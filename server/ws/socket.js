@@ -17,16 +17,7 @@ function initWebSocket(server) {
         const msg = JSON.parse(data);
 
         if (msg.type === "chat") {
-          // 用户发消息，调用 AI 回复
-          const reply = await handleChat(msg.content);
-          ws.send(
-            JSON.stringify({
-              type: "chat",
-              role: "ai",
-              content: reply,
-              timestamp: new Date().toISOString(),
-            }),
-          );
+          await handleChat(msg.content, ws);
         }
       } catch (err) {
         console.error("消息处理错误:", err);
@@ -39,7 +30,6 @@ function initWebSocket(server) {
   });
 }
 
-// AI 主动推送消息给所有客户端
 function pushToAll(message) {
   const payload = JSON.stringify({
     type: "push",

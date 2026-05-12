@@ -1,6 +1,5 @@
-<!-- src/components/chat/ChatBubble.vue -->
 <template>
-    <div class="bubble-wrapper" :class="msg.role">
+    <div class="bubble-wrapper" :class="msg.role" v-if="msg.content">
         <div class="bubble">
             <p>{{ msg.content }}</p>
             <span class="time">{{ formatTime(msg.timestamp) }}</span>

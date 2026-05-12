@@ -1,4 +1,3 @@
-<!-- src/views/ChatView.vue -->
 <template>
     <div class="chat-page">
         <div class="chat-header">
@@ -7,6 +6,7 @@
         </div>
         <div class="chat-messages" ref="messagesContainer">
             <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :msg="msg" />
+            <TypingIndicator :visible="isTyping" />
         </div>
         <ChatInput @send="handleSend" />
     </div>
@@ -16,12 +16,14 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
+import TypingIndicator from '@/components/chat/TypingIndicator.vue'
 import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const chatStore = useChatStore()
 const { connect, send, onMessage, removeHandler } = useWebSocket()
 const messagesContainer = ref(null)
+const isTyping = ref(false)
 
 function scrollToBottom() {
     nextTick(() => {
@@ -34,11 +36,13 @@ function scrollToBottom() {
 function handleSend(text) {
     chatStore.addMessage({ role: 'user', content: text })
     send({ type: 'chat', content: text })
+    isTyping.value = true
     scrollToBottom()
 }
 
 function handleIncoming(data) {
     if (data.type === 'chat' || data.type === 'push') {
+        isTyping.value = false
         chatStore.addMessage({ role: 'ai', content: data.content, timestamp: data.timestamp })
         scrollToBottom()
     }

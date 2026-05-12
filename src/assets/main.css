@@ -41,3 +41,18 @@ body {
   overflow: hidden;
   border-radius: var(--border-radius);
 }
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+/* 全局过渡 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

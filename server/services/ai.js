@@ -1,16 +1,14 @@
 // server/services/ai.js
 const { getDB } = require("../db/index");
 
-async function handleChat(userMessage) {
+async function handleChat(userMessage, ws) {
   const db = getDB();
 
-  // 存用户消息
   db.prepare("INSERT INTO messages (role, content) VALUES (?, ?)").run(
     "user",
     userMessage,
   );
 
-  // 获取最近 20 条对话作为上下文
   const history = db
     .prepare("SELECT role, content FROM messages ORDER BY id DESC LIMIT 20")
     .all()
@@ -31,7 +29,6 @@ async function handleChat(userMessage) {
     ],
   });
 
-  // 调用 AI API
   const response = await fetch(`${process.env.AI_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -45,18 +42,31 @@ async function handleChat(userMessage) {
 
   if (!data.choices || !data.choices[0]) {
     console.error("AI 返回异常:", data);
-    return "抱歉，我暂时无法回复。";
+    ws.send(
+      JSON.stringify({
+        type: "chat",
+        role: "ai",
+        content: "抱歉，我暂时无法回复。",
+        timestamp: new Date().toISOString(),
+      }),
+    );
+    return;
   }
 
   const aiReply = data.choices[0].message.content;
-
-  // 存 AI 回复
   db.prepare("INSERT INTO messages (role, content) VALUES (?, ?)").run(
     "ai",
     aiReply,
   );
 
-  return aiReply;
+  ws.send(
+    JSON.stringify({
+      type: "chat",
+      role: "ai",
+      content: aiReply,
+      timestamp: new Date().toISOString(),
+    }),
+  );
 }
 
 module.exports = { handleChat };

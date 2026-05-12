@@ -7,7 +7,7 @@ export const useChatStore = defineStore("chat", () => {
 
   function addMessage(msg) {
     messages.value.push({
-      id: Date.now(),
+      id: msg.id || Date.now() + Math.random(),
       role: msg.role,
       content: msg.content,
       timestamp: msg.timestamp || new Date().toISOString(),
