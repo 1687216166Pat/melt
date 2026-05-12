@@ -1,0 +1,83 @@
+.dock {
+  position: fixed;
+
+  left: 50%;
+
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+
+  transform: translateX(-50%);
+
+  width: 92%;
+  height: 92px;
+
+  border-radius: 32px;
+
+  display: flex;
+
+  justify-content: space-evenly;
+  align-items: center;
+
+  background: rgba(255, 255, 255, 0.24);
+
+  backdrop-filter: blur(30px);
+
+  border: 1px solid rgba(255, 255, 255, 0.25);
+
+  box-shadow: var(--shadow);
+
+  z-index: 100;
+}
+
+/* Home Indicator */
+
+.home-indicator {
+  position: fixed;
+
+  bottom: 8px;
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  width: 135px;
+  height: 5px;
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.8);
+
+  z-index: 999;
+}
+
+/* 分页 */
+
+.page-indicator {
+  position: fixed;
+
+  bottom: 120px;
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  display: flex;
+
+  gap: 8px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.4);
+
+  transition: 0.3s;
+}
+
+.dot.active {
+  width: 20px;
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.95);
+}

@@ -1,0 +1,26 @@
+.status-bar {
+  position: fixed;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+
+  z-index: 1000;
+}
+
+.status-content {
+  height: 44px;
+
+  padding: env(safe-area-inset-top) 24px 0;
+
+  display: flex;
+
+  justify-content: space-between;
+  align-items: center;
+
+  color: white;
+
+  font-size: 15px;
+  font-weight: 600;
+}

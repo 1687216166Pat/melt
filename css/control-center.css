@@ -1,0 +1,39 @@
+.control-center {
+  position: fixed;
+
+  top: -100%;
+
+  left: 0;
+
+  width: 100%;
+  height: 100%;
+
+  z-index: 10000;
+
+  padding: calc(env(safe-area-inset-top) + 18px) 18px 40px;
+
+  background: rgba(255, 255, 255, 0.22);
+
+  backdrop-filter: blur(50px);
+
+  transition: top 0.55s cubic-bezier(0.22, 1, 0.2, 1);
+
+  box-shadow: var(--deep-shadow);
+
+  overflow-y: auto;
+}
+
+.control-center.show {
+  top: 0;
+}
+
+.grabber {
+  width: 42px;
+  height: 5px;
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.8);
+
+  margin: 0 auto 22px;
+}

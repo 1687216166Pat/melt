@@ -1,0 +1,84 @@
+.app-page {
+  position: fixed;
+
+  inset: 0;
+
+  background: rgba(255, 255, 255, 0.7);
+
+  backdrop-filter: blur(50px);
+
+  z-index: 9000;
+
+  opacity: 0;
+
+  transform: scale(1.08);
+
+  pointer-events: none;
+
+  transition: 0.4s cubic-bezier(0.22, 0.8, 0.2, 1);
+}
+
+.app-page.show {
+  opacity: 1;
+
+  transform: scale(1);
+
+  pointer-events: auto;
+}
+
+.app-header {
+  height: 90px;
+
+  padding: env(safe-area-inset-top) 24px 0;
+
+  display: flex;
+
+  align-items: center;
+}
+
+.back-btn {
+  width: 42px;
+  height: 42px;
+
+  border: none;
+
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.5);
+
+  backdrop-filter: blur(10px);
+
+  font-size: 20px;
+
+  box-shadow: var(--shadow);
+}
+
+.app-content {
+  padding: 30px;
+}
+
+.app-title {
+  font-size: 34px;
+
+  color: #444;
+
+  font-weight: 700;
+
+  margin-bottom: 20px;
+}
+
+.card {
+  padding: 24px;
+
+  border-radius: 28px;
+
+  background: rgba(255, 255, 255, 0.4);
+
+  backdrop-filter: blur(20px);
+
+  box-shadow: var(--shadow);
+
+  color: #555;
+
+  line-height: 1.7;
+}
