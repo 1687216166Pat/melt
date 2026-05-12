@@ -1,12 +1,30 @@
 <template>
-    <!-- 这个 div 的 #app id 会应用我们在 style.css 中定义的样式 -->
-    <!-- 目前这里是空的，后续我们会在这里添加状态栏、主屏幕等组件 -->
+    <div class="phone-screen">
+        <StatusBar />
+        <main class="screen-content">
+            <RouterView />
+        </main>
+        <HomeIndicator />
+    </div>
 </template>
 
 <script setup>
-// 这里是脚本区域，未来会在这里引入其他组件
+import StatusBar from '@/components/StatusBar.vue'
+import HomeIndicator from '@/components/HomeIndicator.vue'
 </script>
 
 <style scoped>
-/* 这里是只对当前组件生效的样式，暂时不需要 */
+.phone-screen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.screen-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 20px;
+}
 </style>
