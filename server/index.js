@@ -38,9 +38,9 @@ if (fs.existsSync(distPath)) {
     } else {
       next();
     }
-  }); 
+  });
 }
- 
+
 initWebSocket(server);
 
 setInterval(consolidateMemories, 6 * 60 * 60 * 1000);

@@ -49,6 +49,10 @@ async function createNew() {
     }
 }
 
+function openSession(id) {
+    router.push(`/chat/${id}`)
+}
+
 async function deleteSession(id) {
     try {
         await api(`/api/sessions/${id}`, { method: 'DELETE' })
@@ -58,6 +62,18 @@ async function deleteSession(id) {
     }
 }
 
+function formatTime(timestamp) {
+    if (!timestamp) return ''
+    const date = new Date(timestamp)
+    const now = new Date()
+    const isToday = date.toDateString() === now.toDateString()
+    if (isToday) {
+        return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    }
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
+onMounted(loadSessions)
 </script>
 
 <style scoped>

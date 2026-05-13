@@ -65,29 +65,21 @@ async function setActivePersona(personaId) {
   if (!personaPrompts[personaId]) return false;
   const db = getDB();
 
-  const { data: existing, error: selectError } = await db
+  const { data: existing } = await db
     .from("user_profile")
     .select("id")
     .eq("key", "active_persona")
     .limit(1);
 
-  console.log("[setActivePersona] select:", { existing, selectError });
-
   if (existing && existing.length > 0) {
-    const { data, error } = await db
+    await db
       .from("user_profile")
       .update({ value: personaId, updated_at: new Date().toISOString() })
-      .eq("key", "active_persona")
-      .select();
-
-    console.log("[setActivePersona] update:", { data, error });
+      .eq("key", "active_persona");
   } else {
-    const { data, error } = await db
+    await db
       .from("user_profile")
-      .insert({ key: "active_persona", value: personaId })
-      .select();
-
-    console.log("[setActivePersona] insert:", { data, error });
+      .insert({ key: "active_persona", value: personaId });
   }
 
   cachedActivePersonaKey = personaId;
