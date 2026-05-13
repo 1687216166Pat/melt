@@ -6,10 +6,12 @@ const isConnected = ref(false);
 const messageHandlers = new Set();
 
 function getWsUrl() {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = window.location.hostname;
-  const port = 3001;
-  return `${protocol}//${host}:${port}`;
+  // 生产环境直连 Railway
+  if (import.meta.env.PROD) {
+    return "wss://gpt1-production-ba3b.up.railway.app";
+  }
+  // 本地开发
+  return `ws://${window.location.hostname}:3001`;
 }
 
 function connect() {
@@ -80,7 +82,6 @@ async function registerPushSubscription() {
 
   try {
     const registration = await navigator.serviceWorker.ready;
-
     const res = await fetch("/api/push/vapid-key");
     const { key } = await res.json();
 
