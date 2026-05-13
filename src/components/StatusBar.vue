@@ -1,6 +1,6 @@
 <template>
     <div class="status-bar">
-        <span class="time">{{ currentTime }}</span>
+        <span class="time">{{ timeStr }}</span>
         <div class="status-icons">
             <span class="signal">●●●●○</span>
             <span class="wifi">WiFi</span>
@@ -10,32 +10,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-
-const currentTime = ref('')
-let timer = null
-
-function updateTime() {
-    const now = new Date()
-    const h = now.getHours().toString().padStart(2, '0')
-    const m = now.getMinutes().toString().padStart(2, '0')
-    currentTime.value = `${h}:${m}`
-}
-
-onMounted(() => {
-    updateTime()
-    timer = setInterval(updateTime, 1000)
-})
-
-onUnmounted(() => {
-    clearInterval(timer)
-})
+import { useTime } from '@/composables/useTime'
+const { timeStr } = useTime()
 </script>
 
 <style scoped>
 .status-bar {
-    height: var(--status-bar-height);
-    padding: 14px 24px 0;
+    padding-top: calc(env(safe-area-inset-top, 20px) + 8px);
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-bottom: 4px;
     display: flex;
     justify-content: space-between;
     align-items: center;

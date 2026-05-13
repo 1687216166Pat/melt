@@ -3,7 +3,13 @@ const express = require("express");
 const router = express.Router();
 const { reportStatus, getLatestStatus } = require("../services/phone");
 const { addSubscription } = require("../services/push");
-const { getAllMemories } = require("../services/memory");
+const {
+  getRecentMemories,
+  deleteRecentMemory,
+  getMemoryProfile,
+  setMemoryProfile,
+  consolidateMemories,
+} = require("../services/memory");
 const { setUserInfo, getAllUserInfo } = require("../services/user");
 const {
   createSession,
@@ -62,9 +68,32 @@ router.get("/sessions/:id/messages", (req, res) => {
   res.json(messages);
 });
 
-// 记忆
+// 记忆管理
 router.get("/memories", (req, res) => {
-  res.json(getAllMemories());
+  const profile = getMemoryProfile();
+  const recent = getRecentMemories(50);
+  res.json({ profile, recent });
+});
+
+router.put("/memories/profile", (req, res) => {
+  const { content } = req.body;
+  setMemoryProfile(content);
+  res.json({ success: true });
+});
+
+router.delete("/memories/recent/:id", (req, res) => {
+  deleteRecentMemory(req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/memories/consolidate", (req, res) => {
+  consolidateMemories()
+    .then(() => {
+      res.json({ success: true });
+    })
+    .catch((e) => {
+      res.status(500).json({ error: e.message });
+    });
 });
 
 // 用户信息
@@ -78,7 +107,7 @@ router.post("/user", (req, res) => {
   res.json({ success: true });
 });
 
-// Prompt 管理 - 人格层
+// Prompt 管理
 router.get("/prompts/personas", (req, res) => {
   res.json({
     personas: getPersonaList(),
@@ -91,7 +120,6 @@ router.post("/prompts/personas/:id/activate", (req, res) => {
   res.json({ success });
 });
 
-// Prompt 管理 - 用户偏好层
 router.get("/prompts/user", (req, res) => {
   res.json({
     content: getUserPrompt(),
@@ -113,6 +141,29 @@ router.post("/push/subscribe", (req, res) => {
 
 router.get("/push/vapid-key", (req, res) => {
   res.json({ key: process.env.VAPID_PUBLIC_KEY });
+});
+
+// 在 module.exports 之前加上这些
+const {
+  getProactiveSettings,
+  setProactiveSettings,
+  checkProactiveMessages,
+} = require("../services/proactive");
+
+// 主动消息设置
+router.get("/proactive/settings", (req, res) => {
+  res.json(getProactiveSettings());
+});
+
+router.post("/proactive/settings", (req, res) => {
+  setProactiveSettings(req.body);
+  res.json({ success: true });
+});
+
+// 手动触发一次检查（测试用）
+router.post("/proactive/trigger", async (req, res) => {
+  await checkProactiveMessages();
+  res.json({ success: true });
 });
 
 module.exports = router;

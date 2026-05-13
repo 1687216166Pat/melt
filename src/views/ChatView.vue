@@ -8,6 +8,7 @@
             <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :msg="msg" />
             <TypingIndicator :visible="isTyping" />
         </div>
+        <DebugPanel :info="debugInfo" />
         <ChatInput @send="handleSend" />
     </div>
 </template>
@@ -18,6 +19,7 @@ import { useRoute } from 'vue-router'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import TypingIndicator from '@/components/chat/TypingIndicator.vue'
+import DebugPanel from '@/components/chat/DebugPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
 
@@ -26,6 +28,7 @@ const chatStore = useChatStore()
 const { send, onMessage, removeHandler } = useWebSocket()
 const messagesContainer = ref(null)
 const isTyping = ref(false)
+const debugInfo = ref(null)
 
 function scrollToBottom() {
     nextTick(() => {
@@ -46,13 +49,15 @@ function handleIncoming(data) {
     if (data.type === 'chat' || data.type === 'push') {
         isTyping.value = false
         chatStore.addMessage({ role: 'ai', content: data.content, timestamp: data.timestamp })
+        if (data.debug) {
+            debugInfo.value = data.debug
+        }
         scrollToBottom()
     }
 }
 
 onMounted(() => {
     onMessage(handleIncoming)
-    // 加载指定会话的消息
     const sessionId = route.params.id
     if (sessionId) {
         chatStore.loadSessionMessages(sessionId)

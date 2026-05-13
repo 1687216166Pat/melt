@@ -6,11 +6,10 @@
 
 <style scoped>
 .home-indicator-area {
-    height: var(--home-indicator-height);
+    padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 8px);
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    padding-bottom: 8px;
     flex-shrink: 0;
 }
 

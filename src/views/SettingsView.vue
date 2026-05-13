@@ -6,6 +6,62 @@
         </div>
 
         <div class="settings-content">
+            <!-- 主动消息设置 -->
+            <div class="section">
+                <h3>💬 主动消息</h3>
+                <div class="setting-row">
+                    <span>启用主动消息</span>
+                    <label class="toggle">
+                        <input type="checkbox" v-model="proactive.enabled" @change="saveProactive" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div v-if="proactive.enabled">
+                    <div class="setting-row">
+                        <span>未互动提醒</span>
+                        <select v-model="proactive.idleHours" @change="saveProactive">
+                            <option :value="6">6 小时</option>
+                            <option :value="12">12 小时</option>
+                            <option :value="24">24 小时</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>每日最多主动</span>
+                        <select v-model="proactive.maxPerDay" @change="saveProactive">
+                            <option :value="1">1 次</option>
+                            <option :value="2">2 次</option>
+                            <option :value="3">3 次</option>
+                            <option :value="5">5 次</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>最小间隔</span>
+                        <select v-model="proactive.minInterval" @change="saveProactive">
+                            <option :value="2">2 小时</option>
+                            <option :value="4">4 小时</option>
+                            <option :value="6">6 小时</option>
+                            <option :value="8">8 小时</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <span>深夜提醒</span>
+                        <label class="toggle">
+                            <input type="checkbox" v-model="proactive.nightReminder" @change="saveProactive" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-row">
+                        <span>记忆提醒</span>
+                        <label class="toggle">
+                            <input type="checkbox" v-model="proactive.memoryReminder" @change="saveProactive" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <button class="test-btn" @click="testProactive">测试发送一条</button>
+                </div>
+            </div>
+
             <!-- 人格切换 -->
             <div class="section">
                 <h3>人格选择（第二层）</h3>
@@ -30,7 +86,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 
 const personas = ref([])
 const activePersona = ref('')
@@ -38,32 +94,57 @@ const userPrompt = ref('')
 const template = ref('')
 const saved = ref(false)
 
-async function loadData() {
-    try {
-        const pRes = await fetch('/api/prompts/personas')
-        console.log('personas 状态:', pRes.status)
-        const pData = await pRes.json()
-        console.log('personas 数据:', pData)
-        personas.value = pData.personas
-        activePersona.value = pData.active
+const proactive = reactive({
+    enabled: true,
+    idleHours: 12,
+    nightReminder: true,
+    memoryReminder: true,
+    maxPerDay: 3,
+    minInterval: 4
+})
 
-        const uRes = await fetch('/api/prompts/user')
-        console.log('user prompt 状态:', uRes.status)
-        const uData = await uRes.json()
-        console.log('user prompt 数据:', uData)
-        userPrompt.value = uData.content
-        template.value = uData.template
-    } catch (e) {
-        console.error('loadData 报错:', e)
-    }
+
+async function loadData() {
+    const pRes = await fetch('/api/prompts/personas')
+    const pData = await pRes.json()
+    personas.value = pData.personas
+    activePersona.value = pData.active
+
+    const uRes = await fetch('/api/prompts/user')
+    const uData = await uRes.json()
+    userPrompt.value = uData.content
+    template.value = uData.template
+
+    const proRes = await fetch('/api/proactive/settings')
+    const proData = await proRes.json()
+    Object.assign(proactive, proData)
 }
 
 async function switchPersona(id) {
-    console.log('切换人格:', id)
-    const res = await fetch(`/api/prompts/personas/${id}/activate`, { method: 'POST' })
-    const data = await res.json()
-    console.log('切换结果:', data)
+    await fetch(`/api/prompts/personas/${id}/activate`, { method: 'POST' })
     activePersona.value = id
+}
+
+async function saveUserPrompt() {
+    await fetch('/api/prompts/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: userPrompt.value })
+    })
+    saved.value = true
+    setTimeout(() => { saved.value = false }, 2000)
+}
+
+async function saveProactive() {
+    await fetch('/api/proactive/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(proactive)
+    })
+}
+
+async function testProactive() {
+    await fetch('/api/proactive/trigger', { method: 'POST' })
 }
 
 onMounted(loadData)
@@ -118,6 +199,84 @@ onMounted(loadData)
     font-size: 12px;
     color: var(--color-text-light);
     margin-bottom: 10px;
+}
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--color-white);
+    border-radius: 10px;
+    margin-bottom: 6px;
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.setting-row select {
+    padding: 4px 8px;
+    border: 1px solid var(--color-bg-secondary);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--color-bg);
+    outline: none;
+}
+
+/* Toggle 开关 */
+.toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--color-bg-secondary);
+    border-radius: 24px;
+    transition: 0.3s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.3s;
+}
+
+.toggle input:checked+.slider {
+    background: var(--color-primary);
+}
+
+.toggle input:checked+.slider:before {
+    transform: translateX(20px);
+}
+
+.test-btn {
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    border: 1px dashed var(--color-primary);
+    background: none;
+    color: var(--color-primary);
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
 }
 
 .persona-card {

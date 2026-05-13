@@ -13,7 +13,17 @@ defineProps({
 })
 
 function formatTime(ts) {
-    const d = new Date(ts)
+    if (!ts) return ''
+    let d = new Date(ts)
+
+    // 如果时间戳不含时区信息（来自SQLite），当作UTC处理
+    if (typeof ts === 'string' && !ts.includes('T') && !ts.includes('Z') && !ts.includes('+')) {
+        d = new Date(ts + 'Z')
+    }
+
+    // 如果解析失败
+    if (isNaN(d.getTime())) return ''
+
     return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 </script>

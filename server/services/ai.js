@@ -2,9 +2,36 @@
 const { getDB } = require("../db/index");
 const { pushNotification } = require("./push");
 const { getFullPrompt } = require("./prompt");
-const { extractMemories, getMemorySummary } = require("./memory");
-const { getUserSummary } = require("./user");
+const {
+  extractMemoryByAI,
+  saveDailyMemory,
+  buildMemoryContext,
+  getSessionMemory,
+} = require("./memory");
 const { getCurrentSession, touchSession } = require("./session");
+
+function getTimeContext() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  const weekday = weekdays[now.getDay()];
+  const month = now.getMonth() + 1;
+  const date = now.getDate();
+  const year = now.getFullYear();
+
+  let period = "";
+  if (hour >= 5 && hour < 9) period = "清晨";
+  else if (hour >= 9 && hour < 12) period = "上午";
+  else if (hour >= 12 && hour < 14) period = "中午";
+  else if (hour >= 14 && hour < 17) period = "下午";
+  else if (hour >= 17 && hour < 19) period = "傍晚";
+  else if (hour >= 19 && hour < 22) period = "晚上";
+  else if (hour >= 22 || hour < 2) period = "深夜";
+  else period = "凌晨";
+
+  return `[当前时间] 现在是${year}年${month}月${date}日 周${weekday} ${hour}:${minute.toString().padStart(2, "0")} ${period}。你能感知到这个时间。`;
+}
 
 async function handleChat(userMessage, ws, sessionId) {
   const db = getDB();
@@ -15,41 +42,51 @@ async function handleChat(userMessage, ws, sessionId) {
     sid = session.id;
   }
 
+  const nowISO = new Date().toISOString();
+
   db.prepare(
-    "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-  ).run(sid, "user", userMessage);
+    "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+  ).run(sid, "user", userMessage, nowISO);
 
   touchSession(sid);
 
-  const history = db
-    .prepare(
-      "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT 10",
-    )
-    .all(sid)
-    .reverse();
+  const history = getSessionMemory(sid, 10);
 
-  // 三层 prompt + 记忆 + 用户信息
+  const timeContext = getTimeContext();
   const fullPrompt = getFullPrompt();
-  const memorySummary = getMemorySummary();
-  const userSummary = getUserSummary();
-  const systemContent = fullPrompt + userSummary + memorySummary;
+  const memoryContext = buildMemoryContext(sid, userMessage);
+
+  const systemContent = `${timeContext}
+[重要] 以上是你当前感知到的真实时间，你必须根据这个时间回答用户关于时间的问题。绝对不要说你无法获取时间。
+
+${fullPrompt}${memoryContext}`;
+
+  const messages = [
+    { role: "system", content: systemContent },
+    ...history.map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    })),
+    {
+      role: "system",
+      content: `[时间] 现在是${new Date().toLocaleString("zh-CN")}`,
+    },
+  ];
 
   const body = JSON.stringify({
     model: process.env.AI_MODEL,
-    messages: [
-      { role: "system", content: systemContent },
-      ...history.map((m) => ({
-        role: m.role === "user" ? "user" : "assistant",
-        content: m.content,
-      })),
-    ],
+    messages,
   });
 
-  console.log("开始请求 AI...");
-  const startTime = Date.now();
+  const totalChars =
+    systemContent.length +
+    history.reduce((sum, m) => sum + m.content.length, 0) +
+    userMessage.length;
+  const estimatedTokens = Math.round(totalChars * 1.5);
 
   console.log("System prompt 长度:", systemContent.length, "字符");
-  console.log("总消息数:", history.length + 1);
+  console.log("开始请求 AI...");
+  const startTime = Date.now();
 
   const response = await fetch(`${process.env.AI_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -61,7 +98,8 @@ async function handleChat(userMessage, ws, sessionId) {
   });
 
   const data = await response.json();
-  console.log(`AI 响应耗时: ${Date.now() - startTime}ms`);
+  const elapsed = Date.now() - startTime;
+  console.log(`AI 响应耗时: ${elapsed}ms`);
 
   if (!data.choices || !data.choices[0]) {
     console.error("AI 返回异常:", data);
@@ -79,10 +117,14 @@ async function handleChat(userMessage, ws, sessionId) {
   const aiReply = data.choices[0].message.content;
 
   db.prepare(
-    "INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)",
-  ).run(sid, "ai", aiReply);
+    "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+  ).run(sid, "ai", aiReply, new Date().toISOString());
 
-  extractMemories(userMessage, aiReply);
+  extractMemoryByAI(userMessage, aiReply).then((memory) => {
+    if (memory) {
+      saveDailyMemory(memory);
+    }
+  });
 
   ws.send(
     JSON.stringify({
@@ -90,6 +132,17 @@ async function handleChat(userMessage, ws, sessionId) {
       role: "ai",
       content: aiReply,
       timestamp: new Date().toISOString(),
+      debug: {
+        prompt: fullPrompt,
+        memory: memoryContext || "无",
+        time: timeContext.trim(),
+        systemLength: systemContent.length,
+        historyCount: history.length,
+        estimatedTokens,
+        actualTokens: data.usage || null,
+        elapsed,
+        model: process.env.AI_MODEL,
+      },
     }),
   );
 

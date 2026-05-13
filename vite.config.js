@@ -8,6 +8,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: "autoUpdate",
+      includeAssets: ["icon-192.png", "icon-512.png", "icon-180.png"],
       manifest: {
         name: "AI Phone",
         short_name: "AI Phone",
@@ -16,6 +17,8 @@ export default defineConfig({
         background_color: "#fdf6f0",
         display: "standalone",
         orientation: "portrait",
+        start_url: "/",
+        scope: "/",
         icons: [
           {
             src: "/icon-192.png",
@@ -26,11 +29,25 @@ export default defineConfig({
             src: "/icon-512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any maskable",
           },
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/.*\/api\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 300,
+              },
+            },
+          },
+        ],
       },
     }),
   ],
@@ -40,6 +57,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
     proxy: {
       "/api": {
         target: "http://localhost:3001",

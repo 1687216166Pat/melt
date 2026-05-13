@@ -3,15 +3,16 @@
         <div class="lock-info">
             <p class="time-display">{{ timeStr }}</p>
             <p class="date-display">{{ dateStr }}</p>
+            <p class="greeting-text">{{ greeting }}</p>
         </div>
         <div class="app-grid">
             <div class="app-icon" @click="$router.push('/sessions')">
                 <div class="icon-bg chat-icon">💬</div>
                 <span class="icon-label">AI 聊天</span>
             </div>
-            <div class="app-icon">
-                <div class="icon-bg status-icon">📱</div>
-                <span class="icon-label">手机状态</span>
+            <div class="app-icon" @click="$router.push('/memory')">
+                <div class="icon-bg status-icon">🧠</div>
+                <span class="icon-label">记忆库</span>
             </div>
             <div class="app-icon" @click="$router.push('/settings')">
                 <div class="icon-bg settings-icon">⚙️</div>
@@ -22,26 +23,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { useTime } from '@/composables/useTime'
 
-const timeStr = ref('')
-const dateStr = ref('')
-let timer = null
-
-function updateTime() {
-    const now = new Date()
-    timeStr.value = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    dateStr.value = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })
-}
-
-onMounted(() => {
-    updateTime()
-    timer = setInterval(updateTime, 1000)
-})
-
-onUnmounted(() => {
-    clearInterval(timer)
-})
+const { timeStr, dateStr, greeting } = useTime()
 </script>
 
 <style scoped>
@@ -69,6 +53,13 @@ onUnmounted(() => {
 .date-display {
     font-size: 16px;
     color: var(--color-text-light);
+    margin-bottom: 6px;
+}
+
+.greeting-text {
+    font-size: 14px;
+    color: var(--color-primary);
+    font-weight: 500;
 }
 
 .app-grid {
