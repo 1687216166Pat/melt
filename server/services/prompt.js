@@ -6,12 +6,10 @@ const {
   userPromptTemplate,
 } = require("../config/prompt");
 
-// 缓存（因为 getFullPrompt 在 ai.js 里需要同步调用）
 let cachedPersona = personaPrompts.xiaorou.content;
 let cachedUserPrompt = "";
 let cachedActivePersonaKey = "xiaorou";
 
-// 定期刷新缓存
 async function refreshPromptCache() {
   try {
     const db = getDB();
@@ -44,9 +42,7 @@ async function refreshPromptCache() {
   }
 }
 
-// 每 30 秒刷新一次缓存
 setInterval(refreshPromptCache, 30000);
-// 启动时也刷新一次（延迟 2 秒等数据库连接好）
 setTimeout(refreshPromptCache, 2000);
 
 function getFullPrompt() {
@@ -68,14 +64,32 @@ function getActivePersona() {
 async function setActivePersona(personaId) {
   if (!personaPrompts[personaId]) return false;
   const db = getDB();
-  await db.from("user_profile").upsert(
-    {
-      key: "active_persona",
-      value: personaId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" },
-  );
+
+  const { data: existing, error: selectError } = await db
+    .from("user_profile")
+    .select("id")
+    .eq("key", "active_persona")
+    .limit(1);
+
+  console.log("[setActivePersona] select:", { existing, selectError });
+
+  if (existing && existing.length > 0) {
+    const { data, error } = await db
+      .from("user_profile")
+      .update({ value: personaId, updated_at: new Date().toISOString() })
+      .eq("key", "active_persona")
+      .select();
+
+    console.log("[setActivePersona] update:", { data, error });
+  } else {
+    const { data, error } = await db
+      .from("user_profile")
+      .insert({ key: "active_persona", value: personaId })
+      .select();
+
+    console.log("[setActivePersona] insert:", { data, error });
+  }
+
   cachedActivePersonaKey = personaId;
   cachedPersona = personaPrompts[personaId].content;
   return true;
@@ -93,14 +107,24 @@ async function getUserPrompt() {
 
 async function setUserPrompt(content) {
   const db = getDB();
-  await db.from("user_profile").upsert(
-    {
-      key: "user_prompt",
-      value: content,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" },
-  );
+
+  const { data: existing } = await db
+    .from("user_profile")
+    .select("id")
+    .eq("key", "user_prompt")
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    await db
+      .from("user_profile")
+      .update({ value: content, updated_at: new Date().toISOString() })
+      .eq("key", "user_prompt");
+  } else {
+    await db
+      .from("user_profile")
+      .insert({ key: "user_prompt", value: content });
+  }
+
   cachedUserPrompt = content ? `\n[用户偏好]\n${content}` : "";
 }
 

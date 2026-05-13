@@ -59,10 +59,9 @@ async function handleChat(userMessage, ws, sessionId) {
   const fullPrompt = getFullPrompt();
   const memoryContext = await buildMemoryContextAsync(sid, userMessage);
 
-  const systemContent = `${timeContext}
-[重要] 以上是你当前感知到的真实时间，你必须根据这个时间回答用户关于时间的问题。绝对不要说你无法获取时间。
-
-${fullPrompt}${memoryContext}`;
+  const systemContent = `${fullPrompt}
+${timeContext}
+${memoryContext}`;
 
   const messages = [
     { role: "system", content: systemContent },
@@ -70,10 +69,6 @@ ${fullPrompt}${memoryContext}`;
       role: m.role === "user" ? "user" : "assistant",
       content: m.content,
     })),
-    {
-      role: "system",
-      content: `[时间] 现在是${new Date().toLocaleString("zh-CN")}`,
-    },
   ];
 
   const body = JSON.stringify({

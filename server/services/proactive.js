@@ -23,14 +23,29 @@ async function getProactiveSettings() {
 
 async function setProactiveSettings(settings) {
   const db = getDB();
-  await db.from("user_profile").upsert(
-    {
-      key: "proactive_settings",
-      value: JSON.stringify(settings),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "key" },
-  );
+
+  // 先查是否存在
+  const { data: existing } = await db
+    .from("user_profile")
+    .select("id")
+    .eq("key", "proactive_settings")
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    // 更新
+    await db
+      .from("user_profile")
+      .update({
+        value: JSON.stringify(settings),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("key", "proactive_settings");
+  } else {
+    // 插入
+    await db
+      .from("user_profile")
+      .insert({ key: "proactive_settings", value: JSON.stringify(settings) });
+  }
 }
 
 async function checkProactiveMessages() {
