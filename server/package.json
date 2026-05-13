@@ -1,9 +1,10 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI Phone Backend",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,12 +13,9 @@
   "type": "commonjs",
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
-    "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "node-fetch": "^3.3.2",
-    "sqlite3": "^6.0.1",
     "web-push": "^3.6.7",
     "ws": "^8.20.0"
   }

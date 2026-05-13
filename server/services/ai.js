@@ -5,7 +5,7 @@ const { getFullPrompt } = require("./prompt");
 const {
   extractMemoryByAI,
   saveDailyMemory,
-  buildMemoryContext,
+  buildMemoryContextAsync,
   getSessionMemory,
 } = require("./memory");
 const { getCurrentSession, touchSession } = require("./session");
@@ -38,23 +38,26 @@ async function handleChat(userMessage, ws, sessionId) {
 
   let sid = sessionId;
   if (!sid) {
-    const session = getCurrentSession();
+    const session = await getCurrentSession();
     sid = session.id;
   }
 
   const nowISO = new Date().toISOString();
 
-  db.prepare(
-    "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-  ).run(sid, "user", userMessage, nowISO);
+  await db.from("messages").insert({
+    session_id: sid,
+    role: "user",
+    content: userMessage,
+    timestamp: nowISO,
+  });
 
-  touchSession(sid);
+  await touchSession(sid);
 
-  const history = getSessionMemory(sid, 10);
+  const history = await getSessionMemory(sid, 10);
 
   const timeContext = getTimeContext();
   const fullPrompt = getFullPrompt();
-  const memoryContext = buildMemoryContext(sid, userMessage);
+  const memoryContext = await buildMemoryContextAsync(sid, userMessage);
 
   const systemContent = `${timeContext}
 [重要] 以上是你当前感知到的真实时间，你必须根据这个时间回答用户关于时间的问题。绝对不要说你无法获取时间。
@@ -116,14 +119,15 @@ ${fullPrompt}${memoryContext}`;
 
   const aiReply = data.choices[0].message.content;
 
-  db.prepare(
-    "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-  ).run(sid, "ai", aiReply, new Date().toISOString());
+  await db.from("messages").insert({
+    session_id: sid,
+    role: "ai",
+    content: aiReply,
+    timestamp: new Date().toISOString(),
+  });
 
   extractMemoryByAI(userMessage, aiReply).then((memory) => {
-    if (memory) {
-      saveDailyMemory(memory);
-    }
+    if (memory) saveDailyMemory(memory);
   });
 
   ws.send(

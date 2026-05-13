@@ -1,61 +1,65 @@
 // server/services/session.js
 const { getDB } = require("../db/index");
 
-function createSession(title) {
+async function createSession(title) {
   const db = getDB();
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  db.prepare("INSERT INTO sessions (id, title) VALUES (?, ?)").run(
-    id,
-    title || "新对话",
-  );
+  await db.from("sessions").insert({ id, title: title || "新对话" });
   return id;
 }
 
-function getSessions() {
+async function getSessions() {
   const db = getDB();
-  return db.prepare("SELECT * FROM sessions ORDER BY updated_at DESC").all();
+  const { data } = await db
+    .from("sessions")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  return data || [];
 }
 
-function getSessionMessages(sessionId, limit = 50) {
+async function getSessionMessages(sessionId, limit = 50) {
   const db = getDB();
-  return db
-    .prepare(
-      "SELECT * FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-    )
-    .all(sessionId, limit)
-    .reverse();
+  const { data } = await db
+    .from("messages")
+    .select("*")
+    .eq("session_id", sessionId)
+    .order("id", { ascending: false })
+    .limit(limit);
+  return (data || []).reverse();
 }
 
-function updateSessionTitle(sessionId, title) {
+async function updateSessionTitle(sessionId, title) {
   const db = getDB();
-  db.prepare(
-    "UPDATE sessions SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-  ).run(title, sessionId);
+  await db
+    .from("sessions")
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
 }
 
-function deleteSession(sessionId) {
+async function deleteSession(sessionId) {
   const db = getDB();
-  db.prepare("DELETE FROM messages WHERE session_id = ?").run(sessionId);
-  db.prepare("DELETE FROM sessions WHERE id = ?").run(sessionId);
+  await db.from("messages").delete().eq("session_id", sessionId);
+  await db.from("sessions").delete().eq("id", sessionId);
 }
 
-function getCurrentSession() {
+async function getCurrentSession() {
   const db = getDB();
-  let session = db
-    .prepare("SELECT * FROM sessions ORDER BY updated_at DESC LIMIT 1")
-    .get();
-  if (!session) {
-    const id = createSession("新对话");
-    session = { id, title: "新对话" };
-  }
-  return session;
+  const { data } = await db
+    .from("sessions")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(1);
+  if (data && data.length > 0) return data[0];
+  const id = await createSession("新对话");
+  return { id, title: "新对话" };
 }
 
-function touchSession(sessionId) {
+async function touchSession(sessionId) {
   const db = getDB();
-  db.prepare(
-    "UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-  ).run(sessionId);
+  await db
+    .from("sessions")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", sessionId);
 }
 
 module.exports = {

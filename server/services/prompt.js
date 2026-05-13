@@ -6,31 +6,53 @@ const {
   userPromptTemplate,
 } = require("../config/prompt");
 
-// 获取完整的三层 prompt
-function getFullPrompt() {
-  const db = getDB();
+// 缓存（因为 getFullPrompt 在 ai.js 里需要同步调用）
+let cachedPersona = personaPrompts.xiaorou.content;
+let cachedUserPrompt = "";
+let cachedActivePersonaKey = "xiaorou";
 
-  // 第一层：系统核心（固定）
-  const layer1 = corePrompt;
+// 定期刷新缓存
+async function refreshPromptCache() {
+  try {
+    const db = getDB();
 
-  // 第二层：人格层（从数据库读取当前激活的人格）
-  const activePersona = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'active_persona'")
-    .get();
-  const personaKey = activePersona ? activePersona.value : "xiaorou";
-  const persona = personaPrompts[personaKey];
-  const layer2 = persona ? persona.content : personaPrompts.xiaorou.content;
+    const { data: personaRow } = await db
+      .from("user_profile")
+      .select("value")
+      .eq("key", "active_persona")
+      .limit(1);
 
-  // 第三层：用户偏好层（从数据库读取）
-  const userPrompt = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'user_prompt'")
-    .get();
-  const layer3 = userPrompt ? `\n## 用户偏好设定\n${userPrompt.value}` : "";
+    const personaKey =
+      personaRow && personaRow.length > 0 ? personaRow[0].value : "xiaorou";
+    cachedActivePersonaKey = personaKey;
+    cachedPersona = personaPrompts[personaKey]
+      ? personaPrompts[personaKey].content
+      : personaPrompts.xiaorou.content;
 
-  return `${layer1}\n${layer2}\n${layer3}`;
+    const { data: promptRow } = await db
+      .from("user_profile")
+      .select("value")
+      .eq("key", "user_prompt")
+      .limit(1);
+
+    cachedUserPrompt =
+      promptRow && promptRow.length > 0
+        ? `\n[用户偏好]\n${promptRow[0].value}`
+        : "";
+  } catch (e) {
+    console.error("刷新 prompt 缓存失败:", e);
+  }
 }
 
-// 获取可用的人格列表
+// 每 30 秒刷新一次缓存
+setInterval(refreshPromptCache, 30000);
+// 启动时也刷新一次（延迟 2 秒等数据库连接好）
+setTimeout(refreshPromptCache, 2000);
+
+function getFullPrompt() {
+  return corePrompt + cachedPersona + cachedUserPrompt;
+}
+
 function getPersonaList() {
   return Object.entries(personaPrompts).map(([key, value]) => ({
     id: key,
@@ -39,51 +61,49 @@ function getPersonaList() {
   }));
 }
 
-// 获取当前激活的人格
 function getActivePersona() {
-  const db = getDB();
-  const row = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'active_persona'")
-    .get();
-  return row ? row.value : "xiaorou";
+  return cachedActivePersonaKey;
 }
 
-// 切换人格
-function setActivePersona(personaId) {
-  const db = getDB();
+async function setActivePersona(personaId) {
   if (!personaPrompts[personaId]) return false;
-  db.prepare(
-    `
-    INSERT INTO user_profile (key, value, updated_at) 
-    VALUES ('active_persona', ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
-  `,
-  ).run(personaId, personaId);
+  const db = getDB();
+  await db.from("user_profile").upsert(
+    {
+      key: "active_persona",
+      value: personaId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+  cachedActivePersonaKey = personaId;
+  cachedPersona = personaPrompts[personaId].content;
   return true;
 }
 
-// 获取用户自定义 prompt
-function getUserPrompt() {
+async function getUserPrompt() {
   const db = getDB();
-  const row = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'user_prompt'")
-    .get();
-  return row ? row.value : "";
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "user_prompt")
+    .limit(1);
+  return data && data.length > 0 ? data[0].value : "";
 }
 
-// 设置用户自定义 prompt
-function setUserPrompt(content) {
+async function setUserPrompt(content) {
   const db = getDB();
-  db.prepare(
-    `
-    INSERT INTO user_profile (key, value, updated_at) 
-    VALUES ('user_prompt', ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
-  `,
-  ).run(content, content);
+  await db.from("user_profile").upsert(
+    {
+      key: "user_prompt",
+      value: content,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+  cachedUserPrompt = content ? `\n[用户偏好]\n${content}` : "";
 }
 
-// 获取用户偏好层模板
 function getUserPromptTemplate() {
   return userPromptTemplate;
 }
@@ -96,4 +116,5 @@ module.exports = {
   getUserPrompt,
   setUserPrompt,
   getUserPromptTemplate,
+  refreshPromptCache,
 };

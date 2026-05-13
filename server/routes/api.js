@@ -26,84 +26,89 @@ const {
   setUserPrompt,
   getUserPromptTemplate,
 } = require("../services/prompt");
-const { getDB } = require("../db/index");
+const {
+  getProactiveSettings,
+  setProactiveSettings,
+  checkProactiveMessages,
+} = require("../services/proactive");
 
 // 手机状态
-router.post("/phone/status", (req, res) => {
+router.post("/phone/status", async (req, res) => {
   const { type, data } = req.body;
-  reportStatus(type, data);
+  await reportStatus(type, data);
   res.json({ success: true });
 });
 
-router.get("/phone/status", (req, res) => {
-  const status = getLatestStatus();
+router.get("/phone/status", async (req, res) => {
+  const status = await getLatestStatus();
   res.json(status);
 });
 
 // 聊天记录
-router.get("/messages", (req, res) => {
-  const session = getCurrentSession();
-  const messages = getSessionMessages(session.id);
+router.get("/messages", async (req, res) => {
+  const session = await getCurrentSession();
+  const messages = await getSessionMessages(session.id);
   res.json(messages);
 });
 
 // 会话管理
-router.get("/sessions", (req, res) => {
-  res.json(getSessions());
+router.get("/sessions", async (req, res) => {
+  const sessions = await getSessions();
+  res.json(sessions);
 });
 
-router.post("/sessions", (req, res) => {
+router.post("/sessions", async (req, res) => {
   const { title } = req.body;
-  const id = createSession(title);
+  const id = await createSession(title);
   res.json({ id, title: title || "新对话" });
 });
 
-router.delete("/sessions/:id", (req, res) => {
-  deleteSession(req.params.id);
+router.delete("/sessions/:id", async (req, res) => {
+  await deleteSession(req.params.id);
   res.json({ success: true });
 });
 
-router.get("/sessions/:id/messages", (req, res) => {
-  const messages = getSessionMessages(req.params.id);
+router.get("/sessions/:id/messages", async (req, res) => {
+  const messages = await getSessionMessages(req.params.id);
   res.json(messages);
 });
 
 // 记忆管理
-router.get("/memories", (req, res) => {
-  const profile = getMemoryProfile();
-  const recent = getRecentMemories(50);
+router.get("/memories", async (req, res) => {
+  const profile = await getMemoryProfile();
+  const recent = await getRecentMemories(50);
   res.json({ profile, recent });
 });
 
-router.put("/memories/profile", (req, res) => {
+router.put("/memories/profile", async (req, res) => {
   const { content } = req.body;
-  setMemoryProfile(content);
+  await setMemoryProfile(content);
   res.json({ success: true });
 });
 
-router.delete("/memories/recent/:id", (req, res) => {
-  deleteRecentMemory(req.params.id);
+router.delete("/memories/recent/:id", async (req, res) => {
+  await deleteRecentMemory(req.params.id);
   res.json({ success: true });
 });
 
-router.post("/memories/consolidate", (req, res) => {
-  consolidateMemories()
-    .then(() => {
-      res.json({ success: true });
-    })
-    .catch((e) => {
-      res.status(500).json({ error: e.message });
-    });
+router.post("/memories/consolidate", async (req, res) => {
+  try {
+    await consolidateMemories();
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // 用户信息
-router.get("/user", (req, res) => {
-  res.json(getAllUserInfo());
+router.get("/user", async (req, res) => {
+  const info = await getAllUserInfo();
+  res.json(info);
 });
 
-router.post("/user", (req, res) => {
+router.post("/user", async (req, res) => {
   const { key, value } = req.body;
-  setUserInfo(key, value);
+  await setUserInfo(key, value);
   res.json({ success: true });
 });
 
@@ -115,21 +120,38 @@ router.get("/prompts/personas", (req, res) => {
   });
 });
 
-router.post("/prompts/personas/:id/activate", (req, res) => {
-  const success = setActivePersona(req.params.id);
+router.post("/prompts/personas/:id/activate", async (req, res) => {
+  const success = await setActivePersona(req.params.id);
   res.json({ success });
 });
 
-router.get("/prompts/user", (req, res) => {
+router.get("/prompts/user", async (req, res) => {
+  const content = await getUserPrompt();
   res.json({
-    content: getUserPrompt(),
+    content,
     template: getUserPromptTemplate(),
   });
 });
 
-router.post("/prompts/user", (req, res) => {
+router.post("/prompts/user", async (req, res) => {
   const { content } = req.body;
-  setUserPrompt(content);
+  await setUserPrompt(content);
+  res.json({ success: true });
+});
+
+// 主动消息
+router.get("/proactive/settings", async (req, res) => {
+  const settings = await getProactiveSettings();
+  res.json(settings);
+});
+
+router.post("/proactive/settings", async (req, res) => {
+  await setProactiveSettings(req.body);
+  res.json({ success: true });
+});
+
+router.post("/proactive/trigger", async (req, res) => {
+  await checkProactiveMessages();
   res.json({ success: true });
 });
 
@@ -141,29 +163,6 @@ router.post("/push/subscribe", (req, res) => {
 
 router.get("/push/vapid-key", (req, res) => {
   res.json({ key: process.env.VAPID_PUBLIC_KEY });
-});
-
-// 在 module.exports 之前加上这些
-const {
-  getProactiveSettings,
-  setProactiveSettings,
-  checkProactiveMessages,
-} = require("../services/proactive");
-
-// 主动消息设置
-router.get("/proactive/settings", (req, res) => {
-  res.json(getProactiveSettings());
-});
-
-router.post("/proactive/settings", (req, res) => {
-  setProactiveSettings(req.body);
-  res.json({ success: true });
-});
-
-// 手动触发一次检查（测试用）
-router.post("/proactive/trigger", async (req, res) => {
-  await checkProactiveMessages();
-  res.json({ success: true });
 });
 
 module.exports = router;

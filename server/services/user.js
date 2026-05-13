@@ -1,37 +1,47 @@
 // server/services/user.js
 const { getDB } = require("../db/index");
 
-function setUserInfo(key, value) {
+async function setUserInfo(key, value) {
   const db = getDB();
-  db.prepare(
-    `
-    INSERT INTO user_profile (key, value, updated_at) 
-    VALUES (?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
-  `,
-  ).run(key, value, value);
+  await db.from("user_profile").upsert(
+    {
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
 }
 
-function getUserInfo(key) {
+async function getUserInfo(key) {
   const db = getDB();
-  const row = db
-    .prepare("SELECT value FROM user_profile WHERE key = ?")
-    .get(key);
-  return row ? row.value : null;
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", key)
+    .limit(1);
+  return data && data.length > 0 ? data[0].value : null;
 }
 
-function getAllUserInfo() {
+async function getAllUserInfo() {
   const db = getDB();
-  return db.prepare("SELECT key, value FROM user_profile").all();
+  const { data } = await db.from("user_profile").select("key, value");
+  return data || [];
 }
 
-function getUserSummary() {
-  const info = getAllUserInfo();
+async function getUserSummary() {
+  const info = await getAllUserInfo();
   if (info.length === 0) return "";
-
-  let summary = "\n## 用户基本信息\n";
+  let summary = "\n[用户信息]\n";
   for (const item of info) {
-    summary += `- ${item.key}: ${item.value}\n`;
+    if (
+      item.key !== "memory_profile" &&
+      item.key !== "active_persona" &&
+      item.key !== "user_prompt" &&
+      item.key !== "proactive_settings"
+    ) {
+      summary += `- ${item.key}: ${item.value}\n`;
+    }
   }
   return summary;
 }

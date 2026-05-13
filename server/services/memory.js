@@ -1,115 +1,95 @@
 // server/services/memory.js
-const { getDB } = require("../db/index");
+const { getDB } = require('../db/index')
 
-// 消息计数器，每 3 条消息才提取一次记忆
-let messageCount = 0;
-const EXTRACT_INTERVAL = 3;
-
-// ============ 记忆提取（AI 驱动） ============
+let messageCount = 0
+const EXTRACT_INTERVAL = 3
 
 function shouldExtract() {
-  messageCount++;
+  messageCount++
   if (messageCount >= EXTRACT_INTERVAL) {
-    messageCount = 0;
-    return true;
+    messageCount = 0
+    return true
   }
-  return false;
+  return false
 }
 
 async function extractMemoryByAI(userMessage, aiReply) {
-  // 每 3 条消息才提取一次
-  if (!shouldExtract()) {
-    return null;
-  }
+  if (!shouldExtract()) return null
 
   const prompt = `从以下对话提取值得记住的事实信息。用|分隔，格式如：名:xx|住:xx。没有则回复"无"。
 
 用户: ${userMessage}
 AI: ${aiReply}
 
-提取：`;
+提取：`
 
   try {
-    const response = await fetch(
-      `${process.env.AI_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Bearer ${process.env.AI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 80,
-          temperature: 0,
-        }),
+    const response = await fetch(`${process.env.AI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${process.env.AI_API_KEY}`
       },
-    );
+      body: JSON.stringify({
+        model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 80,
+        temperature: 0
+      })
+    })
 
-    const data = await response.json();
-    if (!data.choices || !data.choices[0]) return null;
+    const data = await response.json()
+    if (!data.choices || !data.choices[0]) return null
 
-    const result = data.choices[0].message.content.trim();
-    if (result === "无" || result.length < 2) return null;
+    const result = data.choices[0].message.content.trim()
+    if (result === '无' || result.length < 2) return null
 
-    console.log("记忆提取结果:", result);
-    return result;
+    console.log('记忆提取结果:', result)
+    return result
   } catch (e) {
-    console.error("记忆提取失败:", e);
-    return null;
+    console.error('记忆提取失败:', e)
+    return null
   }
 }
 
-// ============ 存储记忆 ============
+async function saveDailyMemory(content) {
+  const db = getDB()
+  const today = new Date().toISOString().slice(0, 10)
 
-function saveDailyMemory(content) {
-  const db = getDB();
-  const today = new Date().toISOString().slice(0, 10);
+  const { data: existing } = await db.from('memories_recent')
+    .select('*')
+    .eq('source_session', today)
+    .limit(1)
 
-  const existing = db
-    .prepare("SELECT id, content FROM memories_recent WHERE source_session = ?")
-    .get(today);
+  if (existing && existing.length > 0) {
+    const oldItems = existing[0].content.split('|').map(s => s.trim())
+    const newItems = content.split('|').map(s => s.trim())
+    const merged = [...new Set([...oldItems, ...newItems])].join('|')
 
-  if (existing) {
-    const oldItems = existing.content.split("|").map((s) => s.trim());
-    const newItems = content.split("|").map((s) => s.trim());
-    const merged = [...new Set([...oldItems, ...newItems])].join("|");
-
-    db.prepare("UPDATE memories_recent SET content = ? WHERE id = ?").run(
-      merged,
-      existing.id,
-    );
-    console.log(`今日记忆更新: ${merged}`);
+    await db.from('memories_recent').update({ content: merged }).eq('id', existing[0].id)
+    console.log(`今日记忆更新: ${merged}`)
   } else {
-    db.prepare(
-      "INSERT INTO memories_recent (content, source_session) VALUES (?, ?)",
-    ).run(content, today);
-    console.log(`今日记忆新建: ${content}`);
+    await db.from('memories_recent').insert({ content, source_session: today })
+    console.log(`今日记忆新建: ${content}`)
   }
 }
-
-// ============ 总档案管理 ============
 
 async function consolidateMemories() {
-  const db = getDB();
+  const db = getDB()
 
-  const dailyMems = db
-    .prepare(
-      "SELECT content, source_session FROM memories_recent ORDER BY created_at ASC",
-    )
-    .all();
+  const { data: dailyMems } = await db.from('memories_recent')
+    .select('*')
+    .order('created_at', { ascending: true })
 
-  if (dailyMems.length === 0) return;
+  if (!dailyMems || dailyMems.length === 0) return
 
-  const currentProfile = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'memory_profile'")
-    .get();
+  const { data: profileRow } = await db.from('user_profile')
+    .select('value')
+    .eq('key', 'memory_profile')
+    .limit(1)
 
-  const allDaily = dailyMems
-    .map((m) => `[${m.source_session}] ${m.content}`)
-    .join("\n");
-  const currentProfileText = currentProfile ? currentProfile.value : "空";
+  const currentProfileText = profileRow && profileRow.length > 0 ? profileRow[0].value : '空'
+  const allDaily = dailyMems.map(m => `[${m.source_session}] ${m.content}`).join('\n')
 
   const prompt = `将以下记忆合并成精简档案。用|分隔，200字内，重要信息在前。
 
@@ -117,128 +97,128 @@ async function consolidateMemories() {
 每日记忆：
 ${allDaily}
 
-合并后：`;
+合并后：`
 
   try {
-    const response = await fetch(
-      `${process.env.AI_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Bearer ${process.env.AI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 200,
-          temperature: 0,
-        }),
+    const response = await fetch(`${process.env.AI_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Bearer ${process.env.AI_API_KEY}`
       },
-    );
+      body: JSON.stringify({
+        model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 200,
+        temperature: 0
+      })
+    })
 
-    const data = await response.json();
-    if (!data.choices || !data.choices[0]) return;
+    const data = await response.json()
+    if (!data.choices || !data.choices[0]) return
 
-    const newProfile = data.choices[0].message.content.trim();
+    const newProfile = data.choices[0].message.content.trim()
 
-    db.prepare(
-      `
-      INSERT INTO user_profile (key, value, updated_at)
-      VALUES ('memory_profile', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
-    `,
-    ).run(newProfile, newProfile);
+    await db.from('user_profile').upsert({
+      key: 'memory_profile',
+      value: newProfile,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' })
 
-    db.prepare(
-      "DELETE FROM memories_recent WHERE created_at < datetime('now', '-7 days')",
-    ).run();
+    // 清理 7 天前的
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    await db.from('memories_recent').delete().lt('created_at', sevenDaysAgo)
 
-    console.log(`总档案更新: ${newProfile}`);
+    console.log(`总档案更新: ${newProfile}`)
   } catch (e) {
-    console.error("记忆合并失败:", e);
+    console.error('记忆合并失败:', e)
   }
 }
 
-// ============ 组装记忆上下文 ============
-
 function buildMemoryContext(sessionId, userMessage) {
-  const db = getDB();
-  let context = "";
+  // 这个需要改成同步调用不了，改成异步
+  // 但为了不大改 ai.js 结构，用缓存方案
+}
 
-  const profile = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'memory_profile'")
-    .get();
-  if (profile && profile.value) {
-    context += `\n[用户档案] ${profile.value}\n`;
+// 改成异步版本
+async function buildMemoryContextAsync(sessionId, userMessage) {
+  const db = getDB()
+  let context = ''
+
+  const { data: profileRow } = await db.from('user_profile')
+    .select('value')
+    .eq('key', 'memory_profile')
+    .limit(1)
+
+  if (profileRow && profileRow.length > 0 && profileRow[0].value) {
+    context += `\n[用户档案] ${profileRow[0].value}\n`
   }
 
-  const recentDays = db
-    .prepare(
-      "SELECT content, source_session FROM memories_recent ORDER BY created_at DESC LIMIT 3",
-    )
-    .all();
-  if (recentDays.length > 0) {
-    context += "[近期]\n";
+  const { data: recentDays } = await db.from('memories_recent')
+    .select('content, source_session')
+    .order('created_at', { ascending: false })
+    .limit(3)
+
+  if (recentDays && recentDays.length > 0) {
+    context += '[近期]\n'
     for (const m of recentDays) {
-      context += `${m.source_session}: ${m.content}\n`;
+      context += `${m.source_session}: ${m.content}\n`
     }
   }
 
-  return context;
+  return context
 }
 
-// ============ 对外接口 ============
-
-function getRecentMemories(limit = 50) {
-  const db = getDB();
-  return db
-    .prepare("SELECT * FROM memories_recent ORDER BY created_at DESC LIMIT ?")
-    .all(limit);
+async function getSessionMemory(sessionId, limit = 10) {
+  const db = getDB()
+  const { data } = await db.from('messages')
+    .select('role, content')
+    .eq('session_id', sessionId)
+    .order('id', { ascending: false })
+    .limit(limit)
+  return (data || []).reverse()
 }
 
-function deleteRecentMemory(id) {
-  const db = getDB();
-  db.prepare("DELETE FROM memories_recent WHERE id = ?").run(id);
+async function getRecentMemories(limit = 50) {
+  const db = getDB()
+  const { data } = await db.from('memories_recent')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  return data || []
 }
 
-function getMemoryProfile() {
-  const db = getDB();
-  const row = db
-    .prepare("SELECT value FROM user_profile WHERE key = 'memory_profile'")
-    .get();
-  return row ? row.value : "";
+async function deleteRecentMemory(id) {
+  const db = getDB()
+  await db.from('memories_recent').delete().eq('id', id)
 }
 
-function setMemoryProfile(content) {
-  const db = getDB();
-  db.prepare(
-    `
-    INSERT INTO user_profile (key, value, updated_at)
-    VALUES ('memory_profile', ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = CURRENT_TIMESTAMP
-  `,
-  ).run(content, content);
+async function getMemoryProfile() {
+  const db = getDB()
+  const { data } = await db.from('user_profile')
+    .select('value')
+    .eq('key', 'memory_profile')
+    .limit(1)
+  return data && data.length > 0 ? data[0].value : ''
 }
 
-function getSessionMemory(sessionId, limit = 10) {
-  const db = getDB();
-  return db
-    .prepare(
-      "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-    )
-    .all(sessionId, limit)
-    .reverse();
+async function setMemoryProfile(content) {
+  const db = getDB()
+  await db.from('user_profile').upsert({
+    key: 'memory_profile',
+    value: content,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'key' })
 }
 
 module.exports = {
   extractMemoryByAI,
   saveDailyMemory,
   consolidateMemories,
-  buildMemoryContext,
+  buildMemoryContextAsync,
   getSessionMemory,
   getRecentMemories,
   deleteRecentMemory,
   getMemoryProfile,
-  setMemoryProfile,
-};
+  setMemoryProfile
+}
