@@ -5,6 +5,7 @@ const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const path = require("path");
+const fs = require("fs");
 const { initWebSocket } = require("./ws/socket");
 const { initDB } = require("./db/index");
 const apiRoutes = require("./routes/api");
@@ -21,14 +22,18 @@ app.use(cors());
 app.use(express.json());
 app.use("/api", apiRoutes);
 
-// 生产环境托管前端
+// 只在 dist 目录存在时托管前端（本地开发或一体部署时）
 const distPath = path.join(__dirname, "../dist");
-app.use(express.static(distPath));
-app.get("/{*path}", (req, res) => {
-  if (!req.path.startsWith("/api")) {
-    res.sendFile(path.join(distPath, "index.html"));
-  }
-});
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.use((req, res, next) => {
+    if (!req.path.startsWith("/api")) {
+      res.sendFile(path.join(distPath, "index.html"));
+    } else {
+      next();
+    }
+  });
+}
 
 initWebSocket(server);
 
