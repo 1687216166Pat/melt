@@ -1,4 +1,4 @@
-// server/index.js
+// server/index.js000
 require("dotenv").config();
 
 const express = require("express");
@@ -38,9 +38,9 @@ if (fs.existsSync(distPath)) {
     } else {
       next();
     }
-  });
+  }); 
 }
-
+ 
 initWebSocket(server);
 
 setInterval(consolidateMemories, 6 * 60 * 60 * 1000);
