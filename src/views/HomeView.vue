@@ -4,16 +4,16 @@
             <p class="time-display">{{ timeStr }}</p>
             <p class="date-display">{{ dateStr }}</p>
             <p class="greeting-text">{{ greeting }}</p>
-            <p class="version-text">v1.0.3</p>
+            <p class="version-text">v1.1.0</p>
         </div>
         <div class="app-grid">
             <div class="app-icon" @click="openChat">
                 <div class="icon-bg chat-icon">💬</div>
                 <span class="icon-label">AI 聊天</span>
             </div>
-            <div class="app-icon" @click="$router.push('/sessions')">
-                <div class="icon-bg history-icon">📋</div>
-                <span class="icon-label">历史会话</span>
+            <div class="app-icon" @click="$router.push('/contacts')">
+                <div class="icon-bg contacts-icon">👥</div>
+                <span class="icon-label">联系人</span>
             </div>
             <div class="app-icon" @click="$router.push('/memory')">
                 <div class="icon-bg status-icon">🧠</div>
@@ -37,18 +37,11 @@ const { timeStr, dateStr, greeting } = useTime()
 
 async function openChat() {
     try {
-        const res = await api('/api/sessions/latest')
+        const res = await api('/api/prompts/personas')
         const data = await res.json()
-        router.push(`/chat/${data.id}`)
+        router.push(`/chat/${data.active}`)
     } catch (e) {
-        // fallback: 创建新会话
-        const res = await api('/api/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: '新对话' })
-        })
-        const data = await res.json()
-        router.push(`/chat/${data.id}`)
+        router.push('/chat/xiaorou')
     }
 }
 </script>
@@ -128,7 +121,7 @@ async function openChat() {
     background: linear-gradient(135deg, #e8a0bf, #ba90c6);
 }
 
-.history-icon {
+.contacts-icon {
     background: linear-gradient(135deg, #f0d9a8, #e8c088);
 }
 

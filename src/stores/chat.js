@@ -14,9 +14,9 @@ export const useChatStore = defineStore("chat", () => {
     });
   }
 
-  async function loadHistory() {
+  async function loadPersonaMessages(personaId) {
     try {
-      const res = await api("/api/messages");
+      const res = await api(`/api/messages/${personaId}`);
       const data = await res.json();
       messages.value = data.map((m) => ({
         id: m.id,
@@ -25,22 +25,7 @@ export const useChatStore = defineStore("chat", () => {
         timestamp: m.timestamp,
       }));
     } catch (e) {
-      console.error("加载历史消息失败:", e);
-    }
-  }
-
-  async function loadSessionMessages(sessionId) {
-    try {
-      const res = await api(`/api/sessions/${sessionId}/messages`);
-      const data = await res.json();
-      messages.value = data.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        timestamp: m.timestamp,
-      }));
-    } catch (e) {
-      console.error("加载会话消息失败:", e);
+      console.error("加载消息失败:", e);
     }
   }
 
@@ -51,8 +36,7 @@ export const useChatStore = defineStore("chat", () => {
   return {
     messages,
     addMessage,
-    loadHistory,
-    loadSessionMessages,
+    loadPersonaMessages,
     clearMessages,
   };
 });

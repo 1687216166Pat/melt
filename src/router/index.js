@@ -1,8 +1,7 @@
-// src/router/index.js
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 import ChatView from "../views/ChatView.vue";
-import SessionsView from "../views/SessionsView.vue";
+import ContactsView from "../views/ContactsView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import MemoryView from "../views/MemoryView.vue";
 
@@ -15,19 +14,14 @@ const router = createRouter({
       component: HomeView,
     },
     {
-      path: "/chat",
+      path: "/chat/:personaId",
       name: "chat",
       component: ChatView,
     },
     {
-      path: "/chat/:id",
-      name: "chat-session",
-      component: ChatView,
-    },
-    {
-      path: "/sessions",
-      name: "sessions",
-      component: SessionsView,
+      path: "/contacts",
+      name: "contacts",
+      component: ContactsView,
     },
     {
       path: "/settings",

@@ -1,8 +1,8 @@
 <template>
     <div class="chat-page">
         <div class="chat-header">
-            <button class="back-btn" @click="$router.push('/sessions')">‹</button>
-            <h2>AI 助手</h2>
+            <button class="back-btn" @click="goBack">‹</button>
+            <h2>{{ personaName }}</h2>
         </div>
         <div class="chat-messages" ref="messagesContainer">
             <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :msg="msg" />
@@ -14,8 +14,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ChatBubble from '@/components/chat/ChatBubble.vue'
 import ChatInput from '@/components/chat/ChatInput.vue'
 import TypingIndicator from '@/components/chat/TypingIndicator.vue'
@@ -24,11 +24,30 @@ import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const route = useRoute()
+const router = useRouter()
 const chatStore = useChatStore()
 const { send, onMessage, removeHandler } = useWebSocket()
 const messagesContainer = ref(null)
 const isTyping = ref(false)
 const debugInfo = ref(null)
+
+function goBack() {
+    if (window.history.length > 1) {
+        router.back()
+    } else {
+        router.push('/')
+    }
+}
+
+const personaId = computed(() => route.params.personaId)
+
+const nameMap = {
+    xiaorou: '小柔',
+    cool: '阿冷',
+    assistant: '助手'
+}
+
+const personaName = computed(() => nameMap[personaId.value] || 'AI 助手')
 
 function scrollToBottom() {
     nextTick(() => {
@@ -40,7 +59,7 @@ function scrollToBottom() {
 
 function handleSend(text) {
     chatStore.addMessage({ role: 'user', content: text })
-    send({ type: 'chat', content: text, sessionId: route.params.id })
+    send({ type: 'chat', content: text, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
@@ -58,12 +77,7 @@ function handleIncoming(data) {
 
 onMounted(() => {
     onMessage(handleIncoming)
-    const sessionId = route.params.id
-    if (sessionId) {
-        chatStore.loadSessionMessages(sessionId)
-    } else {
-        chatStore.loadHistory()
-    }
+    chatStore.loadPersonaMessages(personaId.value)
 })
 
 onUnmounted(() => {
