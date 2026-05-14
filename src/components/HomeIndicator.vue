@@ -6,7 +6,7 @@
 
 <style scoped>
 .home-indicator-area {
-    padding-bottom: 8px;
+    padding-bottom: var(--sab, 0px);
     display: flex;
     justify-content: center;
     align-items: flex-end;
@@ -19,5 +19,6 @@
     background: var(--color-text);
     border-radius: 3px;
     opacity: 0.3;
+    margin-bottom: 8px;
 }
 </style>

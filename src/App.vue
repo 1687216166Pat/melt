@@ -39,6 +39,7 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     position: relative;
+    overflow: hidden;
     transition: background 1s ease;
 }
 
@@ -74,6 +75,8 @@ onUnmounted(() => {
 .screen-content {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 0 20px;
+    -webkit-overflow-scrolling: touch;
 }
 </style>
