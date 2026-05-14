@@ -4,6 +4,8 @@
             <p class="time-display">{{ timeStr }}</p>
             <p class="date-display">{{ dateStr }}</p>
             <p class="greeting-text">{{ greeting }}</p>
+            <p class="version-text">v1.0.1</p>
+
         </div>
         <div class="app-grid">
             <div class="app-icon" @click="$router.push('/sessions')">
@@ -108,5 +110,11 @@ const { timeStr, dateStr, greeting } = useTime()
     margin-top: 6px;
     font-size: 11px;
     color: var(--color-text);
+}
+
+.version-text {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
 }
 </style>
