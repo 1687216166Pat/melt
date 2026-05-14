@@ -37,6 +37,22 @@ router.get("/phone/status", async (req, res) => {
 });
 
 // 聊天记录 - 按人格获取
+router.get("/messages/latest-persona", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("messages")
+    .select("persona_id")
+    .order("id", { ascending: false })
+    .limit(1);
+
+  if (data && data.length > 0) {
+    res.json({ personaId: data[0].persona_id });
+  } else {
+    res.json({ personaId: null });
+  }
+});
+
 router.get("/messages/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
@@ -146,6 +162,86 @@ const { getDimensionsForDisplay } = require("../services/relationship");
 router.get("/relationship/:personaId", async (req, res) => {
   const data = await getDimensionsForDisplay(req.params.personaId);
   res.json(data);
+});
+
+const {
+  createCustomPersona,
+  deleteCustomPersona,
+} = require("../services/prompt");
+
+// 自定义人格
+router.post("/personas/custom", async (req, res) => {
+  const { name, content, avatar } = req.body;
+  const id = "custom_" + Date.now().toString(36);
+  await createCustomPersona(id, name, content, avatar);
+  res.json({ success: true, id });
+});
+
+router.delete("/personas/custom/:id", async (req, res) => {
+  await deleteCustomPersona(req.params.id);
+  res.json({ success: true });
+});
+
+// 导出所有数据
+router.get("/export", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+
+  const { data: messages } = await db.from("messages").select("*");
+  const { data: memories } = await db.from("memories_recent").select("*");
+  const { data: patterns } = await db.from("memory_patterns").select("*");
+  const { data: profile } = await db.from("user_profile").select("*");
+  const { data: personas } = await db.from("custom_personas").select("*");
+  const { data: dimensions } = await db
+    .from("relationship_dimensions")
+    .select("*");
+
+  res.json({
+    exportDate: new Date().toISOString(),
+    messages: messages || [],
+    memories: memories || [],
+    patterns: patterns || [],
+    profile: profile || [],
+    customPersonas: personas || [],
+    dimensions: dimensions || [],
+  });
+});
+
+// 导入数据
+router.post("/import", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const data = req.body;
+
+  try {
+    if (data.messages && data.messages.length > 0) {
+      await db.from("messages").insert(
+        data.messages.map((m) => ({
+          persona_id: m.persona_id || "xiaorou",
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+        })),
+      );
+    }
+    if (data.memories && data.memories.length > 0) {
+      await db.from("memories_recent").insert(
+        data.memories.map((m) => ({
+          persona_id: m.persona_id || "xiaorou",
+          content: m.content,
+          source_session: m.source_session,
+        })),
+      );
+    }
+    if (data.customPersonas && data.customPersonas.length > 0) {
+      for (const p of data.customPersonas) {
+        await db.from("custom_personas").upsert(p, { onConflict: "id" });
+      }
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

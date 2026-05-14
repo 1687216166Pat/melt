@@ -45,7 +45,7 @@
                     </div>
                     <div class="dim-markers">
                         <span v-for="s in stages" :key="s" class="marker" :class="{ active: s === dim.stage }">{{ s
-                            }}</span>
+                        }}</span>
                     </div>
                 </div>
             </div>
@@ -59,15 +59,24 @@
 import { ref, computed, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
-const personas = ref([
-    { id: 'xiaorou', name: '小柔' },
-    { id: 'cool', name: '阿冷' },
-    { id: 'assistant', name: '助手' }
-])
-
+const personas = ref([])
 const stages = ["靠近", "停留", "熟悉", "偏爱", "默契", "依恋", "长伴", "归属"]
-const currentPersona = ref('xiaorou')
+const currentPersona = ref('')
 const relationData = ref(null)
+
+async function loadPersonas() {
+    try {
+        const res = await api('/api/prompts/personas')
+        const data = await res.json()
+        personas.value = data.personas.map(p => ({ id: p.id, name: p.name }))
+        if (personas.value.length > 0) {
+            currentPersona.value = data.active || personas.value[0].id
+            await loadData(currentPersona.value)
+        }
+    } catch (e) {
+        console.error('加载人格列表失败:', e)
+    }
+}
 
 async function loadData(personaId) {
     try {
@@ -108,8 +117,9 @@ const dataPoints = computed(() => {
         .join(" ")
 })
 
-onMounted(() => loadData(currentPersona.value))
+onMounted(loadPersonas)
 </script>
+
 
 <style scoped>
 .relationship-page {

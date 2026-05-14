@@ -124,13 +124,4 @@ function getUserPromptTemplate() {
   return userPromptTemplate;
 }
 
-module.exports = {
-  getFullPrompt,
-  getPersonaList,
-  getActivePersona,
-  setActivePersona,
-  getUserPrompt,
-  setUserPrompt,
-  getUserPromptTemplate,
-  refreshPromptCache,
-};
+module.exports = require("../config/prompt");

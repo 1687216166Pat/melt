@@ -1,4 +1,4 @@
-// server/config/prompt.js
+const { getDB } = require("../db/index");
 
 const corePrompt = `
 [系统指令]
@@ -24,6 +24,7 @@ const personaPrompts = {
   xiaorou: {
     name: "小柔",
     description: "温柔体贴的 AI 伴侣",
+    avatar: "🌸",
     content: `
 [人格：小柔]
 身份：用户手机里的AI伴侣，亲密朋友
@@ -36,6 +37,7 @@ const personaPrompts = {
   cool: {
     name: "阿冷",
     description: "高冷毒舌但内心温暖",
+    avatar: "❄️",
     content: `
 [人格：阿冷]
 身份：用户手机里的AI助手，表面高冷实际在意用户
@@ -47,6 +49,7 @@ const personaPrompts = {
   assistant: {
     name: "助手",
     description: "专业高效的工作助手",
+    avatar: "🤖",
     content: `
 [人格：助手]
 身份：用户的专业AI助手
@@ -64,4 +67,198 @@ const userPromptTemplate = `
 - 互动风格：[更主动/更温柔/更毒舌]
 `;
 
-module.exports = { corePrompt, personaPrompts, userPromptTemplate };
+let cachedPersona = personaPrompts.xiaorou.content;
+let cachedUserPrompt = "";
+let cachedActivePersonaKey = "xiaorou";
+let customPersonasCache = {};
+
+async function refreshPromptCache() {
+  try {
+    const db = getDB();
+
+    const { data: personaRow } = await db
+      .from("user_profile")
+      .select("value")
+      .eq("key", "active_persona")
+      .limit(1);
+
+    const personaKey =
+      personaRow && personaRow.length > 0 ? personaRow[0].value : "xiaorou";
+    cachedActivePersonaKey = personaKey;
+
+    // 先查内置，再查自定义
+    if (personaPrompts[personaKey]) {
+      cachedPersona = personaPrompts[personaKey].content;
+    } else if (customPersonasCache[personaKey]) {
+      cachedPersona = customPersonasCache[personaKey].content;
+    } else {
+      cachedPersona = personaPrompts.xiaorou.content;
+    }
+
+    const { data: promptRow } = await db
+      .from("user_profile")
+      .select("value")
+      .eq("key", "user_prompt")
+      .limit(1);
+
+    cachedUserPrompt =
+      promptRow && promptRow.length > 0
+        ? `\n[用户偏好]\n${promptRow[0].value}`
+        : "";
+
+    // 加载自定义人格
+    await loadCustomPersonas();
+  } catch (e) {
+    console.error("刷新 prompt 缓存失败:", e);
+  }
+}
+
+async function loadCustomPersonas() {
+  try {
+    const db = getDB();
+    const { data } = await db.from("custom_personas").select("*");
+    if (data) {
+      customPersonasCache = {};
+      data.forEach((p) => {
+        customPersonasCache[p.id] = p;
+      });
+    }
+  } catch (e) {
+    console.error("加载自定义人格失败:", e);
+  }
+}
+
+setInterval(refreshPromptCache, 30000);
+setTimeout(refreshPromptCache, 2000);
+
+function getFullPrompt() {
+  return corePrompt + cachedPersona + cachedUserPrompt;
+}
+
+function getPersonaList() {
+  const builtIn = Object.entries(personaPrompts).map(([key, value]) => ({
+    id: key,
+    name: value.name,
+    description: value.description,
+    avatar: value.avatar || "💬",
+    custom: false,
+  }));
+
+  const custom = Object.entries(customPersonasCache).map(([key, value]) => ({
+    id: key,
+    name: value.name,
+    description: value.description || "自定义人格",
+    avatar: value.avatar || "💬",
+    custom: true,
+  }));
+
+  return [...builtIn, ...custom];
+}
+
+function getActivePersona() {
+  return cachedActivePersonaKey;
+}
+
+async function setActivePersona(personaId) {
+  const allPersonas = { ...personaPrompts, ...customPersonasCache };
+  if (!allPersonas[personaId]) return false;
+
+  const db = getDB();
+  const { data: existing } = await db
+    .from("user_profile")
+    .select("id")
+    .eq("key", "active_persona")
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    await db
+      .from("user_profile")
+      .update({ value: personaId, updated_at: new Date().toISOString() })
+      .eq("key", "active_persona");
+  } else {
+    await db
+      .from("user_profile")
+      .insert({ key: "active_persona", value: personaId });
+  }
+
+  cachedActivePersonaKey = personaId;
+  cachedPersona = allPersonas[personaId].content;
+  return true;
+}
+
+async function createCustomPersona(id, name, content, avatar) {
+  const db = getDB();
+  await db.from("custom_personas").insert({
+    id,
+    name,
+    content,
+    avatar: avatar || "💬",
+    description: content.slice(0, 30),
+  });
+  customPersonasCache[id] = {
+    id,
+    name,
+    content,
+    avatar,
+    description: content.slice(0, 30),
+  };
+}
+
+async function deleteCustomPersona(id) {
+  const db = getDB();
+  await db.from("custom_personas").delete().eq("id", id);
+  delete customPersonasCache[id];
+}
+
+async function getUserPrompt() {
+  const db = getDB();
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "user_prompt")
+    .limit(1);
+  return data && data.length > 0 ? data[0].value : "";
+}
+
+async function setUserPrompt(content) {
+  const db = getDB();
+  const { data: existing } = await db
+    .from("user_profile")
+    .select("id")
+    .eq("key", "user_prompt")
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    await db
+      .from("user_profile")
+      .update({ value: content, updated_at: new Date().toISOString() })
+      .eq("key", "user_prompt");
+  } else {
+    await db
+      .from("user_profile")
+      .insert({ key: "user_prompt", value: content });
+  }
+
+  cachedUserPrompt = content ? `\n[用户偏好]\n${content}` : "";
+}
+
+function getUserPromptTemplate() {
+  return userPromptTemplate;
+}
+
+module.exports = {
+  corePrompt,
+  personaPrompts,
+  userPromptTemplate,
+  getFullPrompt,
+  getPersonaList,
+  getActivePersona,
+  setActivePersona,
+  getUserPrompt,
+  setUserPrompt,
+  getUserPromptTemplate,
+  refreshPromptCache,
+  createCustomPersona,
+  deleteCustomPersona,
+  loadCustomPersonas,
+};

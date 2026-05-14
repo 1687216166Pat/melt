@@ -23,6 +23,7 @@ import TypingIndicator from '@/components/chat/TypingIndicator.vue'
 import DebugPanel from '@/components/chat/DebugPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { api } from '@/utils/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,14 +42,20 @@ function goBack() {
 }
 
 const personaId = computed(() => route.params.personaId)
+const personaName = ref('AI 助手')
 
-const nameMap = {
-    xiaorou: '小柔',
-    cool: '阿冷',
-    assistant: '助手'
+async function loadPersonaName() {
+    try {
+        const res = await api('/api/prompts/personas')
+        const data = await res.json()
+        const found = data.personas.find(p => p.id === personaId.value)
+        if (found) {
+            personaName.value = found.name
+        }
+    } catch (e) {
+        // 保持默认名字
+    }
 }
-
-const personaName = computed(() => nameMap[personaId.value] || 'AI 助手')
 
 function scrollToBottom() {
     nextTick(() => {
@@ -78,6 +85,7 @@ function handleIncoming(data) {
 
 onMounted(() => {
     onMessage(handleIncoming)
+    loadPersonaName()
     chatStore.loadPersonaMessages(personaId.value)
 })
 
@@ -86,6 +94,7 @@ onUnmounted(() => {
 })
 
 watch(() => chatStore.messages.length, scrollToBottom)
+
 </script>
 
 <style scoped>

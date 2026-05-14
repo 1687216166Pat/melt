@@ -4,7 +4,7 @@
             <p class="time-display">{{ timeStr }}</p>
             <p class="date-display">{{ dateStr }}</p>
             <p class="greeting-text">{{ greeting }}</p>
-            <p class="version-text">v1.1.0</p>
+            <p class="version-text">v1.1.1</p>
         </div>
         <div class="app-grid">
             <div class="app-icon" @click="openChat">
@@ -42,13 +42,22 @@ const { timeStr, dateStr, greeting } = useTime()
 
 async function openChat() {
     try {
-        const res = await api('/api/prompts/personas')
+        // 先查最近一条消息是哪个人格的
+        const res = await api('/api/messages/latest-persona')
         const data = await res.json()
-        router.push(`/chat/${data.active}`)
+        if (data.personaId) {
+            router.push(`/chat/${data.personaId}`)
+        } else {
+            // 没有聊天记录，用当前激活的人格
+            const pRes = await api('/api/prompts/personas')
+            const pData = await pRes.json()
+            router.push(`/chat/${pData.active}`)
+        }
     } catch (e) {
         router.push('/chat/xiaorou')
     }
 }
+
 </script>
 
 <style scoped>

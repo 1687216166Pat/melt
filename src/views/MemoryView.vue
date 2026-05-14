@@ -38,15 +38,24 @@
 import { ref, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
-const personas = ref([
-    { id: 'xiaorou', name: '小柔' },
-    { id: 'cool', name: '阿冷' },
-    { id: 'assistant', name: '助手' }
-])
-
-const currentPersona = ref('xiaorou')
+const personas = ref([])
+const currentPersona = ref('')
 const profile = ref('')
 const recentMemories = ref([])
+
+async function loadPersonas() {
+    try {
+        const res = await api('/api/prompts/personas')
+        const data = await res.json()
+        personas.value = data.personas.map(p => ({ id: p.id, name: p.name }))
+        if (personas.value.length > 0) {
+            currentPersona.value = data.active || personas.value[0].id
+            await loadMemories(currentPersona.value)
+        }
+    } catch (e) {
+        console.error('加载人格列表失败:', e)
+    }
+}
 
 async function loadMemories(personaId) {
     try {
@@ -69,8 +78,9 @@ async function deleteMemory(id) {
     recentMemories.value = recentMemories.value.filter(m => m.id !== id)
 }
 
-onMounted(() => loadMemories(currentPersona.value))
+onMounted(loadPersonas)
 </script>
+
 
 <style scoped>
 .memory-page {

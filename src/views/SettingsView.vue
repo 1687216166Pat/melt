@@ -6,6 +6,25 @@
         </div>
 
         <div class="settings-content">
+            <!-- API 配置 -->
+            <div class="section">
+                <h3>🔑 API 配置</h3>
+                <div class="input-group">
+                    <label>API Key</label>
+                    <input type="password" v-model="apiConfig.key" placeholder="sk-..." />
+                </div>
+                <div class="input-group">
+                    <label>API 地址</label>
+                    <input type="text" v-model="apiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
+                </div>
+                <div class="input-group">
+                    <label>模型名称</label>
+                    <input type="text" v-model="apiConfig.model" placeholder="gpt-4o-mini" />
+                </div>
+                <button class="save-btn" @click="saveApiConfig">保存 API 配置</button>
+                <p class="save-tip" v-if="apiSaved">已保存 ✓</p>
+            </div>
+
             <!-- 主动消息设置 -->
             <div class="section">
                 <h3>💬 主动消息</h3>
@@ -35,36 +54,12 @@
                             <option :value="5">5 次</option>
                         </select>
                     </div>
-                    <div class="setting-row">
-                        <span>最小间隔</span>
-                        <select v-model="proactive.minInterval" @change="saveProactive">
-                            <option :value="2">2 小时</option>
-                            <option :value="4">4 小时</option>
-                            <option :value="6">6 小时</option>
-                            <option :value="8">8 小时</option>
-                        </select>
-                    </div>
-                    <div class="setting-row">
-                        <span>深夜提醒</span>
-                        <label class="toggle">
-                            <input type="checkbox" v-model="proactive.nightReminder" @change="saveProactive" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div class="setting-row">
-                        <span>记忆提醒</span>
-                        <label class="toggle">
-                            <input type="checkbox" v-model="proactive.memoryReminder" @change="saveProactive" />
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <button class="test-btn" @click="testProactive">测试发送一条</button>
                 </div>
             </div>
 
             <!-- 人格切换 -->
             <div class="section">
-                <h3>人格选择（第二层）</h3>
+                <h3>🎭 人格选择</h3>
                 <div v-for="p in personas" :key="p.id" class="persona-card" :class="{ active: p.id === activePersona }"
                     @click="switchPersona(p.id)">
                     <span class="persona-name">{{ p.name }}</span>
@@ -75,11 +70,19 @@
 
             <!-- 用户偏好 -->
             <div class="section">
-                <h3>我的偏好（第三层）</h3>
-                <p class="section-tip">这里的设定会叠加在人格之上，不会覆盖核心性格</p>
-                <textarea v-model="userPrompt" :placeholder="template" rows="10"></textarea>
+                <h3>📝 我的偏好</h3>
+                <textarea v-model="userPrompt" :placeholder="template" rows="8"></textarea>
                 <button class="save-btn" @click="saveUserPrompt">保存偏好</button>
                 <p class="save-tip" v-if="saved">已保存 ✓</p>
+            </div>
+
+            <!-- 导入导出 -->
+            <div class="section">
+                <h3>💾 数据管理</h3>
+                <button class="action-btn" @click="exportData">导出数据 (JSON)</button>
+                <button class="action-btn" @click="triggerImport">导入数据 (JSON)</button>
+                <input type="file" ref="importInput" accept=".json" style="display:none" @change="importData" />
+                <button class="action-btn upload-btn" @click="syncToCloud">上传至云端</button>
             </div>
         </div>
     </div>
@@ -94,6 +97,14 @@ const activePersona = ref('')
 const userPrompt = ref('')
 const template = ref('')
 const saved = ref(false)
+const apiSaved = ref(false)
+const importInput = ref(null)
+
+const apiConfig = reactive({
+    key: '',
+    baseUrl: '',
+    model: ''
+})
 
 const proactive = reactive({
     enabled: true,
@@ -104,7 +115,13 @@ const proactive = reactive({
     minInterval: 4
 })
 
-async function loadData() {
+onMounted(async () => {
+    // 加载 API 配置（本地存储）
+    const savedConfig = localStorage.getItem('api_config')
+    if (savedConfig) {
+        Object.assign(apiConfig, JSON.parse(savedConfig))
+    }
+
     try {
         const pRes = await api('/api/prompts/personas')
         const pData = await pRes.json()
@@ -122,6 +139,12 @@ async function loadData() {
     } catch (e) {
         console.error('加载设置失败:', e)
     }
+})
+
+function saveApiConfig() {
+    localStorage.setItem('api_config', JSON.stringify(apiConfig))
+    apiSaved.value = true
+    setTimeout(() => { apiSaved.value = false }, 2000)
 }
 
 async function switchPersona(id) {
@@ -147,12 +170,48 @@ async function saveProactive() {
     })
 }
 
-async function testProactive() {
-    await api('/api/proactive/trigger', { method: 'POST' })
+async function exportData() {
+    try {
+        const res = await api('/api/export')
+        const data = await res.json()
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ai-phone-backup-${new Date().toISOString().slice(0, 10)}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+    } catch (e) {
+        console.error('导出失败:', e)
+    }
 }
 
-onMounted(loadData)
+function triggerImport() {
+    importInput.value.click()
+}
 
+async function importData(event) {
+    const file = event.target.files[0]
+    if (!file) return
+
+    try {
+        const text = await file.text()
+        const data = JSON.parse(text)
+        await api('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        alert('导入成功')
+    } catch (e) {
+        console.error('导入失败:', e)
+        alert('导入失败: ' + e.message)
+    }
+}
+
+async function syncToCloud() {
+    alert('数据已在云端（Supabase），无需额外同步')
+}
 </script>
 
 <style scoped>
@@ -161,9 +220,7 @@ onMounted(loadData)
     flex-direction: column;
     height: 100%;
     padding-top: env(safe-area-inset-top, 44px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-
 
 .settings-header {
     display: flex;
@@ -191,6 +248,7 @@ onMounted(loadData)
     flex: 1;
     overflow-y: auto;
     padding: 16px 0;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
 }
 
 .section {
@@ -203,10 +261,30 @@ onMounted(loadData)
     margin-bottom: 10px;
 }
 
-.section-tip {
+.input-group {
+    margin-bottom: 10px;
+}
+
+.input-group label {
+    display: block;
     font-size: 12px;
     color: var(--color-text-light);
-    margin-bottom: 10px;
+    margin-bottom: 4px;
+}
+
+.input-group input {
+    width: 100%;
+    height: 38px;
+    border: 1px solid var(--color-bg-secondary);
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 14px;
+    background: var(--color-white);
+    outline: none;
+}
+
+.input-group input:focus {
+    border-color: var(--color-primary);
 }
 
 .setting-row {
@@ -230,7 +308,6 @@ onMounted(loadData)
     outline: none;
 }
 
-/* Toggle 开关 */
 .toggle {
     position: relative;
     width: 44px;
@@ -275,18 +352,6 @@ onMounted(loadData)
     transform: translateX(20px);
 }
 
-.test-btn {
-    width: 100%;
-    padding: 10px;
-    margin-top: 8px;
-    border: 1px dashed var(--color-primary);
-    background: none;
-    color: var(--color-primary);
-    border-radius: 8px;
-    font-size: 13px;
-    cursor: pointer;
-}
-
 .persona-card {
     background: var(--color-white);
     border-radius: 12px;
@@ -298,7 +363,6 @@ onMounted(loadData)
     border: 2px solid transparent;
     cursor: pointer;
     transition: all 0.15s;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .persona-card.active {
@@ -360,5 +424,27 @@ textarea:focus {
     color: var(--color-primary);
     font-size: 13px;
     margin-top: 8px;
+}
+
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--color-bg-secondary);
+    background: var(--color-white);
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--color-text);
+    cursor: pointer;
+}
+
+.action-btn:active {
+    background: var(--color-bg-secondary);
+}
+
+.upload-btn {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
 }
 </style>
