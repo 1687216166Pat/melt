@@ -52,9 +52,9 @@ router.get("/messages", async (req, res) => {
 });
 
 // 会话管理
-router.get("/sessions", async (req, res) => {
-  const sessions = await getSessions();
-  res.json(sessions);
+router.get("/sessions/latest", async (req, res) => {
+  const session = await getCurrentSession();
+  res.json(session);
 });
 
 router.post("/sessions", async (req, res) => {

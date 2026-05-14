@@ -7,7 +7,9 @@ const {
   saveDailyMemory,
   buildMemoryContextAsync,
   getSessionMemory,
+  detectPatterns,
 } = require("./memory");
+
 const { getCurrentSession, touchSession } = require("./session");
 
 function getTimeContext() {
@@ -50,6 +52,8 @@ async function handleChat(userMessage, ws, sessionId) {
     content: userMessage,
     timestamp: nowISO,
   });
+
+  detectPatterns(userMessage);
 
   await touchSession(sid);
 

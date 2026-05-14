@@ -4,13 +4,16 @@
             <p class="time-display">{{ timeStr }}</p>
             <p class="date-display">{{ dateStr }}</p>
             <p class="greeting-text">{{ greeting }}</p>
-            <p class="version-text">v1.0.1</p>
-
+            <p class="version-text">v1.0.2</p>
         </div>
         <div class="app-grid">
-            <div class="app-icon" @click="$router.push('/sessions')">
+            <div class="app-icon" @click="openChat">
                 <div class="icon-bg chat-icon">💬</div>
                 <span class="icon-label">AI 聊天</span>
+            </div>
+            <div class="app-icon" @click="$router.push('/sessions')">
+                <div class="icon-bg history-icon">📋</div>
+                <span class="icon-label">历史会话</span>
             </div>
             <div class="app-icon" @click="$router.push('/memory')">
                 <div class="icon-bg status-icon">🧠</div>
@@ -25,9 +28,29 @@
 </template>
 
 <script setup>
+import { useRouter } from 'vue-router'
 import { useTime } from '@/composables/useTime'
+import { api } from '@/utils/api'
 
+const router = useRouter()
 const { timeStr, dateStr, greeting } = useTime()
+
+async function openChat() {
+    try {
+        const res = await api('/api/sessions/latest')
+        const data = await res.json()
+        router.push(`/chat/${data.id}`)
+    } catch (e) {
+        // fallback: 创建新会话
+        const res = await api('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: '新对话' })
+        })
+        const data = await res.json()
+        router.push(`/chat/${data.id}`)
+    }
+}
 </script>
 
 <style scoped>
@@ -65,6 +88,12 @@ const { timeStr, dateStr, greeting } = useTime()
     font-weight: 500;
 }
 
+.version-text {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+}
+
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -99,6 +128,10 @@ const { timeStr, dateStr, greeting } = useTime()
     background: linear-gradient(135deg, #e8a0bf, #ba90c6);
 }
 
+.history-icon {
+    background: linear-gradient(135deg, #f0d9a8, #e8c088);
+}
+
 .status-icon {
     background: linear-gradient(135deg, #c0dbea, #a8d8ea);
 }
@@ -111,11 +144,5 @@ const { timeStr, dateStr, greeting } = useTime()
     margin-top: 6px;
     font-size: 11px;
     color: var(--color-text);
-}
-
-.version-text {
-    font-size: 11px;
-    color: #999;
-    margin-top: 4px;
 }
 </style>
