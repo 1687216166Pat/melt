@@ -1,5 +1,5 @@
 <template>
-    <div class="phone-screen" :class="period">
+    <div class="phone-screen" :class="period" :style="atmosphereStyle">
         <div class="bg-decor">
             <div class="decor-circle c1"></div>
             <div class="decor-circle c2"></div>
@@ -13,22 +13,51 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import NotificationBanner from '@/components/NotificationBanner.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useTime } from '@/composables/useTime'
+import { api } from '@/utils/api'
+import { useDeviceStatus } from '@/composables/useDeviceStatus'
 
 const { connect, requestNotificationPermission, registerPushSubscription } = useWebSocket()
 const { period, startClock, stopClock } = useTime()
+
+const atmosphereWarmth = ref(0)
+const { startReporting, stopReporting } = useDeviceStatus()
+
+const atmosphereStyle = computed(() => {
+    const w = atmosphereWarmth.value
+    if (w <= 0) return {}
+    return {
+        '--decor-opacity': 0.3 + w * 0.2,
+        '--decor-scale': 1 + w * 0.1,
+    }
+})
+
+async function loadAtmosphere() {
+    try {
+        const pRes = await api('/api/prompts/personas')
+        const pData = await pRes.json()
+        const activeId = pData.active || 'xiaorou'
+
+        const res = await api(`/api/atmosphere/${activeId}`)
+        const data = await res.json()
+        atmosphereWarmth.value = data.uiWarmth || 0
+    } catch { }
+}
 
 onMounted(() => {
     connect()
     requestNotificationPermission()
     registerPushSubscription()
     startClock()
+    loadAtmosphere()
+    setInterval(loadAtmosphere, 5 * 60 * 1000)
 })
 
 onUnmounted(() => {
+    stopReporting()
     stopClock()
 })
 </script>
@@ -78,6 +107,8 @@ onUnmounted(() => {
     overflow-x: hidden;
     padding: 0 22px;
     -webkit-overflow-scrolling: touch;
+    position: relative;
+    z-index: 1;
 }
 
 .bg-decor {
@@ -95,7 +126,9 @@ onUnmounted(() => {
     position: absolute;
     border-radius: 50%;
     filter: blur(60px);
-    opacity: 0.3;
+    opacity: var(--decor-opacity, 0.3);
+    transform: scale(var(--decor-scale, 1));
+    transition: opacity 2s var(--ease-soft), transform 2s var(--ease-soft);
 }
 
 .c1 {
@@ -123,13 +156,5 @@ onUnmounted(() => {
     bottom: -20px;
     right: 20%;
     animation: softFloat 14s ease-in-out infinite 4s;
-}
-
-.screen-content {
-    flex: 1;
-    overflow: hidden;
-    padding: 0 22px;
-    position: relative;
-    z-index: 1;
 }
 </style>

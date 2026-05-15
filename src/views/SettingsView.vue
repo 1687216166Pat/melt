@@ -118,6 +118,31 @@
                     <SoftButton variant="primary" block @click="syncToCloud">上传至云端</SoftButton>
                 </GlassCard>
             </div>
+
+            <!-- 手机状态感知 -->
+            <div class="section">
+                <h3>📱 手机状态感知</h3>
+                <GlassCard size="md">
+                    <p class="guide-text">通过 iOS 快捷指令自动上报手机状态，让 AI 感知你的生活节奏。</p>
+                    <p class="guide-step">1. 打开「快捷指令」App</p>
+                    <p class="guide-step">2. 创建自动化 → 选择触发条件</p>
+                    <p class="guide-step">3. 添加「获取 URL 内容」操作</p>
+                    <p class="guide-step">4. 设置以下 Webhook：</p>
+                    <div class="webhook-box">
+                        <p class="webhook-url">POST {{ webhookUrl }}/api/phone/status</p>
+                        <p class="webhook-body">Body: {"type":"sleep","data":"入睡"}</p>
+                    </div>
+                    <p class="guide-text">推荐自动化触发条件：</p>
+                    <div class="trigger-list">
+                        <GlassTag variant="pink" size="sm">睡觉时</GlassTag>
+                        <GlassTag variant="pink" size="sm">起床时</GlassTag>
+                        <GlassTag variant="warm" size="sm">电量低于20%</GlassTag>
+                        <GlassTag variant="purple" size="sm">打开某个App</GlassTag>
+                        <GlassTag variant="soft" size="sm">连接WiFi</GlassTag>
+                    </div>
+                </GlassCard>
+            </div>
+
         </div>
     </div>
 </template>
@@ -160,6 +185,8 @@ const outputPrefs = reactive({
 const modelList = ref([])
 const apiTestResult = ref(null)
 const proactiveTestResult = ref(null)
+const webhookUrl = ref(import.meta.env.VITE_API_URL || window.location.origin)
+
 
 onMounted(async () => {
     // 加载 API 配置（本地存储）
@@ -687,5 +714,46 @@ textarea:focus {
 .api-result.error {
     color: #c07070;
     background: rgba(192, 112, 112, 0.08);
+}
+
+.guide-text {
+    font-size: 13px;
+    color: var(--color-text);
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+
+.guide-step {
+    font-size: 12px;
+    color: var(--color-text-light);
+    padding: 4px 0;
+    padding-left: 8px;
+}
+
+.webhook-box {
+    background: var(--color-bg);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 10px 0;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--color-text);
+    word-break: break-all;
+}
+
+.webhook-url {
+    margin-bottom: 4px;
+    color: var(--color-primary);
+}
+
+.webhook-body {
+    color: var(--color-text-light);
+}
+
+.trigger-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
 }
 </style>

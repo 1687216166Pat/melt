@@ -588,4 +588,10 @@ router.get("/timeline/:personaId", async (req, res) => {
   res.json(data);
 });
 
+router.get("/atmosphere/:personaId", async (req, res) => {
+  const { getRelationshipAtmosphere } = require("../services/relationship");
+  const data = await getRelationshipAtmosphere(req.params.personaId);
+  res.json(data);
+});
+
 module.exports = router;

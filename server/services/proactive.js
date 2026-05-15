@@ -2,6 +2,8 @@
 const { getDB } = require("../db/index");
 const { pushToAll } = require("../ws/socket");
 const { getMemoryProfile, getRecentMemories } = require("./memory");
+const { getRelationshipAtmosphere } = require("./relationship");
+const { getActivePersona } = require("./prompt");
 
 async function getProactiveSettings() {
   const db = getDB();
@@ -57,6 +59,16 @@ async function checkProactiveMessages() {
   const hour = now.getHours();
   const today = now.toISOString().slice(0, 10);
 
+  // 关系氛围影响主动消息频率
+  const activePersona = getActivePersona();
+  let intervalMultiplier = 1;
+  try {
+    const atmosphere = await getRelationshipAtmosphere(activePersona);
+    if (atmosphere.phase === "close") intervalMultiplier = 0.8;
+    if (atmosphere.phase === "deep") intervalMultiplier = 0.6;
+    if (atmosphere.phase === "bonded") intervalMultiplier = 0.5;
+  } catch {}
+
   // 边界检查
   const { data: todayLogs } = await db
     .from("proactive_log")
@@ -73,7 +85,7 @@ async function checkProactiveMessages() {
 
   if (lastLog && lastLog.length > 0) {
     const hoursSince = (now - new Date(lastLog[0].sent_at)) / (1000 * 60 * 60);
-    if (hoursSince < settings.minInterval) return;
+    if (hoursSince < settings.minInterval * intervalMultiplier) return;
   }
 
   // 获取最后一条用户消息

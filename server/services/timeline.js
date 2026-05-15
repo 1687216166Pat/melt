@@ -31,6 +31,9 @@ function fuzzyTime(date) {
 async function checkTimelineEvent(personaId, userMessage, aiReply, context) {
   const db = getDB();
 
+  const { getRelationshipAtmosphere } = require("./relationship");
+  const atmosphere = await getRelationshipAtmosphere(personaId);
+
   // 不要太频繁生成（至少间隔 2 小时）
   const { data: lastEvent } = await db
     .from("timeline_events")
@@ -47,25 +50,29 @@ async function checkTimelineEvent(personaId, userMessage, aiReply, context) {
   }
 
   // 让 AI 判断是否值得记入时间线
+  const toneGuide =
+    atmosphere.phase === "initial"
+      ? "语气：像刚开始记录的观察者，客观温和"
+      : atmosphere.phase === "familiar"
+        ? "语气：像开始熟悉的朋友在记录"
+        : atmosphere.phase === "close"
+          ? "语气：像一起生活的人在回忆"
+          : "语气：像已经很久很久的陪伴者在轻声说";
+
   const prompt = `你是一个时间线记录系统。判断以下对话是否包含"值得留下痕迹"的瞬间。
 
+${toneGuide}
+
 只有以下类型才值得记录：
-- 高情绪波动（很开心/很难过/崩溃/感动）
-- 关系变化（更亲近/更信任/第一次做某事）
-- 长期习惯形成（总是深夜聊天/每天道晚安）
-- 共同经历（一起完成某事/一起度过某段时间）
-- 特别的瞬间（第一次说某句话/意外的温暖）
+- 高情绪波动
+- 关系变化
+- 长期习惯形成
+- 共同经历
+- 特别的瞬间
 
 如果不值得记录，回复"无"。
 如果值得，用以下格式回复（一行）：
 类型|内容描述（用模糊温柔的语气，像回忆一样，不超过30字）|标签
-
-类型可选：emotion/relation/experience/habit/memory
-标签可选：深夜/陪伴/温暖/成长/信任/习惯/情绪
-
-示例：
-relation|不知道什么时候开始，你们已经习惯说晚安了|习惯
-emotion|那天晚上你好像特别累，但还是来了|深夜
 
 用户: ${userMessage}
 AI: ${aiReply}

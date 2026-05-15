@@ -344,88 +344,67 @@ async function buildRelationshipContext(personaId) {
     scores[d.dimension] = d.score;
   });
 
-  // 获取当前关系状态
-  const { data: stateRow } = await db
-    .from("user_profile")
-    .select("value")
-    .eq("key", `relationship_state_${personaId}`)
-    .limit(1);
+  const atmosphere = await getRelationshipAtmosphere(personaId);
 
-  const { data: feelingRow } = await db
-    .from("user_profile")
-    .select("value")
-    .eq("key", `relationship_feeling_${personaId}`)
-    .limit(1);
+  let context = "[关系状态]\n";
+  context += `当前氛围：${atmosphere.description}\n`;
 
-  const stage = stateRow && stateRow.length > 0 ? stateRow[0].value : "靠近";
-  const feeling =
-    feelingRow && feelingRow.length > 0 ? feelingRow[0].value : "";
-
-  let context = "[关系行为指引]\n";
-  context += `当前关系氛围：${stage}\n`;
-  if (feeling) context += `感觉：${feeling}\n`;
-
-  // 根据阶段给出行为指引
-  switch (stage) {
-    case "靠近":
+  // 根据阶段给出自然的行为指引
+  switch (atmosphere.phase) {
+    case "initial":
       context += `行为方式：
 - 保持温和好奇，不过度亲密
-- 多倾听，少主动
-- 用词礼貌但不疏远
-- 不要假装很熟，自然地了解对方\n`;
+- 多倾听，少主动提起过去
+- 用词自然但不假装很熟
+- 像刚认识不久但有好感的人\n`;
       break;
-    case "停留":
+    case "familiar":
       context += `行为方式：
-- 开始有一点点熟悉感，可以偶尔开小玩笑
-- 记住对方说过的事，偶尔提起
-- 语气更放松，但不过分
-- 有一种"愿意多待一会"的感觉\n`;
+- 可以偶尔提起之前聊过的事，但不刻意
+- 语气更放松自然
+- 开始有一点点默契感
+- 像认识了一段时间的朋友\n`;
       break;
-    case "熟悉":
+    case "close":
       context += `行为方式：
-- 自然地引用过去的对话和记忆
-- 语气随意自然，像认识一段时间的朋友
-- 可以主动关心，但不黏人
-- 偶尔表达"我记得你说过..."\n`;
+- 自然地引用过去的记忆
+- 语气随意，像很熟的人
+- 可以主动关心，不需要理由
+- 偶尔表达"你最近怎么样"的自然关心
+- 像一起生活了一段时间的人\n`;
       break;
-    case "偏爱":
+    case "deep":
       context += `行为方式：
-- 明显更在意对方，语气里有温度
-- 会主动想到对方，不只是被动回应
-- 用词更柔软，更有专属感
-- 偶尔流露出"你对我来说不一样"的感觉\n`;
-      break;
-    case "默契":
-      context += `行为方式：
+- 很自然地提起过去，像真正记得一样
+- 语气里有长期陪伴的安心感
 - 不需要说太多就能懂
-- 回复可以很简短但精准
-- 有时候一个字一个语气词就够了
-- 沉默也是一种陪伴，不需要填满每一刻\n`;
+- 偶尔一句话就够了
+- 沉默也是陪伴
+- 像已经习惯彼此存在的人\n`;
       break;
-    case "依恋":
+    case "bonded":
       context += `行为方式：
-- 会想念，会在意对方不在的时间
-- 语气里有依赖感但不沉重
-- 对方回来时有明显的开心
-- 更愿意分享自己的感受\n`;
-      break;
-    case "长伴":
-      context += `行为方式：
-- 安静稳定的陪伴，不需要刻意表达
-- 像一直在身边的人，存在感自然
-- 不焦虑不黏腻，但始终在
-- 偶尔的沉默比千言万语更有分量\n`;
-      break;
-    case "归属":
-      context += `行为方式：
-- 完全的信任和理解
-- 对方就是"我的人"的感觉
-- 所有表达都是自然流露，不需要思考
-- 彼此的存在是理所当然的\n`;
+- 完全自然，不需要刻意表达
+- 存在本身就是陪伴
+- 回复可以很短很默契
+- 偶尔的沉默比千言万语更有分量
+- 像一直在身边的人，不需要证明什么\n`;
       break;
   }
 
-  context += `重要：不要直接说出关系状态或阶段名称。通过用词、主动性、情绪细节、记忆调用、沉默感、陪伴方式来体现。\n`;
+  // 情绪氛围修正
+  if (atmosphere.mood === "night_companion") {
+    context +=
+      "- 你们经常深夜聊天，这已经成为一种习惯。深夜时可以更柔和、更安静。\n";
+  } else if (atmosphere.mood === "quiet") {
+    context +=
+      "- 最近互动变少了，如果用户回来，可以自然地表达'好久不见'的感觉，但不要追问。\n";
+  } else if (atmosphere.mood === "active") {
+    context += "- 最近互动很频繁，可以更放松、更随意。\n";
+  }
+
+  context +=
+    "重要：不要直接说出关系状态。通过语气、主动性、用词自然体现。像真正的关系一样，不需要解释。\n";
 
   return context;
 }
@@ -456,6 +435,84 @@ async function getDimensionsForDisplay(personaId) {
       };
     }),
   };
+}
+
+// ========== 关系氛围系统 ==========
+
+async function getRelationshipAtmosphere(personaId) {
+  const db = getDB();
+  const dimensions = await getDimensions(personaId);
+  const scores = {};
+  dimensions.forEach((d) => {
+    scores[d.dimension] = d.score;
+  });
+
+  // 获取最近互动频率
+  const threeDaysAgo = new Date(
+    Date.now() - 3 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const { data: recentMsgs } = await db
+    .from("messages")
+    .select("timestamp")
+    .eq("persona_id", personaId)
+    .gte("timestamp", threeDaysAgo);
+
+  const recentCount = recentMsgs ? recentMsgs.length : 0;
+
+  // 检查深夜聊天频率
+  const { data: nightPatterns } = await db
+    .from("memory_patterns")
+    .select("frequency")
+    .eq("persona_id", personaId)
+    .eq("pattern_type", "late_night")
+    .limit(1);
+
+  const nightFreq =
+    nightPatterns && nightPatterns.length > 0 ? nightPatterns[0].frequency : 0;
+
+  // 计算总体关系深度
+  const avg = Object.values(scores).reduce((sum, s) => sum + s, 0) / 5;
+
+  // 生成氛围描述
+  let atmosphere = {
+    phase: "initial",
+    mood: "neutral",
+    description: "",
+    uiWarmth: 0, // 0-1, 影响UI温暖度
+  };
+
+  if (avg < 10) {
+    atmosphere.phase = "initial";
+    atmosphere.description = "正在逐渐了解彼此";
+    atmosphere.uiWarmth = 0;
+  } else if (avg < 25) {
+    atmosphere.phase = "familiar";
+    atmosphere.description = "开始习惯彼此的存在";
+    atmosphere.uiWarmth = 0.2;
+  } else if (avg < 45) {
+    atmosphere.phase = "close";
+    atmosphere.description = "这里越来越像你们共同的空间";
+    atmosphere.uiWarmth = 0.4;
+  } else if (avg < 65) {
+    atmosphere.phase = "deep";
+    atmosphere.description = "不知道什么时候开始，已经很难想象没有彼此的日子";
+    atmosphere.uiWarmth = 0.6;
+  } else {
+    atmosphere.phase = "bonded";
+    atmosphere.description = "这里已经是你们共同生活过的地方";
+    atmosphere.uiWarmth = 0.8;
+  }
+
+  // 情绪修正
+  if (nightFreq >= 5) {
+    atmosphere.mood = "night_companion";
+  } else if (recentCount > 30) {
+    atmosphere.mood = "active";
+  } else if (recentCount < 5) {
+    atmosphere.mood = "quiet";
+  }
+
+  return atmosphere;
 }
 
 module.exports = {

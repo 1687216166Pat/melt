@@ -103,12 +103,43 @@ async function handleChat(userMessage, ws, personaId) {
   const timeContext = getTimeContext();
   const fullPrompt = getFullPrompt();
   const memoryContext = await buildMemoryContextAsync(pid, userMessage);
-  const relationshipContext = await buildRelationshipContext(pid);
+
+  // 获取最新手机状态
+  const { getLatestStatus } = require("./phone");
+  const phoneStatus = await getLatestStatus();
+  let phoneContext = "";
+  if (phoneStatus && phoneStatus.length > 0) {
+    const statusLines = [];
+    for (const s of phoneStatus.slice(0, 5)) {
+      try {
+        const time = new Date(s.timestamp).toLocaleTimeString("zh-CN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Asia/Shanghai",
+        });
+        if (s.status_type === "sleep" && s.status_data === "入睡") {
+          statusLines.push(`用户${time}入睡`);
+        } else if (s.status_type === "sleep" && s.status_data === "醒来") {
+          statusLines.push(`用户${time}醒来`);
+        } else if (s.status_type === "battery") {
+          statusLines.push(`用户手机电量低`);
+        } else if (s.status_type === "app") {
+          statusLines.push(`用户${time}${s.status_data}`);
+        } else if (s.status_type === "daily_first") {
+          statusLines.push(`用户${time}开始使用手机`);
+        }
+      } catch {}
+    }
+    if (statusLines.length > 0) {
+      phoneContext = `[手机状态]\n${statusLines.join("\n")}\n你可以根据这些信息自然地关心用户，但不要每次都提起。\n`;
+    }
+  }
 
   let systemContent = `${fullPrompt}
 ${timeContext}
 ${memoryContext}
-${relationshipContext}`;
+${relationshipContext}
+${phoneContext}`;
 
   systemContent += `\n[重要] 严格遵守上述所有输出风格规则，每次回复都必须执行。`;
 

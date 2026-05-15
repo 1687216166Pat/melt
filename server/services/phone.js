@@ -19,8 +19,8 @@ async function getLatestStatus() {
   const { data } = await db
     .from("phone_status")
     .select("*")
-    .order("id", { ascending: false })
-    .limit(10);
+    .order("timestamp", { ascending: false })
+    .limit(5);
   return data || [];
 }
 
