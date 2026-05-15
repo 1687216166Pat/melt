@@ -1,6 +1,7 @@
 <template>
     <div class="chat-input-area">
-        <input v-model="text" placeholder="输入消息..." @keyup.enter="sendMessage" />
+        <textarea ref="inputRef" v-model="text" placeholder="输入消息..." @keydown.enter.exact="sendMessage"
+            @input="autoResize" rows="1"></textarea>
         <button @click="sendMessage" :disabled="!text.trim()">
             <span>↑</span>
         </button>
@@ -8,15 +9,25 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 
 const emit = defineEmits(['send'])
 const text = ref('')
+const inputRef = ref(null)
 
-function sendMessage() {
+function sendMessage(e) {
+    if (e && e.type === 'keydown') e.preventDefault()
     if (!text.value.trim()) return
     emit('send', text.value.trim())
     text.value = ''
+    nextTick(() => autoResize())
+}
+
+function autoResize() {
+    const el = inputRef.value
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
 </script>
 
@@ -26,22 +37,27 @@ function sendMessage() {
     gap: 8px;
     padding: 10px 0;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-    align-items: center;
+    align-items: flex-end;
     flex-shrink: 0;
 }
 
-input {
+textarea {
     flex: 1;
-    height: 36px;
+    min-height: 36px;
+    max-height: 120px;
     border-radius: 18px;
     border: 1px solid var(--color-bg-secondary);
-    padding: 0 16px;
+    padding: 8px 16px;
     font-size: 15px;
+    font-family: inherit;
     background: var(--color-white);
     outline: none;
+    resize: none;
+    line-height: 1.4;
+    overflow-y: auto;
 }
 
-input:focus {
+textarea:focus {
     border-color: var(--color-primary);
 }
 
@@ -57,6 +73,7 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 button:disabled {

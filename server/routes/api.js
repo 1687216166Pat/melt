@@ -322,4 +322,107 @@ router.get("/memories/:personaId/dates", async (req, res) => {
   res.json(result);
 });
 
+// 获取模型列表
+router.post("/test/models", async (req, res) => {
+  const { baseUrl, key } = req.body;
+  try {
+    const response = await fetch(`${baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 测试 API 连接
+router.post("/test/connection", async (req, res) => {
+  const { baseUrl, key, model } = req.body;
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 5,
+      }),
+    });
+    const data = await response.json();
+    res.json({ ok: response.ok, data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 保存 API 配置
+router.post("/settings/api", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { key, baseUrl, model } = req.body;
+
+  if (key) {
+    process.env.AI_API_KEY = key;
+    await db
+      .from("user_profile")
+      .upsert(
+        { key: "api_key", value: key, updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+  }
+  if (baseUrl) {
+    process.env.AI_BASE_URL = baseUrl;
+    await db
+      .from("user_profile")
+      .upsert(
+        {
+          key: "api_base_url",
+          value: baseUrl,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" },
+      );
+  }
+  if (model) {
+    process.env.AI_MODEL = model;
+    process.env.AI_MEMORY_MODEL = model;
+    await db
+      .from("user_profile")
+      .upsert(
+        {
+          key: "api_model",
+          value: model,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" },
+      );
+  }
+
+  res.json({ success: true });
+});
+
+// 启动时加载 API 配置
+router.get("/settings/api", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("user_profile")
+    .select("key, value")
+    .in("key", ["api_key", "api_base_url", "api_model"]);
+
+  const config = {};
+  if (data) {
+    data.forEach((row) => {
+      if (row.key === "api_key") config.key = row.value;
+      if (row.key === "api_base_url") config.baseUrl = row.value;
+      if (row.key === "api_model") config.model = row.value;
+    });
+  }
+  res.json(config);
+});
+
 module.exports = router;

@@ -102,10 +102,12 @@ async function handleChat(userMessage, ws, personaId) {
   const memoryContext = await buildMemoryContextAsync(pid, userMessage);
   const relationshipContext = await buildRelationshipContext(pid);
 
-  const systemContent = `${fullPrompt}
+  let systemContent = `${fullPrompt}
 ${timeContext}
 ${memoryContext}
 ${relationshipContext}`;
+
+  systemContent += `\n[重要] 严格遵守上述所有输出风格规则，每次回复都必须执行。`;
 
   const messages = [
     { role: "system", content: systemContent },
@@ -193,7 +195,11 @@ ${relationshipContext}`;
     return;
   }
 
-  const aiReply = data.choices[0].message.content;
+  let aiReply = data.choices[0].message.content;
+  // 过滤思维链
+  aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, "").trim();
+  aiReply = aiReply.replace(/\[思考\][\s\S]*/g, "").trim();
+  aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
 
   // 存 AI 回复
   await db.from("messages").insert({

@@ -75,7 +75,39 @@ function handleSend(text) {
 function handleIncoming(data) {
     if (data.type === 'chat' || data.type === 'push') {
         isTyping.value = false
-        chatStore.addMessage({ role: 'ai', content: data.content, timestamp: data.timestamp })
+
+        const lines = data.content.split('\n').map(l => l.trim()).filter(Boolean)
+
+        // 合并过短的连续行（少于4个字的和下一行合并）
+        const merged = []
+        for (let i = 0; i < lines.length; i++) {
+            if (lines[i].length < 4 && i + 1 < lines.length) {
+                merged.push(lines[i] + lines[i + 1])
+                i++
+            } else {
+                merged.push(lines[i])
+            }
+        }
+
+        if (merged.length > 1) {
+            merged.forEach((line, idx) => {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai',
+                        content: line,
+                        timestamp: data.timestamp
+                    })
+                    scrollToBottom()
+                }, idx * 400)
+            })
+        } else {
+            chatStore.addMessage({
+                role: 'ai',
+                content: data.content,
+                timestamp: data.timestamp
+            })
+        }
+
         if (data.debug) {
             debugInfo.value = data.debug
         }
@@ -83,10 +115,11 @@ function handleIncoming(data) {
     }
 }
 
-onMounted(() => {
+onMounted(async () => {
     onMessage(handleIncoming)
     loadPersonaName()
-    chatStore.loadPersonaMessages(personaId.value)
+    await chatStore.loadPersonaMessages(personaId.value)
+    scrollToBottom()
 })
 
 onUnmounted(() => {

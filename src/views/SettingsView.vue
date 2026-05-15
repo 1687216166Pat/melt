@@ -23,6 +23,24 @@
                 </div>
                 <button class="save-btn" @click="saveApiConfig">保存 API 配置</button>
                 <p class="save-tip" v-if="apiSaved">已保存 ✓</p>
+
+                <div class="api-actions">
+                    <button class="action-btn" @click="fetchModels">获取模型列表</button>
+                    <button class="action-btn" @click="testApiConnection">测试连接</button>
+                </div>
+
+                <div v-if="modelList.length > 0" class="model-list">
+                    <p class="list-label">可用模型：</p>
+                    <div class="model-scroll">
+                        <div v-for="m in modelList" :key="m" class="model-item" @click="apiConfig.model = m">
+                            {{ m }}
+                        </div>
+                    </div>
+                </div>
+
+                <p v-if="apiTestResult" class="api-result" :class="apiTestResult.success ? 'success' : 'error'">
+                    {{ apiTestResult.message }}
+                </p>
             </div>
 
             <!-- 主动消息设置 -->
@@ -55,7 +73,14 @@
                         </select>
                     </div>
                 </div>
+
+                <button class="action-btn" @click="testProactive">测试主动消息</button>
+                <p v-if="proactiveTestResult" class="api-result"
+                    :class="proactiveTestResult.success ? 'success' : 'error'">
+                    {{ proactiveTestResult.message }}
+                </p>
             </div>
+
 
             <!-- 人格切换 -->
             <div class="section">
@@ -71,10 +96,27 @@
             <!-- 用户偏好 -->
             <div class="section">
                 <h3>📝 我的偏好</h3>
+
+                <div class="setting-row">
+                    <span>AI 输出包含动作描写</span>
+                    <label class="toggle">
+                        <input type="checkbox" v-model="outputPrefs.actionDesc" @change="saveOutputPrefs" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <span>AI 分句输出（更有节奏感）</span>
+                    <label class="toggle">
+                        <input type="checkbox" v-model="outputPrefs.splitSentence" @change="saveOutputPrefs" />
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
                 <textarea v-model="userPrompt" :placeholder="template" rows="8"></textarea>
                 <button class="save-btn" @click="saveUserPrompt">保存偏好</button>
                 <p class="save-tip" v-if="saved">已保存 ✓</p>
             </div>
+
 
             <!-- 导入导出 -->
             <div class="section">
@@ -115,11 +157,26 @@ const proactive = reactive({
     minInterval: 4
 })
 
+const outputPrefs = reactive({
+    actionDesc: false,
+    splitSentence: false
+})
+
+const modelList = ref([])
+const apiTestResult = ref(null)
+const proactiveTestResult = ref(null)
+
 onMounted(async () => {
     // 加载 API 配置（本地存储）
     const savedConfig = localStorage.getItem('api_config')
     if (savedConfig) {
         Object.assign(apiConfig, JSON.parse(savedConfig))
+    }
+
+    // 加载输出偏好（本地存储）
+    const savedPrefs = localStorage.getItem('output_prefs')
+    if (savedPrefs) {
+        Object.assign(outputPrefs, JSON.parse(savedPrefs))
     }
 
     try {
@@ -130,7 +187,10 @@ onMounted(async () => {
 
         const uRes = await api('/api/prompts/user')
         const uData = await uRes.json()
-        userPrompt.value = uData.content
+        // 剥离输出风格部分，只显示用户手写内容
+        const content = uData.content || ''
+        const styleIndex = content.indexOf('\n\n[输出风格')
+        userPrompt.value = styleIndex > -1 ? content.slice(0, styleIndex) : content
         template.value = uData.template
 
         const proRes = await api('/api/proactive/settings')
@@ -141,11 +201,123 @@ onMounted(async () => {
     }
 })
 
-function saveApiConfig() {
+
+async function saveApiConfig() {
     localStorage.setItem('api_config', JSON.stringify(apiConfig))
+    // 同步到后端
+    await api('/api/settings/api', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            key: apiConfig.key,
+            baseUrl: apiConfig.baseUrl,
+            model: apiConfig.model
+        })
+    })
     apiSaved.value = true
     setTimeout(() => { apiSaved.value = false }, 2000)
 }
+
+
+async function fetchModels() {
+    apiTestResult.value = null
+    modelList.value = []
+    try {
+        const res = await api('/api/test/models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                baseUrl: apiConfig.baseUrl || 'https://api.openai.com/v1',
+                key: apiConfig.key
+            })
+        })
+        const data = await res.json()
+        if (data.error) {
+            apiTestResult.value = { success: false, message: `获取失败: ${data.error}` }
+            return
+        }
+        if (data.data && Array.isArray(data.data)) {
+            modelList.value = data.data.map(m => m.id).sort()
+            apiTestResult.value = { success: true, message: `获取到 ${modelList.value.length} 个模型` }
+        } else {
+            apiTestResult.value = { success: false, message: '返回格式异常' }
+        }
+    } catch (e) {
+        apiTestResult.value = { success: false, message: `请求失败: ${e.message}` }
+    }
+}
+
+async function testApiConnection() {
+    apiTestResult.value = null
+    try {
+        const res = await api('/api/test/connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                baseUrl: apiConfig.baseUrl || 'https://api.openai.com/v1',
+                key: apiConfig.key,
+                model: apiConfig.model || 'gpt-4o-mini'
+            })
+        })
+        const data = await res.json()
+        if (data.error) {
+            apiTestResult.value = { success: false, message: `失败: ${data.error}` }
+        } else if (data.ok && data.data.choices && data.data.choices[0]) {
+            apiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${apiConfig.model}` }
+        } else {
+            apiTestResult.value = { success: false, message: `失败: ${data.data?.error?.message || '未知错误'}` }
+        }
+    } catch (e) {
+        apiTestResult.value = { success: false, message: `连接失败: ${e.message}` }
+    }
+}
+
+
+async function testProactive() {
+    proactiveTestResult.value = null
+    try {
+        const res = await api('/api/proactive/trigger', { method: 'POST' })
+        const data = await res.json()
+        if (data.success) {
+            proactiveTestResult.value = { success: true, message: '主动消息触发成功 ✓ 检查聊天页面' }
+        } else {
+            proactiveTestResult.value = { success: false, message: '触发失败' }
+        }
+    } catch (e) {
+        proactiveTestResult.value = { success: false, message: `失败: ${e.message}` }
+    }
+}
+
+async function saveOutputPrefs() {
+    localStorage.setItem('output_prefs', JSON.stringify(outputPrefs))
+    const prefText = buildPrefText()
+    await api('/api/prompts/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: prefText })
+    })
+}
+
+
+function buildPrefText() {
+    let text = userPrompt.value || ''
+    const lines = []
+    if (outputPrefs.actionDesc) {
+        lines.push('- 回复中包含动作描写，用*号包裹，如 *轻轻叹了口气*、*歪头看着你*')
+    } else {
+        lines.push('- 禁止使用动作描写，禁止使用*号包裹的任何内容，只用纯对话文字回复')
+    }
+    if (outputPrefs.splitSentence) {
+        lines.push('- 必须分句输出，每个短句单独一行，用换行分隔，营造停顿感和节奏感。示例：\n嗯...\n今天怎么这么晚才来\n是不是又加班了')
+    } else {
+        lines.push('- 正常连续输出，不需要刻意分行')
+    }
+    if (lines.length > 0) {
+        text += '\n\n[输出风格 - 必须严格遵守]\n' + lines.join('\n')
+    }
+    return text
+}
+
 
 async function switchPersona(id) {
     await api(`/api/prompts/personas/${id}/activate`, { method: 'POST' })
@@ -153,14 +325,16 @@ async function switchPersona(id) {
 }
 
 async function saveUserPrompt() {
+    const prefText = buildPrefText()
     await api('/api/prompts/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userPrompt.value })
+        body: JSON.stringify({ content: prefText })
     })
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)
 }
+
 
 async function saveProactive() {
     await api('/api/proactive/settings', {
@@ -446,5 +620,65 @@ textarea:focus {
     background: var(--color-primary);
     color: white;
     border-color: var(--color-primary);
+}
+
+.api-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.api-actions .action-btn {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.model-list {
+    margin-top: 10px;
+    background: var(--color-white);
+    border-radius: 10px;
+    padding: 10px;
+}
+
+.list-label {
+    font-size: 12px;
+    color: var(--color-text-light);
+    margin-bottom: 6px;
+}
+
+.model-scroll {
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.model-item {
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--color-text);
+    border-radius: 6px;
+    cursor: pointer;
+    word-break: break-all;
+}
+
+.model-item:active {
+    background: var(--color-primary);
+    color: white;
+}
+
+.api-result {
+    font-size: 12px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.api-result.success {
+    color: #4caf50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.api-result.error {
+    color: #f44336;
+    background: rgba(244, 67, 54, 0.1);
 }
 </style>
