@@ -93,6 +93,35 @@
                     <span class="value">{{ info.layer3?.timeContext }}</span>
                 </div>
             </div>
+
+            <!-- 第四层：记忆系统 -->
+            <div v-if="info.memory" class="debug-layer">
+                <h4>🧠 Layer 4 - 记忆</h4>
+                <div class="debug-row">
+                    <span class="label">距下次总结</span>
+                    <span class="value">{{ info.memory?.nextTriggerIn }} 条</span>
+                </div>
+                <div class="debug-row">
+                    <span class="label">本轮已聊</span>
+                    <span class="value">{{ info.memory?.messagesSinceSummary }} 条</span>
+                </div>
+                <div class="debug-row">
+                    <span class="label">累计消息</span>
+                    <span class="value">{{ info.memory?.totalMessages }} 条</span>
+                </div>
+                <div class="debug-row">
+                    <span class="label">长期印象</span>
+                    <span class="value" :class="info.memory?.longTermProfile === '有' ? 'success' : ''">
+                        {{ info.memory?.longTermProfile }}
+                    </span>
+                </div>
+                <div class="debug-row">
+                    <span class="label">近期印象</span>
+                    <span class="value" :class="info.memory?.recentMemories === '有' ? 'success' : ''">
+                        {{ info.memory?.recentMemories }}
+                    </span>
+                </div>
+            </div>
         </div>
     </div>
 </template>

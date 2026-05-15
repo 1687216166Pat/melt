@@ -11,21 +11,34 @@
                 <div class="icon-bg chat-icon">💬</div>
                 <span class="icon-label">AI 聊天</span>
             </div>
-            <div class="app-icon" @click="$router.push('/contacts')">
-                <div class="icon-bg contacts-icon">👥</div>
-                <span class="icon-label">联系人</span>
+            <div class="app-icon" @click="$router.push('/about')">
+                <div class="icon-bg about-icon">💕</div>
+                <span class="icon-label">关于他</span>
             </div>
             <div class="app-icon" @click="$router.push('/memory')">
                 <div class="icon-bg status-icon">🧠</div>
                 <span class="icon-label">记忆库</span>
             </div>
+            <div class="app-icon" @click="$router.push('/worldbook')">
+                <div class="icon-bg worldbook-icon">📖</div>
+                <span class="icon-label">世界书</span>
+            </div>
             <div class="app-icon" @click="$router.push('/settings')">
                 <div class="icon-bg settings-icon">⚙️</div>
                 <span class="icon-label">设置</span>
             </div>
-            <div class="app-icon" @click="$router.push('/relationship')">
-                <div class="icon-bg relationship-icon">💕</div>
-                <span class="icon-label">关系</span>
+            <!-- 档案 -->
+            <div v-if="activeTab === 'profile'" class="tab-content">
+                <div class="info-block">
+                    <h4>基本信息</h4>
+                    ...
+                </div>
+                <div class="info-block">
+                    <h4>人设</h4>
+                    ...
+                </div>
+                <button class="chat-enter-btn" @click="$router.push(`/chat/${currentPersona}`)">💬 进入对话</button>
+                <button class="edit-btn" @click="$router.push(`/persona-detail/${currentPersona}`)">编辑详情</button>
             </div>
 
         </div>
@@ -155,5 +168,26 @@ async function openChat() {
 
 .relationship-icon {
     background: linear-gradient(135deg, #f8b4d9, #e8a0bf);
+}
+
+.worldbook-icon {
+    background: linear-gradient(135deg, #b8d4e3, #8fb8d4);
+}
+
+.about-icon {
+    background: linear-gradient(135deg, #f8b4d9, #e8a0bf);
+}
+
+.chat-enter-btn {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--color-primary);
+    color: white;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    margin-bottom: 8px;
 }
 </style>

@@ -7,10 +7,10 @@
         </div>
         <div class="contacts-list">
             <div v-for="persona in personas" :key="persona.id" class="contact-item"
-                @click="$router.push(`/chat/${persona.id}`)">
+                @click="$router.push(`/persona-detail/${persona.id}`)">
                 <div class="contact-avatar">{{ persona.avatar }}</div>
                 <div class="contact-info">
-                    <p class="contact-name">{{ persona.name }}</p>
+                    <p class="contact-name">{{ persona.note || persona.name }}</p>
                     <p class="contact-desc">{{ persona.description }}</p>
                 </div>
                 <button v-if="persona.custom" class="delete-persona-btn"
@@ -94,12 +94,26 @@ async function loadPersonas() {
     try {
         const res = await api('/api/prompts/personas')
         const data = await res.json()
-        personas.value = data.personas
         activePersona.value = data.active
+
+        // 逐个获取详情（包含备注）
+        const detailed = await Promise.all(
+            data.personas.map(async (p) => {
+                try {
+                    const detailRes = await api(`/api/persona/${p.id}`)
+                    const detail = await detailRes.json()
+                    return { ...p, note: detail.note || '' }
+                } catch {
+                    return p
+                }
+            })
+        )
+        personas.value = detailed
     } catch (e) {
         console.error('加载联系人失败:', e)
     }
 }
+
 
 async function createPersona() {
     if (!newPersona.name || !newPersona.content) return

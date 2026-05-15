@@ -69,14 +69,19 @@ if (fs.existsSync(distPath)) {
 
 initWebSocket(server);
 
-// 每 6 小时合并所有人格的记忆
-setInterval(
-  () => {
+// 零点触发每日沉淀
+setInterval(() => {
+  const now = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }),
+  );
+  if (now.getHours() === 0 && now.getMinutes() === 0) {
+    const { getPersonaList } = require("./services/prompt");
+    const { dailyConsolidate } = require("./services/memory");
     const personas = getPersonaList();
-    personas.forEach((p) => consolidateMemories(p.id));
-  },
-  6 * 60 * 60 * 1000,
-);
+    personas.forEach((p) => dailyConsolidate(p.id));
+    console.log("[记忆] 零点沉淀已触发");
+  }
+}, 60000);
 
 setInterval(checkProactiveMessages, 30 * 60 * 1000);
 

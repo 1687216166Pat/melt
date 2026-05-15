@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 import ChatView from "../views/ChatView.vue";
-import ContactsView from "../views/ContactsView.vue";
+import AboutView from "../views/AboutView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import MemoryView from "../views/MemoryView.vue";
-import RelationshipView from "../views/RelationshipView.vue";
+import PersonaDetailView from "../views/PersonaDetailView.vue";
+import WorldBookView from "../views/WorldBookView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,9 +21,9 @@ const router = createRouter({
       component: ChatView,
     },
     {
-      path: "/contacts",
-      name: "contacts",
-      component: ContactsView,
+      path: "/about",
+      name: "about",
+      component: AboutView,
     },
     {
       path: "/settings",
@@ -35,9 +36,14 @@ const router = createRouter({
       component: MemoryView,
     },
     {
-      path: "/relationship",
-      name: "relationship",
-      component: RelationshipView,
+      path: "/persona-detail/:personaId",
+      name: "persona-detail",
+      component: PersonaDetailView,
+    },
+    {
+      path: "/worldbook",
+      name: "worldbook",
+      component: WorldBookView,
     },
   ],
 });

@@ -3,7 +3,9 @@
         <div class="chat-header">
             <button class="back-btn" @click="goBack">‹</button>
             <h2>{{ personaName }}</h2>
+            <button class="setting-btn" @click="$router.push(`/persona-detail/${personaId}`)">⚙</button>
         </div>
+
         <div class="chat-messages" ref="messagesContainer">
             <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :msg="msg" />
             <TypingIndicator :visible="isTyping" />
@@ -46,12 +48,10 @@ const personaName = ref('AI 助手')
 
 async function loadPersonaName() {
     try {
-        const res = await api('/api/prompts/personas')
+        const res = await api(`/api/persona/${personaId.value}`)
         const data = await res.json()
-        const found = data.personas.find(p => p.id === personaId.value)
-        if (found) {
-            personaName.value = found.name
-        }
+        // 备注优先，其次名字
+        personaName.value = data.note || data.name || 'AI 助手'
     } catch (e) {
         // 保持默认名字
     }
@@ -166,5 +166,29 @@ watch(() => chatStore.messages.length, scrollToBottom)
     overflow-y: auto;
     padding: 16px 0;
     -webkit-overflow-scrolling: touch;
+}
+
+.chat-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-bg-secondary);
+}
+
+.chat-header h2 {
+    flex: 1;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.setting-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--color-text-light);
+    cursor: pointer;
+    padding: 4px;
 }
 </style>

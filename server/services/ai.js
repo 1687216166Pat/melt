@@ -2,12 +2,12 @@ const { getDB } = require("../db/index");
 const { pushNotification } = require("./push");
 const { getFullPrompt, getActivePersona } = require("./prompt");
 const {
-  extractMemoryByAI,
-  saveDailyMemory,
+  processMemory,
   buildMemoryContextAsync,
   getSessionMemory,
   detectPatterns,
 } = require("./memory");
+
 const {
   updateDimensionsFromChat,
   buildRelationshipContext,
@@ -181,13 +181,20 @@ ${relationshipContext}`;
           },
           layer2: {
             persona: pid,
-            emotion: detectEmotion(userMessage),
-            memoryContext: memoryContext || "无",
-            activePersona: getActivePersona(),
+            memoryContext: memoryContext ? memoryContext.slice(0, 300) : "无",
+            memoryLength: memoryContext ? memoryContext.length : 0,
           },
           layer3: {
             historyCount: history.length,
             systemPromptLength: systemContent.length,
+            timeContext: timeContext.trim(),
+          },
+          memory: {
+            messagesSinceSummary: getCounter(pid).sinceLastSummary,
+            totalMessages: getCounter(pid).total,
+            nextTriggerIn: 100 - getCounter(pid).sinceLastSummary,
+            longTermProfile: "未知",
+            recentMemories: "未知",
           },
         },
       }),
@@ -212,10 +219,8 @@ ${relationshipContext}`;
   // 触发关系评估
   evaluateRelationship(pid, history);
 
-  // 提取记忆
-  extractMemoryByAI(pid, userMessage, aiReply).then((memory) => {
-    if (memory) saveDailyMemory(pid, memory);
-  });
+  // 记忆处理（双触发机制）
+  processMemory(pid, userMessage, aiReply);
 
   // 获取今日消息数
   const today = new Date().toISOString().slice(0, 10);
@@ -234,6 +239,9 @@ ${relationshipContext}`;
     .order("frequency", { ascending: false })
     .limit(3);
 
+  // 获取记忆计数器
+  const counter = getCounter(pid);
+
   ws.send(
     JSON.stringify({
       type: "chat",
@@ -248,25 +256,23 @@ ${relationshipContext}`;
           estimatedTokens,
           actualTokens: data.usage || null,
           elapsed,
-          promptTokens: data.usage?.prompt_tokens || null,
-          completionTokens: data.usage?.completion_tokens || null,
         },
         layer2: {
           persona: pid,
-          personaName: { xiaorou: "小柔", cool: "阿冷", assistant: "助手" }[
-            pid
-          ],
-          emotion: detectEmotion(userMessage),
-          memoryContext: memoryContext || "无",
+          memoryContext: memoryContext ? memoryContext.slice(0, 300) : "无",
           memoryLength: memoryContext ? memoryContext.length : 0,
-          patterns: patterns || [],
         },
         layer3: {
           historyCount: history.length,
           systemPromptLength: systemContent.length,
-          todayMessages: todayMsgs ? todayMsgs.length : 0,
-          wsClients: "active",
           timeContext: timeContext.trim(),
+        },
+        memory: {
+          messagesSinceSummary: counter.sinceLastSummary,
+          totalMessages: counter.total,
+          nextTriggerIn: 100 - counter.sinceLastSummary,
+          longTermProfile: memoryContext.includes("[长期印象]") ? "有" : "无",
+          recentMemories: memoryContext.includes("[近期印象]") ? "有" : "无",
         },
       },
     }),

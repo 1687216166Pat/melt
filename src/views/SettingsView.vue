@@ -81,18 +81,6 @@
                 </p>
             </div>
 
-
-            <!-- 人格切换 -->
-            <div class="section">
-                <h3>🎭 人格选择</h3>
-                <div v-for="p in personas" :key="p.id" class="persona-card" :class="{ active: p.id === activePersona }"
-                    @click="switchPersona(p.id)">
-                    <span class="persona-name">{{ p.name }}</span>
-                    <span class="persona-desc">{{ p.description }}</span>
-                    <span class="check" v-if="p.id === activePersona">✓</span>
-                </div>
-            </div>
-
             <!-- 用户偏好 -->
             <div class="section">
                 <h3>📝 我的偏好</h3>

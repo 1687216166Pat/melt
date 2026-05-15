@@ -376,30 +376,26 @@ router.post("/settings/api", async (req, res) => {
   }
   if (baseUrl) {
     process.env.AI_BASE_URL = baseUrl;
-    await db
-      .from("user_profile")
-      .upsert(
-        {
-          key: "api_base_url",
-          value: baseUrl,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "key" },
-      );
+    await db.from("user_profile").upsert(
+      {
+        key: "api_base_url",
+        value: baseUrl,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
   }
   if (model) {
     process.env.AI_MODEL = model;
     process.env.AI_MEMORY_MODEL = model;
-    await db
-      .from("user_profile")
-      .upsert(
-        {
-          key: "api_model",
-          value: model,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "key" },
-      );
+    await db.from("user_profile").upsert(
+      {
+        key: "api_model",
+        value: model,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
   }
 
   res.json({ success: true });
@@ -425,4 +421,153 @@ router.get("/settings/api", async (req, res) => {
   res.json(config);
 });
 
+// 助手详情
+router.get("/persona/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const id = req.params.personaId;
+
+  // 先查自定义人格表
+  const { data } = await db
+    .from("custom_personas")
+    .select("*")
+    .eq("id", id)
+    .limit(1);
+  if (data && data.length > 0) {
+    res.json(data[0]);
+  } else {
+    // 内置人格：基本信息 + user_profile 里的配置
+    const { getPersonaList } = require("../services/prompt");
+    const list = getPersonaList();
+    const found = list.find((p) => p.id === id) || {
+      name: id,
+      content: "",
+      avatar: "💬",
+    };
+
+    // 查是否有额外配置
+    const { data: configRow } = await db
+      .from("user_profile")
+      .select("value")
+      .eq("key", `persona_config_${id}`)
+      .limit(1);
+
+    if (configRow && configRow.length > 0) {
+      const extra = JSON.parse(configRow[0].value);
+      Object.assign(found, extra);
+    }
+
+    res.json(found);
+  }
+});
+
+router.put("/persona/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const id = req.params.personaId;
+  const { name, content, avatar, avatarUrl, note, gender, worldBookId } =
+    req.body;
+
+  const { data: existing } = await db
+    .from("custom_personas")
+    .select("id")
+    .eq("id", id)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    await db
+      .from("custom_personas")
+      .update({
+        name,
+        content,
+        avatar: avatar || "💬",
+        description: content ? content.slice(0, 30) : "",
+        note: note || "",
+        gender: gender || "",
+        world_book_id: worldBookId || "",
+      })
+      .eq("id", id);
+  } else {
+    await db.from("user_profile").upsert(
+      {
+        key: `persona_config_${id}`,
+        value: JSON.stringify({ name, note, gender, avatarUrl, worldBookId }),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+  }
+
+  res.json({ success: true });
+});
+
+// 清空对话
+router.delete("/messages/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("messages").delete().eq("persona_id", req.params.personaId);
+  res.json({ success: true });
+});
+
+// 清空记忆
+router.delete("/memories/:personaId/clear", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const pid = req.params.personaId;
+  await db.from("memories_recent").delete().eq("persona_id", pid);
+  await db.from("memory_patterns").delete().eq("persona_id", pid);
+  await db.from("user_profile").delete().eq("key", `memory_profile_${pid}`);
+  res.json({ success: true });
+});
+
+// 世界书
+router.get("/worldbooks", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("world_books")
+    .select("*")
+    .order("created_at", { ascending: false });
+  res.json(data || []);
+});
+
+router.post("/worldbooks", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { title, content } = req.body;
+  const id = "wb_" + Date.now().toString(36);
+  await db.from("world_books").insert({ id, title, content });
+  res.json({ success: true, id });
+});
+
+router.put("/worldbooks/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { title, content } = req.body;
+  await db
+    .from("world_books")
+    .update({ title, content })
+    .eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+router.delete("/worldbooks/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("world_books").delete().eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// 获取行为模式
+router.get("/patterns/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("memory_patterns")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .order("frequency", { ascending: false })
+    .limit(10);
+  res.json(data || []);
+});
 module.exports = router;
