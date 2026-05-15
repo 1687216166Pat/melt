@@ -570,4 +570,15 @@ router.get("/patterns/:personaId", async (req, res) => {
     .limit(10);
   res.json(data || []);
 });
+
+// 测试推送通知（不调用AI）
+router.post("/push/test", async (req, res) => {
+  const { pushNotification } = require("../services/push");
+  const result = await pushNotification(
+    "测试通知",
+    "如果你看到这条消息，说明推送正常工作 ✓",
+  );
+  res.json({ success: true, subscribers: result.length });
+});
+
 module.exports = router;

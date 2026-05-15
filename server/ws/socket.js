@@ -1,5 +1,6 @@
 const { WebSocketServer } = require("ws");
 const { handleChat } = require("../services/ai");
+const { sendPushNotification } = require("../services/push");
 
 let wss;
 let clients = new Set();
@@ -25,6 +26,7 @@ function initWebSocket(server) {
 
     ws.on("close", () => {
       clients.delete(ws);
+      console.log("客户端断开");
     });
   });
 }
@@ -36,11 +38,19 @@ function pushToAll(message) {
     content: message,
     timestamp: new Date().toISOString(),
   });
+
+  let delivered = false;
   clients.forEach((ws) => {
     if (ws.readyState === 1) {
       ws.send(payload);
+      delivered = true;
     }
   });
+
+  // 如果没有活跃的 WebSocket 连接，发 Push 通知
+  if (!delivered) {
+    sendPushNotification("AI 助手", message.slice(0, 100));
+  }
 }
 
 module.exports = { initWebSocket, pushToAll };

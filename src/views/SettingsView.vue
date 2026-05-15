@@ -79,7 +79,13 @@
                     :class="proactiveTestResult.success ? 'success' : 'error'">
                     {{ proactiveTestResult.message }}
                 </p>
+
+                <button class="action-btn" @click="testPush">测试推送通知</button>
+                <p v-if="pushTestResult" class="api-result" :class="pushTestResult.success ? 'success' : 'error'">
+                    {{ pushTestResult.message }}
+                </p>
             </div>
+
 
             <!-- 用户偏好 -->
             <div class="section">
@@ -368,6 +374,23 @@ async function importData(event) {
     } catch (e) {
         console.error('导入失败:', e)
         alert('导入失败: ' + e.message)
+    }
+}
+
+const pushTestResult = ref(null)
+
+async function testPush() {
+    pushTestResult.value = null
+    try {
+        const res = await api('/api/push/test', { method: 'POST' })
+        const data = await res.json()
+        if (data.subscribers > 0) {
+            pushTestResult.value = { success: true, message: `推送已发送给 ${data.subscribers} 个订阅者` }
+        } else {
+            pushTestResult.value = { success: false, message: '没有订阅者，请先允许通知权限' }
+        }
+    } catch (e) {
+        pushTestResult.value = { success: false, message: `失败: ${e.message}` }
     }
 }
 

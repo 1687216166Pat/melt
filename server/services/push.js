@@ -1,5 +1,5 @@
-// server/services/push.js
 const webPush = require("web-push");
+const { getDB } = require("../db/index");
 
 webPush.setVapidDetails(
   process.env.VAPID_EMAIL || "mailto:test@example.com",
@@ -7,23 +7,76 @@ webPush.setVapidDetails(
   process.env.VAPID_PRIVATE_KEY,
 );
 
-// 存储订阅信息
+// 内存缓存
 let subscriptions = [];
 
+// 启动时从数据库加载
+async function loadSubscriptions() {
+  try {
+    const db = getDB();
+    const { data } = await db
+      .from("user_profile")
+      .select("value")
+      .eq("key", "push_subscriptions")
+      .limit(1);
+    if (data && data.length > 0) {
+      subscriptions = JSON.parse(data[0].value);
+    }
+  } catch (e) {
+    console.error("加载推送订阅失败:", e);
+  }
+}
+
+// 保存到数据库
+async function saveSubscriptions() {
+  try {
+    const db = getDB();
+    const { data: existing } = await db
+      .from("user_profile")
+      .select("id")
+      .eq("key", "push_subscriptions")
+      .limit(1);
+    if (existing && existing.length > 0) {
+      await db
+        .from("user_profile")
+        .update({
+          value: JSON.stringify(subscriptions),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("key", "push_subscriptions");
+    } else {
+      await db
+        .from("user_profile")
+        .insert({
+          key: "push_subscriptions",
+          value: JSON.stringify(subscriptions),
+        });
+    }
+  } catch (e) {
+    console.error("保存推送订阅失败:", e);
+  }
+}
+
 function addSubscription(sub) {
-  // 避免重复
   const exists = subscriptions.find((s) => s.endpoint === sub.endpoint);
   if (!exists) {
     subscriptions.push(sub);
+    saveSubscriptions();
+    console.log("[Push] 新订阅已注册, 当前订阅数:", subscriptions.length);
   }
 }
 
 function removeSubscription(endpoint) {
   subscriptions = subscriptions.filter((s) => s.endpoint !== endpoint);
+  saveSubscriptions();
 }
 
-// 给所有订阅者推送
 async function pushNotification(title, body) {
+  if (subscriptions.length === 0) {
+    console.log("[Push] 没有订阅者，跳过推送");
+    return [];
+  }
+
   const payload = JSON.stringify({ title, body, url: "/chat" });
 
   const results = await Promise.allSettled(
@@ -32,10 +85,18 @@ async function pushNotification(title, body) {
         if (err.statusCode === 410) {
           removeSubscription(sub.endpoint);
         }
+        console.error("[Push] 推送失败:", err.statusCode || err.message);
       }),
     ),
   );
+
+  console.log(
+    `[Push] 推送完成, 成功: ${results.filter((r) => r.status === "fulfilled").length}/${results.length}`,
+  );
   return results;
 }
+
+// 延迟加载订阅
+setTimeout(loadSubscriptions, 3000);
 
 module.exports = { addSubscription, removeSubscription, pushNotification };
