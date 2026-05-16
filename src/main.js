@@ -13,21 +13,6 @@ app.config.errorHandler = (err, vm, info) => {
   console.error("全局错误:", err, info);
 };
 
-// 动态 viewport 高度同步
-function syncAppHeight() {
-  const h = window.innerHeight;
-  document.documentElement.style.setProperty("--app-height", `${h}px`);
-  // 强制 body 和 html 高度
-  document.documentElement.style.height = h + "px";
-  document.body.style.height = h + "px";
-}
-
-syncAppHeight();
-window.addEventListener("resize", syncAppHeight);
-window.addEventListener("orientationchange", () => {
-  setTimeout(syncAppHeight, 100);
-});
-
 // iOS standalone 模式额外处理
 if (window.navigator.standalone) {
   document.documentElement.style.overflow = "hidden";
