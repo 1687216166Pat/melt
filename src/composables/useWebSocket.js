@@ -6,7 +6,9 @@ let lastMsgId = "";
 const isConnected = ref(false);
 const messageHandlers = new Set();
 let processedIds = new Set();
-let lastFullContent = ''
+let lastFullContent = "";
+let lastReceivedContent = "";
+let lastReceivedTime = 0;
 
 function getWsUrl() {
   // 生产环境直连 Railway
@@ -18,16 +20,11 @@ function getWsUrl() {
 }
 
 function connect() {
-  if (
-    socket &&
-    (socket.readyState === WebSocket.OPEN ||
-      socket.readyState === WebSocket.CONNECTING)
-  )
-    return;
-
-  // 关闭旧连接
+  // 强制关闭所有旧连接
   if (socket) {
-    socket.onclose = null; // 防止触发重连
+    socket.onclose = null;
+    socket.onmessage = null;
+    socket.onerror = null;
     socket.close();
     socket = null;
   }
@@ -39,20 +36,24 @@ function connect() {
     console.log("WebSocket 已连接");
   };
 
-socket.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    
-    // 用完整内容去重
-    const fullId = data.type + (data.content || '') + (data.timestamp || '')
-    if (fullId === lastFullContent) return
-    lastFullContent = fullId
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
 
-    messageHandlers.forEach((handler) => handler(data))
+    // 强去重
+    const now = Date.now();
+    const contentKey = data.content || "";
+    if (contentKey === lastReceivedContent && now - lastReceivedTime < 3000) {
+      return;
+    }
+    lastReceivedContent = contentKey;
+    lastReceivedTime = now;
+
+    messageHandlers.forEach((handler) => handler(data));
 
     if (document.hidden && (data.type === "chat" || data.type === "push")) {
-        sendSystemNotification(data.content)
+      sendSystemNotification(data.content);
     }
-}
+  };
 
   socket.onclose = () => {
     isConnected.value = false;
@@ -61,7 +62,7 @@ socket.onmessage = (event) => {
   };
 
   socket.onerror = () => {
-    socket.close();
+    if (socket) socket.close();
   };
 }
 

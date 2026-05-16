@@ -367,6 +367,7 @@ ${phoneContext}`;
       }, idx * 800);
     });
   } else {
+    // 推送通知（只发一次，不分句）
     const preview =
       aiReply.length > 60 ? aiReply.slice(0, 60) + "..." : aiReply;
     pushNotification(pName, preview);
