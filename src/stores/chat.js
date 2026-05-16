@@ -19,69 +19,65 @@ export const useChatStore = defineStore("chat", () => {
     allMessages.value.push(newMsg);
   }
 
-  async function loadPersonaMessages(personaId) {
+async function loadPersonaMessages(personaId) {
     if (!personaId) return;
     try {
-      const res = await api(`/api/messages/${personaId}`);
-      const data = await res.json();
+        const res = await api(`/api/messages/${personaId}`);
+        const data = await res.json();
 
-      // 处理 AI 分句
-      const processed = [];
-      data.forEach((m) => {
-        if (m.role === "ai") {
-          const lines = m.content
-            .split("\n")
-            .map((l) => l.trim())
-            .filter(Boolean);
-          const merged = [];
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].length < 4 && i + 1 < lines.length) {
-              merged.push(lines[i] + lines[i + 1]);
-              i++;
+        const processed = [];
+        data.forEach((m) => {
+            if (m.role === "ai") {
+                const lines = m.content.split("\n").map((l) => l.trim()).filter(Boolean);
+                const merged = [];
+                let buffer = "";
+                for (let i = 0; i < lines.length; i++) {
+                    buffer += (buffer ? "" : "") + lines[i];
+                    if (buffer.length >= 15 || i === lines.length - 1) {
+                        merged.push(buffer);
+                        buffer = "";
+                    }
+                }
+
+                if (merged.length > 1) {
+                    merged.forEach((line) => {
+                        processed.push({
+                            id: m.id + "_" + Math.random(),
+                            role: m.role,
+                            content: line,
+                            timestamp: m.timestamp,
+                        });
+                    });
+                } else {
+                    processed.push({
+                        id: m.id,
+                        role: m.role,
+                        content: m.content.replace(/\n/g, ""),
+                        timestamp: m.timestamp,
+                    });
+                }
             } else {
-              merged.push(lines[i]);
+                processed.push({
+                    id: m.id,
+                    role: m.role,
+                    content: m.content,
+                    timestamp: m.timestamp,
+                });
             }
-          }
-          if (merged.length > 1) {
-            merged.forEach((line) => {
-              processed.push({
-                id: m.id + "_" + Math.random(),
-                role: m.role,
-                content: line,
-                timestamp: m.timestamp,
-              });
-            });
-          } else {
-            processed.push({
-              id: m.id,
-              role: m.role,
-              content: m.content,
-              timestamp: m.timestamp,
-            });
-          }
-        } else {
-          processed.push({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-          });
-        }
-      });
+        });
 
-      allMessages.value = processed;
-      // 只显示最新 10 条
-      if (processed.length > pageSize) {
-        messages.value = processed.slice(-pageSize);
-        hasMore.value = true;
-      } else {
-        messages.value = processed;
-        hasMore.value = false;
-      }
+        allMessages.value = processed;
+        if (processed.length > pageSize) {
+            messages.value = processed.slice(-pageSize);
+            hasMore.value = true;
+        } else {
+            messages.value = processed;
+            hasMore.value = false;
+        }
     } catch (e) {
-      console.error("加载消息失败:", e);
+        console.error("加载消息失败:", e);
     }
-  }
+}
 
   function loadMore() {
     if (!hasMore.value) return;

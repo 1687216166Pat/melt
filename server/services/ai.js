@@ -134,6 +134,32 @@ async function handleChat(userMessage, ws, personaId) {
 
   const fullPrompt = corePrompt + personaContent + userPromptStr;
 
+  // 获取分句设置
+  let minMsg = 1,
+    maxMsg = 3;
+  try {
+    const { data: pDetail } = await db
+      .from("custom_personas")
+      .select("min_messages, max_messages")
+      .eq("id", pid)
+      .limit(1);
+    if (pDetail && pDetail.length > 0) {
+      if (pDetail[0].min_messages) minMsg = pDetail[0].min_messages;
+      if (pDetail[0].max_messages) maxMsg = pDetail[0].max_messages;
+    } else {
+      const { data: configRow } = await db
+        .from("user_profile")
+        .select("value")
+        .eq("key", `persona_config_${pid}`)
+        .limit(1);
+      if (configRow && configRow.length > 0) {
+        const config = JSON.parse(configRow[0].value);
+        if (config.minMessages) minMsg = config.minMessages;
+        if (config.maxMessages) maxMsg = config.maxMessages;
+      }
+    }
+  } catch {}
+
   // 默认世界书（角色扮演核心协议）
   const defaultWorldBook = `
 [角色扮演核心协议]
@@ -227,6 +253,7 @@ ${relationshipContext}
 ${phoneContext}`;
 
   systemContent += `\n[重要] 严格遵守上述所有输出风格规则，每次回复都必须执行。`;
+  systemContent += `\n[输出条数] 回复分${minMsg}-${maxMsg}条消息，每条必须是完整的句子。`;
 
   const messages = [
     { role: "system", content: systemContent },

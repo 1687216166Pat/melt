@@ -477,7 +477,7 @@ router.put("/persona/:personaId", async (req, res) => {
     ai_relationship,
     user_relationship,
   } = req.body;
-
+  
   const { data: existing } = await db
     .from("custom_personas")
     .select("id")
@@ -499,6 +499,10 @@ router.put("/persona/:personaId", async (req, res) => {
     if (user_relationship !== undefined)
       updateData.user_relationship = user_relationship;
     if (content) updateData.description = content.slice(0, 30);
+    if (req.body.minMessages !== undefined)
+      updateData.min_messages = req.body.minMessages;
+    if (req.body.maxMessages !== undefined)
+      updateData.max_messages = req.body.maxMessages;
 
     const { error } = await db
       .from("custom_personas")
@@ -519,7 +523,10 @@ router.put("/persona/:personaId", async (req, res) => {
       call_user,
       ai_relationship,
       user_relationship,
+      minMessages: req.body.minMessages,
+      maxMessages: req.body.maxMessages,
     };
+
     const { error } = await db.from("user_profile").upsert(
       {
         key: `persona_config_${id}`,

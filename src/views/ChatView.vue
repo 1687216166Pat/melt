@@ -69,6 +69,7 @@ const messagesContainer = ref(null)
 const isTyping = ref(false)
 const debugInfo = ref(null)
 const showPanel = ref(false)
+const maxBubbles = ref(3)
 
 function goToDetail() {
     showPanel.value = false
@@ -97,11 +98,10 @@ async function loadPersonaName() {
     try {
         const res = await api(`/api/persona/${personaId.value}`)
         const data = await res.json()
-        // 备注优先，其次名字
         personaName.value = data.note || data.name || 'AI 助手'
-    } catch (e) {
-        // 保持默认名字
-    }
+        if (data.maxMessages) maxBubbles.value = data.maxMessages
+        if (data.max_messages) maxBubbles.value = data.max_messages
+    } catch (e) { }
 }
 
 function scrollToBottom() {
@@ -125,42 +125,45 @@ function handleIncoming(data) {
 
         const lines = data.content.split('\n').map(l => l.trim()).filter(Boolean)
 
-        // 合并过短的连续行（少于4个字的和下一行合并）
+        // 强制合并：短于15字的行和下一行合并
         const merged = []
+        let buffer = ''
         for (let i = 0; i < lines.length; i++) {
-            if (lines[i].length < 4 && i + 1 < lines.length) {
-                merged.push(lines[i] + lines[i + 1])
-                i++
-            } else {
-                merged.push(lines[i])
+            buffer += (buffer ? '' : '') + lines[i]
+            if (buffer.length >= 15 || i === lines.length - 1) {
+                merged.push(buffer)
+                buffer = ''
             }
         }
 
-        if (merged.length > 1) {
-            merged.forEach((line, idx) => {
+        // 限制最大气泡数
+        let final = merged
+        if (merged.length > maxBubbles.value) {
+            final = []
+            const chunkSize = Math.ceil(merged.length / maxBubbles.value)
+            for (let i = 0; i < merged.length; i += chunkSize) {
+                final.push(merged.slice(i, i + chunkSize).join(''))
+            }
+        }
+
+        if (final.length > 1) {
+            final.forEach((line, idx) => {
                 setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai',
-                        content: line,
-                        timestamp: data.timestamp
-                    })
+                    chatStore.addMessage({ role: 'ai', content: line, timestamp: data.timestamp })
                     scrollToBottom()
-                }, idx * 400)
+                }, idx * 500)
             })
         } else {
-            chatStore.addMessage({
-                role: 'ai',
-                content: data.content,
-                timestamp: data.timestamp
-            })
+            chatStore.addMessage({ role: 'ai', content: data.content.replace(/\n/g, ''), timestamp: data.timestamp })
+            scrollToBottom()
         }
 
         if (data.debug) {
             debugInfo.value = data.debug
         }
-        scrollToBottom()
     }
 }
+
 
 function loadOlder() {
     chatStore.loadMore()

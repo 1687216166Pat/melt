@@ -83,6 +83,23 @@
                 </GlassCard>
             </div>
 
+            <!-- 回复条数 -->
+            <div class="section-block">
+                <h3 class="section-label">回复分句</h3>
+                <GlassCard size="md">
+                    <div class="detail-row">
+                        <span class="detail-label">最少条数</span>
+                        <input class="detail-value-input" type="number" v-model.number="detail.minMessages" min="1"
+                            max="10" />
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">最多条数</span>
+                        <input class="detail-value-input" type="number" v-model.number="detail.maxMessages" min="1"
+                            max="10" />
+                    </div>
+                </GlassCard>
+            </div>
+
             <!-- 进入对话 -->
             <div class="section-block">
                 <SoftButton variant="primary" block @click="$router.push(`/chat/${personaId}`)">💬 进入对话</SoftButton>
@@ -127,6 +144,8 @@ const detail = reactive({
     call_user: '',
     ai_relationship: '',
     user_relationship: '',
+    minMessages: 1,
+    maxMessages: 3,
 })
 
 async function loadDetail() {
