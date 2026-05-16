@@ -265,7 +265,19 @@ async function loadPersonas() {
         } catch { }
     }
 
-    currentPersona.value = data.active || (personas.value[0] && personas.value[0].id) || 'xiaorou'
+    // 优先用最近聊天的人格
+    try {
+        const latestRes = await api('/api/messages/latest-persona')
+        const latestData = await latestRes.json()
+        if (latestData.personaId) {
+            currentPersona.value = latestData.personaId
+        } else {
+            currentPersona.value = data.active || (personas.value[0] && personas.value[0].id) || 'xiaorou'
+        }
+    } catch {
+        currentPersona.value = data.active || (personas.value[0] && personas.value[0].id) || 'xiaorou'
+    }
+
     await loadAll()
 }
 

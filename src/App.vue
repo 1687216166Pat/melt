@@ -136,13 +136,7 @@ onUnmounted(() => {
 }
 
 /* 环境状态修正 */
-.phone-screen.env-quiet {
-    filter: saturate(0.9);
-}
 
-.phone-screen.env-active {
-    filter: saturate(1.05);
-}
 
 .screen-content {
     flex: 1;

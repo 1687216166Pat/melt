@@ -12,9 +12,9 @@
                     gradient="linear-gradient(155deg, rgba(248,244,250,0.95), rgba(238,230,242,0.7))" />
                 <span class="icon-label">AI 聊天</span>
             </div>
-            <div class="app-icon" @click="$router.push('/about')">
+            <div class="app-icon" @click="openAbout">
                 <AppIcon icon="heart"
-                    gradient="linear-gradient(155deg, rgba(252,246,248,0.95), rgba(245,235,240,0.7))" />
+                    gradient="linear-gradient(155deg, rgba(252,244,248,0.95), rgba(245,232,240,0.7))" />
                 <span class="icon-label">关于他</span>
             </div>
             <div class="app-icon" @click="$router.push('/memory')">
@@ -62,6 +62,17 @@ async function openChat() {
         }
     } catch (e) {
         router.push('/chat/xiaorou')
+    }
+}
+
+async function openAbout() {
+    try {
+        const res = await api('/api/prompts/personas')
+        const data = await res.json()
+        // 跳转到关于他页面，带上当前活跃人格
+        router.push('/about')
+    } catch {
+        router.push('/about')
     }
 }
 

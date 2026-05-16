@@ -173,11 +173,9 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.detail-page {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    padding-top: env(safe-area-inset-top, 44px);
+.detail-page * {
+    max-width: 100%;
+    overflow-wrap: break-word;
 }
 
 .detail-header {
@@ -218,6 +216,7 @@ onMounted(() => {
 .detail-content {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px 0;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
 }
@@ -335,4 +334,10 @@ onMounted(() => {
     padding: 10px;
     opacity: 0.8;
 }
+
+.dream-input, .dream-textarea {
+    word-break: break-all;
+    overflow-wrap: break-word;
+}
+
 </style>
