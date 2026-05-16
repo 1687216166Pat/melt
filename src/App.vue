@@ -95,7 +95,37 @@ onMounted(() => {
     startClock()
     startReporting()
     loadEnvironment()
-    envInterval = setInterval(loadEnvironment, 10 * 60 * 1000) // 每10分钟
+    envInterval = setInterval(loadEnvironment, 10 * 60 * 1000)
+
+    // 加载自定义壁纸
+    const savedWallpaper = localStorage.getItem('custom_wallpaper')
+    if (savedWallpaper) {
+        setTimeout(() => {
+            const screen = document.querySelector('.phone-screen')
+            if (screen) {
+                screen.style.backgroundImage = `url(${savedWallpaper})`
+                screen.style.backgroundSize = 'cover'
+                screen.style.backgroundPosition = 'center'
+            }
+        }, 100)
+    }
+
+    // 加载自定义字体
+    const savedFontUrl = localStorage.getItem('custom_font_url')
+    const savedFontName = localStorage.getItem('custom_font_name')
+    if (savedFontUrl && savedFontName) {
+        const style = document.createElement('style')
+        style.textContent = `
+            @font-face {
+                font-family: '${savedFontName}';
+                src: url('${savedFontUrl}');
+            }
+            html, body, #app, * {
+                font-family: '${savedFontName}', -apple-system, BlinkMacSystemFont, sans-serif !important;
+            }
+        `
+        document.head.appendChild(style)
+    }
 })
 
 onUnmounted(() => {
@@ -103,6 +133,7 @@ onUnmounted(() => {
     stopReporting()
     if (envInterval) clearInterval(envInterval)
 })
+
 </script>
 
 <style scoped>
@@ -256,5 +287,4 @@ onUnmounted(() => {
     opacity: 0;
     transform: scale(1.02) translateY(-4px);
 }
-
 </style>

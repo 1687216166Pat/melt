@@ -10,7 +10,7 @@
             <div class="app-icon" @click="openChat">
                 <AppIcon icon="chat"
                     gradient="linear-gradient(155deg, rgba(248,244,250,0.95), rgba(238,230,242,0.7))" />
-                <span class="icon-label">AI 聊天</span>
+                <span class="icon-label">共语</span>
             </div>
             <div class="app-icon" @click="openAbout">
                 <AppIcon icon="heart"
@@ -33,7 +33,11 @@
                 <span class="icon-label">设置</span>
             </div>
         </div>
-
+        <div class="app-icon" @click="$router.push('/customize')">
+            <AppIcon icon="customize"
+                gradient="linear-gradient(155deg, rgba(250,245,252,0.95), rgba(242,232,248,0.7))" />
+            <span class="icon-label">美化</span>
+        </div>
 
     </div>
 </template>
@@ -48,14 +52,17 @@ const router = useRouter()
 const { timeStr, dateStr, greeting } = useTime()
 
 async function openChat() {
+    const mode = localStorage.getItem('chat_entry_mode') || 'direct'
+    if (mode === 'list') {
+        router.push('/chat-list')
+        return
+    }
     try {
-        // 先查最近一条消息是哪个人格的
         const res = await api('/api/messages/latest-persona')
         const data = await res.json()
         if (data.personaId) {
             router.push(`/chat/${data.personaId}`)
         } else {
-            // 没有聊天记录，用当前激活的人格
             const pRes = await api('/api/prompts/personas')
             const pData = await pRes.json()
             router.push(`/chat/${pData.active}`)

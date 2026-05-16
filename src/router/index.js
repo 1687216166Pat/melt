@@ -6,6 +6,8 @@ import SettingsView from "../views/SettingsView.vue";
 import MemoryView from "../views/MemoryView.vue";
 import PersonaDetailView from "../views/PersonaDetailView.vue";
 import WorldBookView from "../views/WorldBookView.vue";
+import CustomizeView from "../views/CustomizeView.vue";
+import ChatListView from "../views/ChatListView.vue";
 
 //开发用，后续可以删掉
 import PlaygroundView from "../views/PlaygroundView.vue";
@@ -52,6 +54,16 @@ const router = createRouter({
       path: "/playground",
       name: "playground",
       component: PlaygroundView,
+    },
+    {
+      path: "/customize",
+      name: "customize",
+      component: CustomizeView,
+    },
+    {
+      path: "/chat-list",
+      name: "chat-list",
+      component: ChatListView,
     },
   ],
 });
