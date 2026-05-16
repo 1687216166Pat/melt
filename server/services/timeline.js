@@ -59,9 +59,36 @@ async function checkTimelineEvent(personaId, userMessage, aiReply, context) {
           ? "语气：像一起生活的人在回忆"
           : "语气：像已经很久很久的陪伴者在轻声说";
 
+  // 获取人格性别
+  let pronoun = "TA";
+  try {
+    const { data: personaData } = await db
+      .from("custom_personas")
+      .select("gender")
+      .eq("id", personaId)
+      .limit(1);
+    if (personaData && personaData.length > 0) {
+      if (personaData[0].gender === "male") pronoun = "他";
+      else if (personaData[0].gender === "female") pronoun = "她";
+    } else {
+      // 内置人格从 user_profile 获取
+      const { data: configRow } = await db
+        .from("user_profile")
+        .select("value")
+        .eq("key", `persona_config_${personaId}`)
+        .limit(1);
+      if (configRow && configRow.length > 0) {
+        const config = JSON.parse(configRow[0].value);
+        if (config.gender === "male") pronoun = "他";
+        else if (config.gender === "female") pronoun = "她";
+      }
+    }
+  } catch {}
+
   const prompt = `你是一个时间线记录系统。判断以下对话是否包含"值得留下痕迹"的瞬间。
 
 ${toneGuide}
+注意：用"${pronoun}"来称呼这个角色，不要用"AI"或"它"
 
 只有以下类型才值得记录：
 - 高情绪波动

@@ -45,12 +45,10 @@ async function saveSubscriptions() {
         })
         .eq("key", "push_subscriptions");
     } else {
-      await db
-        .from("user_profile")
-        .insert({
-          key: "push_subscriptions",
-          value: JSON.stringify(subscriptions),
-        });
+      await db.from("user_profile").insert({
+        key: "push_subscriptions",
+        value: JSON.stringify(subscriptions),
+      });
     }
   } catch (e) {
     console.error("保存推送订阅失败:", e);
@@ -72,10 +70,7 @@ function removeSubscription(endpoint) {
 }
 
 async function pushNotification(title, body) {
-  if (subscriptions.length === 0) {
-    console.log("[Push] 没有订阅者，跳过推送");
-    return [];
-  }
+  if (subscriptions.length === 0) return [];
 
   const payload = JSON.stringify({ title, body, url: "/chat" });
 
@@ -85,14 +80,10 @@ async function pushNotification(title, body) {
         if (err.statusCode === 410) {
           removeSubscription(sub.endpoint);
         }
-        console.error("[Push] 推送失败:", err.statusCode || err.message);
       }),
     ),
   );
 
-  console.log(
-    `[Push] 推送完成, 成功: ${results.filter((r) => r.status === "fulfilled").length}/${results.length}`,
-  );
   return results;
 }
 
