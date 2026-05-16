@@ -3,6 +3,7 @@
         <div class="chatlist-header">
             <button class="back-btn" @click="$router.push('/')">‹</button>
             <h2>共语</h2>
+            <button class="add-btn" @click="showAddModal = true">+</button>
         </div>
 
         <div class="chatlist-content">
@@ -24,15 +25,79 @@
                 <p>还没有可以聊天的对象</p>
             </div>
         </div>
+
+        <!-- 添加新AI弹窗 -->
+        <BlurModal :visible="showAddModal" @close="showAddModal = false">
+            <h3>添加新的AI</h3>
+            <DreamInput label="名字" v-model="newPersona.name" placeholder="角色名称" />
+            <DreamInput label="头像 (emoji 或留空)" v-model="newPersona.avatar" placeholder="💬" />
+            <DreamInput label="头像图片URL" v-model="newPersona.avatarUrl" placeholder="https://..." />
+            <div class="file-row">
+                <span class="file-label">或上传图片</span>
+                <input type="file" accept="image/*" @change="handleAvatarUpload" class="file-input" />
+            </div>
+            <DreamInput label="设定" type="textarea" v-model="newPersona.content" :rows="6" placeholder="描述性格、说话方式..." />
+            <div class="modal-actions">
+                <SoftButton variant="secondary" @click="showAddModal = false">取消</SoftButton>
+                <SoftButton variant="primary" @click="createPersona"
+                    :disabled="!newPersona.name || !newPersona.content">创建</SoftButton>
+            </div>
+        </BlurModal>
+
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { api } from '@/utils/api'
 import GlassCard from '@/components/ui/GlassCard.vue'
+import BlurModal from '@/components/ui/BlurModal.vue'
+import DreamInput from '@/components/ui/DreamInput.vue'
+import SoftButton from '@/components/ui/SoftButton.vue'
 
 const personas = ref([])
+const showAddModal = ref(false)
+const newPersona = reactive({
+    name: '',
+    avatar: '💬',
+    avatarUrl: '',
+    content: ''
+})
+
+function handleAvatarUpload(event) {
+    const file = event.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        newPersona.avatarUrl = e.target.result
+    }
+    reader.readAsDataURL(file)
+}
+
+async function createPersona() {
+    if (!newPersona.name || !newPersona.content) return
+    try {
+        await api('/api/personas/custom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: newPersona.name,
+                avatar: newPersona.avatar,
+                avatarUrl: newPersona.avatarUrl,
+                content: newPersona.content
+            })
+        })
+        showAddModal.value = false
+        newPersona.name = ''
+        newPersona.avatar = '💬'
+        newPersona.avatarUrl = ''
+        newPersona.content = ''
+        await loadPersonas()
+    } catch (e) {
+        console.error('创建失败:', e)
+    }
+}
+
 
 async function loadPersonas() {
     try {
@@ -175,5 +240,36 @@ onMounted(loadPersonas)
     color: var(--color-text-light);
     font-size: 13px;
     opacity: 0.5;
+}
+
+.add-btn {
+    background: none;
+    border: none;
+    font-size: 22px;
+    color: var(--color-primary);
+    cursor: pointer;
+    opacity: 0.75;
+}
+
+.chatlist-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.chatlist-header h2 {
+    flex: 1;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
 }
 </style>

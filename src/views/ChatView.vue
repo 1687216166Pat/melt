@@ -41,7 +41,9 @@
             </div>
             <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :msg="msg" @edit="handleEdit"
                 @delete="handleDelete" @regenerate="handleRegenerate" />
+            <TypingIndicator :visible="isTyping" />
         </div>
+
         <DebugPanel :info="debugInfo" />
         <ChatInput @send="handleSend" />
     </div>

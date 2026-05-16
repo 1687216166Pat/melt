@@ -6,6 +6,7 @@ let lastMsgId = "";
 const isConnected = ref(false);
 const messageHandlers = new Set();
 let processedIds = new Set();
+let lastFullContent = ''
 
 function getWsUrl() {
   // 生产环境直连 Railway
@@ -38,25 +39,20 @@ function connect() {
     console.log("WebSocket 已连接");
   };
 
-  socket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+socket.onmessage = (event) => {
+    const data = JSON.parse(event.data)
+    
+    // 用完整内容去重
+    const fullId = data.type + (data.content || '') + (data.timestamp || '')
+    if (fullId === lastFullContent) return
+    lastFullContent = fullId
 
-    // 生成消息唯一标识并去重
-    const msgId = data.timestamp + (data.content || "").slice(0, 30);
-    if (processedIds.has(msgId)) return;
-    processedIds.add(msgId);
-    // 防止内存泄漏，只保留最近50条
-    if (processedIds.size > 50) {
-      const arr = [...processedIds];
-      processedIds = new Set(arr.slice(-30));
-    }
-
-    messageHandlers.forEach((handler) => handler(data));
+    messageHandlers.forEach((handler) => handler(data))
 
     if (document.hidden && (data.type === "chat" || data.type === "push")) {
-      sendSystemNotification(data.content);
+        sendSystemNotification(data.content)
     }
-  };
+}
 
   socket.onclose = () => {
     isConnected.value = false;

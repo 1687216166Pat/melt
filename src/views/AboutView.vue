@@ -147,7 +147,7 @@
             <!-- 侧写 -->
             <div v-if="activeTab === 'observe'" class="tab-content">
                 <GlassCard size="md">
-                    <h4 class="block-title">AI 对你的长期观察</h4>
+                    <h4 class="block-title">对你的长期观察</h4>
                     <p class="content-text" v-if="memoryProfile">{{ memoryProfile }}</p>
                     <p class="content-text empty" v-else>还没有足够的观察...</p>
                 </GlassCard>
@@ -650,32 +650,29 @@ onMounted(loadPersonas)
 
 .timeline-atmosphere {
     text-align: center;
-    padding: 28px 0 24px;
+    padding: 10px 0 8px;
 }
 
 .timeline-title {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 400;
     color: var(--color-text);
-    letter-spacing: 0.05em;
-    margin-bottom: 8px;
+    margin-bottom: 3px;
 }
 
 .timeline-subtitle {
-    font-size: 12px;
+    font-size: 10px;
     color: var(--color-text-light);
     font-style: italic;
-    opacity: 0.7;
-    animation: breathe 5s ease-in-out infinite;
+    opacity: 0.5;
+}
+
+.timeline-group {
+    margin-bottom: 18px;
 }
 
 .timeline-flow {
     padding-bottom: 20px;
-}
-
-.timeline-group {
-    margin-bottom: 28px;
-    animation: fadeIn 0.5s var(--ease-soft) backwards;
 }
 
 .timeline-group:nth-child(2) {

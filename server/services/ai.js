@@ -1,6 +1,11 @@
 const { getDB } = require("../db/index");
 const { pushNotification } = require("./push");
-const { getFullPrompt, getActivePersona } = require("./prompt");
+const { getActivePersona } = require("./prompt");
+const {
+  corePrompt,
+  personaPrompts,
+  getUserPrompt,
+} = require("../config/prompt");
 const {
   processMemory,
   buildMemoryContextAsync,
@@ -79,7 +84,7 @@ function detectEmotion(userMessage) {
   return "正常";
 }
 
-async function handleChat(userMessage, ws, personaId, clients) {
+async function handleChat(userMessage, ws, personaId) {
   const db = getDB();
   const pid = personaId || "xiaorou";
   const personaNames = { xiaorou: "小柔", cool: "阿冷", assistant: "助手" };
@@ -103,7 +108,32 @@ async function handleChat(userMessage, ws, personaId, clients) {
 
   // 构建 prompt
   const timeContext = getTimeContext();
-  const fullPrompt = getFullPrompt();
+
+  // 动态获取当前人格的 prompt
+  let personaContent = "";
+  if (personaPrompts[pid]) {
+    personaContent = personaPrompts[pid].content;
+  } else {
+    // 自定义人格从数据库获取
+    const db2 = getDB();
+    const { data: customP } = await db2
+      .from("custom_personas")
+      .select("content")
+      .eq("id", pid)
+      .limit(1);
+    if (customP && customP.length > 0) {
+      personaContent = customP[0].content;
+    }
+  }
+
+  // 获取用户偏好
+  const userPromptContent = await getUserPrompt();
+  const userPromptStr = userPromptContent
+    ? `\n[用户偏好]\n${userPromptContent}`
+    : "";
+
+  const fullPrompt = corePrompt + personaContent + userPromptStr;
+
   const memoryContext = await buildMemoryContextAsync(pid, userMessage);
   const relationshipContext = await buildRelationshipContext(pid);
 
@@ -235,15 +265,8 @@ ${phoneContext}`;
       },
     });
 
-    if (clients) {
-      clients.forEach((client) => {
-        if (client.readyState === 1) {
-          client.send(errorPayload);
-        }
-      });
-    } else {
-      ws.send(errorPayload);
-    }
+    ws.send(errorPayload);
+
     return;
   }
 
@@ -330,16 +353,7 @@ ${phoneContext}`;
     },
   });
 
-  // 发给所有客户端
-  if (clients) {
-    clients.forEach((client) => {
-      if (client.readyState === 1) {
-        client.send(payload);
-      }
-    });
-  } else {
-    ws.send(payload);
-  }
+  ws.send(payload);
 
   // 分句推送
   const pushLines = aiReply
