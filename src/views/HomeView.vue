@@ -43,8 +43,9 @@
                                 <AppIcon icon="book"
                                     gradient="linear-gradient(155deg, rgba(248,245,252,0.95), rgba(238,232,245,0.7))" />
                             </div>
-                            <div class="mini-app placeholder-app">
-                                <div class="app-placeholder"></div>
+                            <div class="mini-app" @click="$router.push('/presence')">
+                                <AppIcon icon="heart"
+                                    gradient="linear-gradient(155deg, rgba(245,248,255,0.95), rgba(232,238,250,0.7))" />
                             </div>
                             <div class="mini-app placeholder-app">
                                 <div class="app-placeholder"></div>

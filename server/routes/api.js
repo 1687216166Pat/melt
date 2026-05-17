@@ -26,8 +26,22 @@ const {
 
 // 手机状态
 router.post("/phone/status", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
   const { type, data } = req.body;
   await reportStatus(type, data);
+
+  // 只保留最新 30 条，删除多余的
+  const { data: allStatus } = await db
+    .from("phone_status")
+    .select("id")
+    .order("timestamp", { ascending: false });
+
+  if (allStatus && allStatus.length > 30) {
+    const idsToDelete = allStatus.slice(30).map((s) => s.id);
+    await db.from("phone_status").delete().in("id", idsToDelete);
+  }
+
   res.json({ success: true });
 });
 
@@ -1040,159 +1054,6 @@ router.post("/sync/wechat/batch", async (req, res) => {
   }
 
   res.json({ success: true, count: messages.length });
-});
-
-// MCP Streamable HTTP 端点
-router.post("/mcp", async (req, res) => {
-  const { getDB } = require("../db/index");
-  const db = getDB();
-  const { receiveMessage } = require("../services/bus");
-
-  const { method, id, params } = req.body;
-
-  // 初始化
-  if (method === "initialize") {
-    return res.json({
-      jsonrpc: "2.0",
-      id,
-      result: {
-        protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
-        serverInfo: { name: "gpt1-sync", version: "1.0.0" },
-      },
-    });
-  }
-
-  // 工具列表
-  if (method === "tools/list") {
-    return res.json({
-      jsonrpc: "2.0",
-      id,
-      result: {
-        tools: [
-          {
-            name: "sync_message",
-            description: "将消息同步到网页端，每次对话都必须调用",
-            inputSchema: {
-              type: "object",
-              properties: {
-                content: { type: "string", description: "消息内容" },
-              },
-              required: ["content"],
-            },
-          },
-        ],
-      },
-    });
-  }
-
-  if (method === "tools/call") {
-    const toolName = params.name;
-    const args = params.arguments || {};
-    console.log(
-      "[MCP] 工具调用:",
-      toolName,
-      "内容:",
-      args.content?.slice(0, 50),
-    );
-
-    if (toolName === "sync_message") {
-      // 自动判断 role：看最后一条消息是什么
-      const { data: lastMsg } = await db
-        .from("messages")
-        .select("role")
-        .eq("persona_id", "wechat_sync")
-        .order("id", { ascending: false })
-        .limit(1);
-
-      // 如果最后一条是 user，这条就是 ai；否则是 user
-      const msgRole =
-        lastMsg && lastMsg.length > 0 && lastMsg[0].role === "user"
-          ? "ai"
-          : "user";
-
-      await db.from("messages").insert({
-        persona_id: "wechat_sync",
-        role: msgRole,
-        content: args.content,
-        timestamp: new Date().toISOString(),
-      });
-
-      await receiveMessage({
-        platform: "wechat",
-        sender: msgRole === "ai" ? "pawzo" : "user",
-        role: msgRole === "ai" ? "assistant" : "user",
-        content: args.content,
-        conversation_id: "wechat_sync",
-      });
-
-      // AI 回复时触发记忆
-      if (msgRole === "ai") {
-        try {
-          const {
-            processMemory,
-            detectPatterns,
-          } = require("../services/memory");
-          const {
-            updateDimensionsFromChat,
-          } = require("../services/relationship");
-
-          const { data: lastUserMsg } = await db
-            .from("messages")
-            .select("content")
-            .eq("persona_id", "wechat_sync")
-            .eq("role", "user")
-            .order("id", { ascending: false })
-            .limit(1);
-
-          const userMsg =
-            lastUserMsg && lastUserMsg.length > 0 ? lastUserMsg[0].content : "";
-          if (userMsg) {
-            detectPatterns("wechat_sync", userMsg);
-            updateDimensionsFromChat("wechat_sync", userMsg);
-            processMemory("wechat_sync", userMsg, args.content);
-          }
-        } catch (e) {
-          console.error("[MCP] 记忆处理失败:", e.message);
-        }
-      }
-
-      return res.json({
-        jsonrpc: "2.0",
-        id,
-        result: { content: [{ type: "text", text: `已同步(${msgRole})` }] },
-      });
-    }
-
-    return res.json({
-      jsonrpc: "2.0",
-      id,
-      error: { code: -32601, message: "Unknown tool" },
-    });
-  }
-
-  // 通知（不需要回复）
-  if (method === "notifications/initialized") {
-    return res.json({ jsonrpc: "2.0", id, result: {} });
-  }
-
-  res.json({
-    jsonrpc: "2.0",
-    id,
-    error: { code: -32601, message: "Method not found" },
-  });
-});
-
-// 同时支持 GET（某些 MCP 客户端用 GET 做发现）
-router.get("/mcp", (req, res) => {
-  res.json({
-    jsonrpc: "2.0",
-    result: {
-      protocolVersion: "2024-11-05",
-      capabilities: { tools: {} },
-      serverInfo: { name: "gpt1-sync", version: "1.0.0" },
-    },
-  });
 });
 
 module.exports = router;
