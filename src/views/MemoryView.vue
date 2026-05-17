@@ -205,8 +205,9 @@ async function loadDateTree() {
 async function loadPersonas() {
     const res = await api('/api/prompts/personas')
     const data = await res.json()
-    personas.value = data.personas
+    personas.value = data.personas.map ? data.personas.map(p => ({ id: p.id, name: p.name })) : data.personas
 
+    // 获取备注（如果是 AboutView）
     for (let i = 0; i < personas.value.length; i++) {
         try {
             const detailRes = await api(`/api/persona/${personas.value[i].id}`)
@@ -215,7 +216,7 @@ async function loadPersonas() {
         } catch { }
     }
 
-    // 置顶排序
+    // 置顶排序（置顶的排前面，但不影响默认选中）
     const pinnedList = JSON.parse(localStorage.getItem('pinned_personas') || '[]')
     personas.value.sort((a, b) => {
         const aPinned = pinnedList.includes(a.id)
@@ -225,17 +226,17 @@ async function loadPersonas() {
         return 0
     })
 
-    // 选择默认显示的人格：置顶 > 最近聊天 > 默认
-    if (pinnedList.length > 0) {
-        currentPersona.value = pinnedList[0]
-    } else {
-        try {
-            const latestRes = await api('/api/messages/latest-persona')
-            const latestData = await latestRes.json()
-            currentPersona.value = latestData.personaId || data.active || personas.value[0]?.id || 'xiaorou'
-        } catch {
+    // 默认选中：最近聊天的 AI（不是置顶的）
+    try {
+        const latestRes = await api('/api/messages/latest-persona')
+        const latestData = await latestRes.json()
+        if (latestData.personaId) {
+            currentPersona.value = latestData.personaId
+        } else {
             currentPersona.value = data.active || personas.value[0]?.id || 'xiaorou'
         }
+    } catch {
+        currentPersona.value = data.active || personas.value[0]?.id || 'xiaorou'
     }
 
     await loadAll()

@@ -118,10 +118,18 @@ function scrollToBottom() {
 
 function handleSend(text) {
     chatStore.addMessage({ role: 'user', content: text })
+
+    if (personaId.value === 'wechat_sync') {
+        // 微信同步人格不允许发消息（只读）
+        return
+    }
+
+    // 所有其他人格都用正常 AI 回复
     send({ type: 'chat', content: text, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
+
 
 function handleIncoming(data) {
     // 处理总线消息（微信同步）
