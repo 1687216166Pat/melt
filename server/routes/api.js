@@ -1042,14 +1042,6 @@ router.post("/sync/wechat/batch", async (req, res) => {
   res.json({ success: true, count: messages.length });
 });
 
-router.all("/sync/mcp", async (req, res) => {
-  console.log("[MCP] method:", req.method);
-  console.log("[MCP] query:", req.query);
-  console.log("[MCP] body:", req.body);
-  console.log("[MCP] headers:", JSON.stringify(req.headers).slice(0, 200));
-  res.json({ success: true, received: true });
-});
-
 // MCP Streamable HTTP 端点
 router.post("/mcp", async (req, res) => {
   const { getDB } = require("../db/index");
@@ -1106,72 +1098,84 @@ router.post("/mcp", async (req, res) => {
   }
 
   // 工具调用
-  if (toolName === "sync_user_message") {
-    await db.from("messages").insert({
-      persona_id: "wechat_sync",
-      role: "user",
-      content: args.content,
-      timestamp: new Date().toISOString(),
-    });
-    await receiveMessage({
-      platform: "wechat",
-      sender: "user",
-      role: "user",
-      content: args.content,
-      conversation_id: "wechat_sync",
-    });
-    return res.json({
-      jsonrpc: "2.0",
-      id,
-      result: { content: [{ type: "text", text: "已同步用户消息" }] },
-    });
-  }
+  if (method === "tools/call") {
+    const toolName = params.name;
+    const args = params.arguments || {};
 
-  if (toolName === "sync_ai_reply") {
-    await db.from("messages").insert({
-      persona_id: "wechat_sync",
-      role: "ai",
-      content: args.content,
-      timestamp: new Date().toISOString(),
-    });
-    await receiveMessage({
-      platform: "wechat",
-      sender: "pawzo",
-      role: "assistant",
-      content: args.content,
-      conversation_id: "wechat_sync",
-    });
+    if (toolName === "sync_user_message") {
+      await db.from("messages").insert({
+        persona_id: "wechat_sync",
+        role: "user",
+        content: args.content,
+        timestamp: new Date().toISOString(),
+      });
+      await receiveMessage({
+        platform: "wechat",
+        sender: "user",
+        role: "user",
+        content: args.content,
+        conversation_id: "wechat_sync",
+      });
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: "已同步用户消息" }] },
+      });
+    }
 
-    // 触发记忆系统
-    try {
-      const { processMemory, detectPatterns } = require("../services/memory");
-      const { updateDimensionsFromChat } = require("../services/relationship");
-      const { checkTimelineEvent } = require("../services/timeline");
+    if (toolName === "sync_ai_reply") {
+      await db.from("messages").insert({
+        persona_id: "wechat_sync",
+        role: "ai",
+        content: args.content,
+        timestamp: new Date().toISOString(),
+      });
+      await receiveMessage({
+        platform: "wechat",
+        sender: "pawzo",
+        role: "assistant",
+        content: args.content,
+        conversation_id: "wechat_sync",
+      });
 
-      const { data: lastUserMsg } = await db
-        .from("messages")
-        .select("content")
-        .eq("persona_id", "wechat_sync")
-        .eq("role", "user")
-        .order("id", { ascending: false })
-        .limit(1);
+      try {
+        const { processMemory, detectPatterns } = require("../services/memory");
+        const {
+          updateDimensionsFromChat,
+        } = require("../services/relationship");
+        const { checkTimelineEvent } = require("../services/timeline");
 
-      const userMsg =
-        lastUserMsg && lastUserMsg.length > 0 ? lastUserMsg[0].content : "";
-      if (userMsg) {
-        detectPatterns("wechat_sync", userMsg);
-        updateDimensionsFromChat("wechat_sync", userMsg);
-        processMemory("wechat_sync", userMsg, args.content);
-        checkTimelineEvent("wechat_sync", userMsg, args.content);
+        const { data: lastUserMsg } = await db
+          .from("messages")
+          .select("content")
+          .eq("persona_id", "wechat_sync")
+          .eq("role", "user")
+          .order("id", { ascending: false })
+          .limit(1);
+
+        const userMsg =
+          lastUserMsg && lastUserMsg.length > 0 ? lastUserMsg[0].content : "";
+        if (userMsg) {
+          detectPatterns("wechat_sync", userMsg);
+          updateDimensionsFromChat("wechat_sync", userMsg);
+          processMemory("wechat_sync", userMsg, args.content);
+          checkTimelineEvent("wechat_sync", userMsg, args.content);
+        }
+      } catch (e) {
+        console.error("[MCP] 记忆处理失败:", e.message);
       }
-    } catch (e) {
-      console.error("[MCP] 记忆处理失败:", e.message);
+
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: "已同步AI回复" }] },
+      });
     }
 
     return res.json({
       jsonrpc: "2.0",
       id,
-      result: { content: [{ type: "text", text: "已同步AI回复" }] },
+      error: { code: -32601, message: "Unknown tool" },
     });
   }
 
