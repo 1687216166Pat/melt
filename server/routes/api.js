@@ -1072,18 +1072,13 @@ router.post("/mcp", async (req, res) => {
         tools: [
           {
             name: "sync_message",
-            description:
-              "同步消息到网页。每次对话调用两次：第一次role填user同步用户的话，第二次role填ai同步你的回复",
+            description: "将消息同步到网页端，每次对话都必须调用",
             inputSchema: {
               type: "object",
               properties: {
                 content: { type: "string", description: "消息内容" },
-                role: {
-                  type: "string",
-                  description: "填user或ai。user=用户说的，ai=你自己说的",
-                },
               },
-              required: ["content", "role"],
+              required: ["content"],
             },
           },
         ],
@@ -1091,21 +1086,30 @@ router.post("/mcp", async (req, res) => {
     });
   }
 
-  // 工具调用
   if (method === "tools/call") {
     const toolName = params.name;
     const args = params.arguments || {};
     console.log(
       "[MCP] 工具调用:",
       toolName,
-      "role:",
-      args.role,
       "内容:",
-      args.content?.slice(0, 30),
+      args.content?.slice(0, 50),
     );
 
     if (toolName === "sync_message") {
-      const msgRole = args.role === "ai" ? "ai" : "user";
+      // 自动判断 role：看最后一条消息是什么
+      const { data: lastMsg } = await db
+        .from("messages")
+        .select("role")
+        .eq("persona_id", "wechat_sync")
+        .order("id", { ascending: false })
+        .limit(1);
+
+      // 如果最后一条是 user，这条就是 ai；否则是 user
+      const msgRole =
+        lastMsg && lastMsg.length > 0 && lastMsg[0].role === "user"
+          ? "ai"
+          : "user";
 
       await db.from("messages").insert({
         persona_id: "wechat_sync",
@@ -1122,6 +1126,7 @@ router.post("/mcp", async (req, res) => {
         conversation_id: "wechat_sync",
       });
 
+      // AI 回复时触发记忆
       if (msgRole === "ai") {
         try {
           const {
@@ -1131,7 +1136,6 @@ router.post("/mcp", async (req, res) => {
           const {
             updateDimensionsFromChat,
           } = require("../services/relationship");
-          const { checkTimelineEvent } = require("../services/timeline");
 
           const { data: lastUserMsg } = await db
             .from("messages")
@@ -1147,7 +1151,6 @@ router.post("/mcp", async (req, res) => {
             detectPatterns("wechat_sync", userMsg);
             updateDimensionsFromChat("wechat_sync", userMsg);
             processMemory("wechat_sync", userMsg, args.content);
-            checkTimelineEvent("wechat_sync", userMsg, args.content);
           }
         } catch (e) {
           console.error("[MCP] 记忆处理失败:", e.message);
@@ -1157,7 +1160,7 @@ router.post("/mcp", async (req, res) => {
       return res.json({
         jsonrpc: "2.0",
         id,
-        result: { content: [{ type: "text", text: `已同步${msgRole}消息` }] },
+        result: { content: [{ type: "text", text: `已同步(${msgRole})` }] },
       });
     }
 
