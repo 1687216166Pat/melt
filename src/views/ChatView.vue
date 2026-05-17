@@ -45,7 +45,11 @@
         </div>
 
         <DebugPanel :info="debugInfo" />
-        <ChatInput @send="handleSend" />
+        <ChatInput v-if="personaId !== 'wechat_sync'" @send="handleSend" />
+        <div v-else class="sync-notice">
+            <p>此对话来自微信同步，仅供查看</p>
+        </div>
+
     </div>
 </template>
 
@@ -120,6 +124,16 @@ function handleSend(text) {
 }
 
 function handleIncoming(data) {
+    // 处理总线消息（微信同步）
+    if (data.type === 'bus_message' && data.message.conversation_id === personaId.value) {
+        chatStore.addMessage({
+            role: data.message.role === 'assistant' ? 'ai' : 'user',
+            content: data.message.content,
+            timestamp: new Date(data.message.timestamp).toISOString(),
+        })
+        scrollToBottom()
+        return
+    }
     if (data.type === 'chat' || data.type === 'push') {
         isTyping.value = false
 
@@ -407,4 +421,14 @@ watch(() => chatStore.messages.length, scrollToBottom)
     opacity: 0;
     transform: translateY(-4px) scale(0.97);
 }
+
+.sync-notice {
+    padding: 16px;
+    text-align: center;
+    color: var(--color-text-light);
+    font-size: 12px;
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
 </style>

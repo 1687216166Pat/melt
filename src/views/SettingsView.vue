@@ -162,6 +162,23 @@
                 </GlassCard>
             </div>
 
+            <div class="section">
+                <h3>◑ 微信同步</h3>
+                <p class="section-sub">将微信对话实时同步到这里</p>
+                <GlassCard size="md">
+                    <p class="guide-text">微信机器人 Webhook 地址：</p>
+                    <div class="webhook-box">
+                        <p class="webhook-url">用户消息：POST {{ webhookUrl }}/api/sync/wechat/user</p>
+                        <p class="webhook-body">Body: {"content":"消息内容"}</p>
+                    </div>
+                    <div class="webhook-box">
+                        <p class="webhook-url">AI回复：POST {{ webhookUrl }}/api/sync/wechat/ai</p>
+                        <p class="webhook-body">Body: {"content":"AI回复内容"}</p>
+                    </div>
+                    <p class="guide-text" style="margin-top:10px">在会话列表中选择"微信同步"即可查看同步的对话。</p>
+                </GlassCard>
+            </div>
+
         </div>
     </div>
 </template>

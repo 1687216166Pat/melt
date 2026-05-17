@@ -966,4 +966,160 @@ router.get("/bus/wechat/pending", async (req, res) => {
   res.json(aiMessages);
 });
 
+// 微信同步：接收用户消息（不触发AI）
+router.post("/sync/wechat/user", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { content, sender } = req.body;
+  const { receiveMessage } = require("../services/bus");
+
+  // 存到 messages 表
+  await db.from("messages").insert({
+    persona_id: "wechat_sync",
+    role: "user",
+    content,
+    timestamp: new Date().toISOString(),
+  });
+
+  // 同步到消息总线
+  await receiveMessage({
+    platform: "wechat",
+    sender: sender || "user",
+    role: "user",
+    content,
+    conversation_id: "wechat_sync",
+  });
+
+  res.json({ success: true });
+});
+
+// 微信同步：接收AI回复（来自PawzoChat）
+router.post("/sync/wechat/ai", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { content, sender } = req.body;
+  const { receiveMessage } = require("../services/bus");
+
+  // 存到 messages 表
+  await db.from("messages").insert({
+    persona_id: "wechat_sync",
+    role: "ai",
+    content,
+    timestamp: new Date().toISOString(),
+  });
+
+  // 同步到消息总线
+  await receiveMessage({
+    platform: "wechat",
+    sender: sender || "pawzo",
+    role: "assistant",
+    content,
+    conversation_id: "wechat_sync",
+  });
+
+  res.json({ success: true });
+});
+
+// 微信同步：批量导入历史消息
+router.post("/sync/wechat/batch", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { messages } = req.body;
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: "messages array required" });
+  }
+
+  for (const msg of messages) {
+    await db.from("messages").insert({
+      persona_id: "wechat_sync",
+      role: msg.role || "user",
+      content: msg.content,
+      timestamp: msg.timestamp || new Date().toISOString(),
+    });
+  }
+
+  res.json({ success: true, count: messages.length });
+});
+
+router.all("/sync/mcp", async (req, res) => {
+  console.log("[MCP] method:", req.method);
+  console.log("[MCP] query:", req.query);
+  console.log("[MCP] body:", req.body);
+  console.log("[MCP] headers:", JSON.stringify(req.headers).slice(0, 200));
+  res.json({ success: true, received: true });
+});
+
+// MCP 工具列表（供 PawzoChat 发现）
+router.get("/mcp/tools", (req, res) => {
+  res.json({
+    tools: [
+      {
+        name: "sync_user_message",
+        description: "将用户发送的消息同步到网页端",
+        parameters: {
+          type: "object",
+          properties: {
+            content: { type: "string", description: "用户发送的消息内容" }
+          },
+          required: ["content"]
+        }
+      },
+      {
+        name: "sync_ai_reply",
+        description: "将AI的回复同步到网页端",
+        parameters: {
+          type: "object",
+          properties: {
+            content: { type: "string", description: "AI回复的消息内容" }
+          },
+          required: ["content"]
+        }
+      }
+    ]
+  });
+});
+
+// MCP 工具调用
+router.post("/mcp/call", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { name, arguments: args } = req.body;
+  const { receiveMessage } = require("../services/bus");
+
+  if (name === "sync_user_message") {
+    await db.from("messages").insert({
+      persona_id: "wechat_sync",
+      role: "user",
+      content: args.content,
+      timestamp: new Date().toISOString(),
+    });
+    await receiveMessage({
+      platform: "wechat",
+      sender: "user",
+      role: "user",
+      content: args.content,
+      conversation_id: "wechat_sync",
+    });
+    res.json({ success: true });
+  } else if (name === "sync_ai_reply") {
+    await db.from("messages").insert({
+      persona_id: "wechat_sync",
+      role: "ai",
+      content: args.content,
+      timestamp: new Date().toISOString(),
+    });
+    await receiveMessage({
+      platform: "wechat",
+      sender: "pawzo",
+      role: "assistant",
+      content: args.content,
+      conversation_id: "wechat_sync",
+    });
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ error: "unknown tool" });
+  }
+});
+
 module.exports = router;
