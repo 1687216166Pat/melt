@@ -1050,76 +1050,137 @@ router.all("/sync/mcp", async (req, res) => {
   res.json({ success: true, received: true });
 });
 
-// MCP 工具列表（供 PawzoChat 发现）
-router.get("/mcp/tools", (req, res) => {
-  res.json({
-    tools: [
-      {
-        name: "sync_user_message",
-        description: "将用户发送的消息同步到网页端",
-        parameters: {
-          type: "object",
-          properties: {
-            content: { type: "string", description: "用户发送的消息内容" }
-          },
-          required: ["content"]
-        }
+// MCP Streamable HTTP 端点
+router.post("/mcp", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { receiveMessage } = require("../services/bus");
+
+  const { method, id, params } = req.body;
+
+  // 初始化
+  if (method === "initialize") {
+    return res.json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: "2024-11-05",
+        capabilities: { tools: {} },
+        serverInfo: { name: "gpt1-sync", version: "1.0.0" },
       },
-      {
-        name: "sync_ai_reply",
-        description: "将AI的回复同步到网页端",
-        parameters: {
-          type: "object",
-          properties: {
-            content: { type: "string", description: "AI回复的消息内容" }
+    });
+  }
+
+  // 工具列表
+  if (method === "tools/list") {
+    return res.json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        tools: [
+          {
+            name: "sync_user_message",
+            description: "将用户发送的消息同步到网页端",
+            inputSchema: {
+              type: "object",
+              properties: {
+                content: { type: "string", description: "用户发送的消息内容" },
+              },
+              required: ["content"],
+            },
           },
-          required: ["content"]
-        }
-      }
-    ]
+          {
+            name: "sync_ai_reply",
+            description: "将AI的回复同步到网页端",
+            inputSchema: {
+              type: "object",
+              properties: {
+                content: { type: "string", description: "AI回复的消息内容" },
+              },
+              required: ["content"],
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  // 工具调用
+  if (method === "tools/call") {
+    const toolName = params.name;
+    const args = params.arguments || {};
+
+    if (toolName === "sync_user_message") {
+      await db.from("messages").insert({
+        persona_id: "wechat_sync",
+        role: "user",
+        content: args.content,
+        timestamp: new Date().toISOString(),
+      });
+      await receiveMessage({
+        platform: "wechat",
+        sender: "user",
+        role: "user",
+        content: args.content,
+        conversation_id: "wechat_sync",
+      });
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: "已同步用户消息" }] },
+      });
+    }
+
+    if (toolName === "sync_ai_reply") {
+      await db.from("messages").insert({
+        persona_id: "wechat_sync",
+        role: "ai",
+        content: args.content,
+        timestamp: new Date().toISOString(),
+      });
+      await receiveMessage({
+        platform: "wechat",
+        sender: "pawzo",
+        role: "assistant",
+        content: args.content,
+        conversation_id: "wechat_sync",
+      });
+      return res.json({
+        jsonrpc: "2.0",
+        id,
+        result: { content: [{ type: "text", text: "已同步AI回复" }] },
+      });
+    }
+
+    return res.json({
+      jsonrpc: "2.0",
+      id,
+      error: { code: -32601, message: "Unknown tool" },
+    });
+  }
+
+  // 通知（不需要回复）
+  if (method === "notifications/initialized") {
+    return res.json({ jsonrpc: "2.0", id, result: {} });
+  }
+
+  res.json({
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32601, message: "Method not found" },
   });
 });
 
-// MCP 工具调用
-router.post("/mcp/call", async (req, res) => {
-  const { getDB } = require("../db/index");
-  const db = getDB();
-  const { name, arguments: args } = req.body;
-  const { receiveMessage } = require("../services/bus");
-
-  if (name === "sync_user_message") {
-    await db.from("messages").insert({
-      persona_id: "wechat_sync",
-      role: "user",
-      content: args.content,
-      timestamp: new Date().toISOString(),
-    });
-    await receiveMessage({
-      platform: "wechat",
-      sender: "user",
-      role: "user",
-      content: args.content,
-      conversation_id: "wechat_sync",
-    });
-    res.json({ success: true });
-  } else if (name === "sync_ai_reply") {
-    await db.from("messages").insert({
-      persona_id: "wechat_sync",
-      role: "ai",
-      content: args.content,
-      timestamp: new Date().toISOString(),
-    });
-    await receiveMessage({
-      platform: "wechat",
-      sender: "pawzo",
-      role: "assistant",
-      content: args.content,
-      conversation_id: "wechat_sync",
-    });
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: "unknown tool" });
-  }
+// 同时支持 GET（某些 MCP 客户端用 GET 做发现）
+router.get("/mcp", (req, res) => {
+  res.json({
+    jsonrpc: "2.0",
+    result: {
+      protocolVersion: "2024-11-05",
+      capabilities: { tools: {} },
+      serverInfo: { name: "gpt1-sync", version: "1.0.0" },
+    },
+  });
 });
 
 module.exports = router;
