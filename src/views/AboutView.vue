@@ -182,6 +182,23 @@
                     </div>
                 </GlassCard>
 
+                <!-- 每日记录 -->
+                <GlassCard v-if="summaries.length > 0" size="md">
+                    <h4 class="block-title">最近的日子</h4>
+                    <div v-for="s in summaries.slice(0, 5)" :key="s.id" class="summary-item">
+                        <span class="summary-date">{{ s.date }}</span>
+                        <p class="summary-text">{{ s.content }}</p>
+                    </div>
+                </GlassCard>
+
+                <!-- 人格洞察 -->
+                <GlassCard v-if="insights.length > 0" size="md">
+                    <h4 class="block-title">长期观察</h4>
+                    <div v-for="ins in insights" :key="ins.id" class="insight-item">
+                        <p class="insight-text">{{ ins.content }}</p>
+                    </div>
+                </GlassCard>
+
                 <!-- 手动添加观察 -->
                 <div class="add-entry-row" @click="showAddObserve = true">
                     <svg viewBox="0 0 24 24" fill="none" class="add-entry-icon">
@@ -268,6 +285,8 @@ const editTimelineId = ref(null)
 const editTimelineContent = ref('')
 const newObserveContent = ref('')
 const editProfileContent = ref('')
+const summaries = ref([])
+const insights = ref([])
 
 const tabs = [
     { id: 'profile', name: '档案', icon: '📋' },
@@ -374,8 +393,17 @@ async function switchPersona(id) {
 
 async function loadAll() {
     loaded.value = false
-    await Promise.all([loadDetail(), loadRelation(), loadObserve(), loadTimeline()])
+    await Promise.all([loadDetail(), loadRelation(), loadObserve(), loadTimeline(), loadSediment()])
     loaded.value = true
+}
+
+async function loadSediment() {
+    try {
+        const sRes = await api(`/api/sediment/${currentPersona.value}/summaries`)
+        summaries.value = await sRes.json()
+        const iRes = await api(`/api/sediment/${currentPersona.value}/insights`)
+        insights.value = await iRes.json()
+    } catch { }
 }
 
 async function loadTimeline() {
@@ -1128,4 +1156,36 @@ onMounted(loadPersonas)
     color: #c07070;
 }
 
+.summary-item {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.summary-item:last-child {
+    border-bottom: none;
+}
+
+.summary-date {
+    font-size: 10px;
+    color: var(--color-text-light);
+    opacity: 0.5;
+}
+
+.summary-text {
+    font-size: 13px;
+    color: var(--color-text);
+    line-height: 1.6;
+    margin-top: 4px;
+}
+
+.insight-item {
+    padding: 8px 0;
+}
+
+.insight-text {
+    font-size: 13px;
+    color: var(--color-text);
+    line-height: 1.6;
+    font-style: italic;
+}
 </style>

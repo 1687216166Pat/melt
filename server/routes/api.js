@@ -1087,19 +1087,77 @@ router.get("/personas/all", async (req, res) => {
 
   const configMap = {};
   if (configs) {
-    configs.forEach(row => {
+    configs.forEach((row) => {
       const id = row.key.replace("persona_config_", "");
       configMap[id] = JSON.parse(row.value);
     });
   }
 
   // 合并
-  const result = list.map(p => ({
+  const result = list.map((p) => ({
     ...p,
     ...(configMap[p.id] || {}),
   }));
 
   res.json(result);
+});
+
+// 人格采样语料库
+router.get("/samples/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("persona_samples")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  res.json(data || []);
+});
+
+router.post("/samples/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { type, data } = req.body;
+  await db.from("persona_samples").insert({
+    persona_id: req.params.personaId,
+    type,
+    data,
+  });
+  res.json({ success: true });
+});
+
+router.delete("/samples/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("persona_samples").delete().eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// 获取每日总结
+router.get("/sediment/:personaId/summaries", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("session_summaries")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .order("date", { ascending: false })
+    .limit(30);
+  res.json(data || []);
+});
+
+// 获取人格洞察
+router.get("/sediment/:personaId/insights", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("persona_insights")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .order("created_at", { ascending: false })
+    .limit(10);
+  res.json(data || []);
 });
 
 module.exports = router;

@@ -134,16 +134,6 @@ async function loadPersonas() {
             return 0
         })
 
-        // 选择默认人格
-        try {
-            const latestRes = await api('/api/messages/latest-persona')
-            const latestData = await latestRes.json()
-            currentPersona.value = latestData.personaId || personas.value[0]?.id || 'xiaorou'
-        } catch {
-            currentPersona.value = personas.value[0]?.id || 'xiaorou'
-        }
-
-        await loadAll()
     } catch (e) {
         console.error('加载失败:', e)
     }

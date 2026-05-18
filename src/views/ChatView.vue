@@ -75,6 +75,14 @@ const debugInfo = ref(null)
 const showPanel = ref(false)
 const maxBubbles = ref(3)
 
+function smartSplit(content) {
+    // 按空行（连续两个换行）分气泡，单个换行视为同一句话
+    const bubbles = content.split(/\n\s*\n/).map(b => b.replace(/\n/g, '').trim()).filter(Boolean)
+    if (bubbles.length > 1) return bubbles
+    // 如果没有空行，就把所有换行去掉当一个气泡
+    return [content.replace(/\n/g, '').trim()]
+}
+
 function goToDetail() {
     showPanel.value = false
     router.push(`/persona-detail/${personaId.value}`)
@@ -120,19 +128,17 @@ function handleSend(text) {
     chatStore.addMessage({ role: 'user', content: text })
 
     if (personaId.value === 'wechat_sync') {
-        // 微信同步人格不允许发消息（只读）
         return
     }
 
-    // 所有其他人格都用正常 AI 回复
     send({ type: 'chat', content: text, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
 
-
 function handleIncoming(data) {
-    // 处理总线消息（只有微信同步人格才处理）
+
+    console.log('[收到消息]', data.type, data.content?.slice(0, 20))
     if (data.type === 'bus_message') {
         if (data.message.conversation_id === personaId.value && personaId.value === 'wechat_sync') {
             chatStore.addMessage({
@@ -147,29 +153,18 @@ function handleIncoming(data) {
 
     if (data.type === 'chat' || data.type === 'push') {
         isTyping.value = false
+        const parts = smartSplit(data.content)
+        console.log('[smartSplit结果]', parts)
 
-        const lines = data.content.split('\n').map(l => l.trim()).filter(Boolean)
-
-        const merged = []
-        let buffer = ''
-        for (let i = 0; i < lines.length; i++) {
-            buffer += (buffer ? '' : '') + lines[i]
-            if (buffer.length >= 15 || i === lines.length - 1) {
-                merged.push(buffer)
-                buffer = ''
-            }
-        }
-
-        let final = merged
-        if (merged.length > maxBubbles.value) {
+        let final = parts
+        if (parts.length > maxBubbles.value) {
             final = []
-            const chunkSize = Math.ceil(merged.length / maxBubbles.value)
-            for (let i = 0; i < merged.length; i += chunkSize) {
-                final.push(merged.slice(i, i + chunkSize).join(''))
+            const chunkSize = Math.ceil(parts.length / maxBubbles.value)
+            for (let i = 0; i < parts.length; i += chunkSize) {
+                final.push(parts.slice(i, i + chunkSize).join(''))
             }
         }
 
-        // 统一用拆分逻辑
         final.forEach((line, idx) => {
             setTimeout(() => {
                 chatStore.addMessage({ role: 'ai', content: line, timestamp: data.timestamp })
@@ -183,20 +178,16 @@ function handleIncoming(data) {
     }
 }
 
-
 function loadOlder() {
     chatStore.loadMore()
 }
 
 function handleScroll() {
-    // 可以在这里做滚动到顶部自动加载
 }
 
 async function handleEdit(msgId, newContent) {
-    // 更新前端
     const msg = chatStore.messages.find(m => m.id === msgId)
     if (msg) msg.content = newContent
-    // 更新后端
     await api(`/api/message/${msgId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -205,17 +196,13 @@ async function handleEdit(msgId, newContent) {
 }
 
 async function handleDelete(msgId) {
-    // 从前端移除
     chatStore.messages = chatStore.messages.filter(m => m.id !== msgId)
-    // 从后端删除
     await api(`/api/message/${msgId}`, { method: 'DELETE' })
 }
 
 async function handleRegenerate(msgId) {
-    // 删除这条AI回复
     chatStore.messages = chatStore.messages.filter(m => m.id !== msgId)
     await api(`/api/message/${msgId}`, { method: 'DELETE' })
-    // 获取最后一条用户消息重新发送
     const lastUserMsg = [...chatStore.messages].reverse().find(m => m.role === 'user')
     if (lastUserMsg) {
         send({ type: 'chat', content: lastUserMsg.content, personaId: personaId.value })
@@ -223,29 +210,23 @@ async function handleRegenerate(msgId) {
     }
 }
 
-
 onMounted(async () => {
     document.querySelector('.screen-content').style.overflow = 'hidden'
-
-    // 先移除再注册，防止重复
     removeHandler(handleIncoming)
     onMessage(handleIncoming)
-
     loadPersonaName()
     await chatStore.loadPersonaMessages(personaId.value)
     scrollToBottom()
 })
 
 onUnmounted(() => {
-    // 恢复父容器滚动
     document.querySelector('.screen-content').style.overflow = 'auto'
     removeHandler(handleIncoming)
 })
 
-
 watch(() => chatStore.messages.length, scrollToBottom)
-
 </script>
+
 
 <style scoped>
 .chat-page {
@@ -435,5 +416,4 @@ watch(() => chatStore.messages.length, scrollToBottom)
     opacity: 0.5;
     flex-shrink: 0;
 }
-
 </style>

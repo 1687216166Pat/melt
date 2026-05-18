@@ -124,16 +124,6 @@ async function handleChat(userMessage, ws, personaId) {
     timestamp: nowISO,
   });
 
-  // 同步用户消息到总线
-  const { receiveMessage: busReceive } = require("./bus");
-  await busReceive({
-    platform: "web",
-    sender: "user",
-    role: "user",
-    content: userMessage,
-    conversation_id: pid,
-  });
-
   // 检测行为模式
   detectPatterns(pid, userMessage);
   updateDimensionsFromChat(pid, userMessage);
@@ -416,8 +406,8 @@ async function handleChat(userMessage, ws, personaId) {
 
   let aiReply = data.choices[0].message.content || "";
   // 过滤思维链
-  aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, "").trim();
-  aiReply = aiReply.replace(/\[思考\][\s\S]*/g, "").trim();
+  aiReply = aiReply.replace(/思考一下[\s\S]*?\n/g, "").trim();
+  aiReply = aiReply.replace(/^思考.*$/gm, "").trim();
   aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
 
   // 如果过滤后为空，用原始内容
@@ -450,15 +440,6 @@ async function handleChat(userMessage, ws, personaId) {
     const reminderContent = `我说过到时候会提醒你的。时间到了。`;
     await createScheduledMessage(pid, reminderContent, aiTime.toISOString());
   }
-
-  // 同步AI回复到消息总线
-  await busReceive({
-    platform: "web",
-    sender: pid,
-    role: "assistant",
-    content: aiReply,
-    conversation_id: pid,
-  });
 
   // 触发关系评估
   evaluateRelationship(pid, history);
@@ -527,23 +508,24 @@ async function handleChat(userMessage, ws, personaId) {
 
   ws.send(payload);
 
-  // 分句推送（静默，不重复打日志）
-  const pushLines = aiReply
-    .split("\n")
-    .map((l) => l.trim())
+  // 按空行分条推送
+  const pushParts = aiReply
+    .split(/\n\s*\n/)
+    .map((s) => s.replace(/\n/g, "").trim())
     .filter(Boolean);
-  const linesToPush =
-    pushLines.length > 1
-      ? pushLines
-      : [aiReply.length > 60 ? aiReply.slice(0, 60) + "..." : aiReply];
-
-  linesToPush.forEach((line, idx) => {
-    setTimeout(() => {
-      pushNotification(pName, line);
-    }, idx * 800);
-  });
-
-  console.log(`[Push] 推送 ${linesToPush.length} 条`);
+  if (pushParts.length <= 1) {
+    const preview = aiReply.replace(/\n/g, "");
+    pushNotification(
+      pName,
+      preview.length > 60 ? preview.slice(0, 60) + "..." : preview,
+    );
+  } else {
+    pushParts.forEach((part, idx) => {
+      setTimeout(() => {
+        pushNotification(pName, part);
+      }, idx * 800);
+    });
+  }
 }
 
 module.exports = { handleChat };

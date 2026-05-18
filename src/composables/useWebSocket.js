@@ -9,6 +9,8 @@ let processedIds = new Set();
 let lastFullContent = "";
 let lastReceivedContent = "";
 let lastReceivedTime = 0;
+let lastProcessedContent = "";
+let lastProcessedTime = 0;
 
 function getWsUrl() {
   // 生产环境直连 Railway
@@ -39,18 +41,21 @@ function connect() {
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
 
-    // 强去重
+    // 最暴力的去重：完全相同的内容 5 秒内只处理一次
+    const contentKey = (data.content || "") + (data.type || "");
     const now = Date.now();
-    const contentKey = data.content || "";
-    if (contentKey === lastReceivedContent && now - lastReceivedTime < 3000) {
+    if (contentKey === lastProcessedContent && now - lastProcessedTime < 5000) {
       return;
     }
-    lastReceivedContent = contentKey;
-    lastReceivedTime = now;
+    lastProcessedContent = contentKey;
+    lastProcessedTime = now;
 
     messageHandlers.forEach((handler) => handler(data));
 
-    if (document.hidden && (data.type === "chat" || data.type === "push")) {
+    if (
+      (data.type === "chat" || data.type === "push") &&
+      document.visibilityState === "hidden"
+    ) {
       sendSystemNotification(data.content, data.personaName);
     }
   };

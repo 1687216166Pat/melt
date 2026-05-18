@@ -69,8 +69,9 @@ function shouldTriggerEvent(userMessage, personaId) {
 async function triggerShortTermSummary(personaId, reason) {
   const db = getDB();
   const counter = getCounter(personaId);
+  const { getIdentityConfig } = require("./sediment");
+  const identity = await getIdentityConfig(personaId);
 
-  // 获取自上次总结以来的消息
   const { data: recentMsgs } = await db
     .from("messages")
     .select("role, content, timestamp")
@@ -81,21 +82,25 @@ async function triggerShortTermSummary(personaId, reason) {
   if (!recentMsgs || recentMsgs.length < 5) return;
 
   const msgs = recentMsgs.reverse();
-  const dialogue = msgs.map((m) => `${m.role}: ${m.content}`).join("\n");
+  const dialogue = msgs
+    .map((m) => {
+      const name = m.role === "user" ? identity.userName : identity.aiName;
+      return `${name}: ${m.content}`;
+    })
+    .join("\n");
 
   const prompt = `你是记忆沉淀系统。从这段对话中提取"留下了什么"。
 
-触发原因：${reason === "basic" ? "消息积累" : reason === "deep_night_chat" ? "深夜长聊" : reason === "high_emotion" ? "情绪波动" : "关系变化"}
+身份：${identity.userName}（用户）和${identity.aiName}（${identity.pronoun}）
 
 规则：
-- 不是摘要，是沉淀
-- 提取：发生了什么事、暴露了什么模式、情绪走向、关系微变化
-- 每条不超过15字
-- 最多8条
+- 用"${identity.userName}"和"${identity.aiName}"称呼，禁止用"用户""AI"
+- 提取：发生了什么、情绪走向、关系微变化
+- 每条不超过15字，最多5条
 - 没有值得沉淀的就回复"无"
 
-对话片段（最近${msgs.length}条）：
-${dialogue.slice(-3000)}
+对话片段：
+${dialogue.slice(-2000)}
 
 沉淀：`;
 
@@ -111,7 +116,7 @@ ${dialogue.slice(-3000)}
         body: JSON.stringify({
           model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
           messages: [{ role: "user", content: prompt }],
-          max_tokens: 150,
+          max_tokens: 100,
           temperature: 0.2,
         }),
       },
@@ -123,15 +128,10 @@ ${dialogue.slice(-3000)}
     const result = data.choices[0].message.content.trim();
     if (result === "无" || result.length < 3) return;
 
-    // 存入近期记忆
     const today = new Date().toISOString().slice(0, 10);
     await saveDailyMemory(personaId, result, today);
 
-    console.log(
-      `[记忆] ${personaId} 短期总结完成 (${reason}): ${result.slice(0, 50)}...`,
-    );
-
-    // 重置计数器
+    console.log(`[记忆] ${personaId} 短期总结完成: ${result.slice(0, 50)}...`);
     counter.sinceLastSummary = 0;
   } catch (e) {
     console.error("[记忆] 短期总结失败:", e.message);
@@ -328,11 +328,22 @@ async function processMemory(personaId, userMessage, aiReply) {
 
 async function extractQuickMemory(personaId, userMessage, aiReply) {
   const today = new Date().toISOString().slice(0, 10);
+  const { getIdentityConfig } = require("./sediment");
+  const identity = await getIdentityConfig(personaId);
 
-  const prompt = `这段对话留下了什么？（不是说了什么，是留下了什么）
-规则：每条不超过10字，最多3条，没有就回复"无"
-用户: ${userMessage}
-AI: ${aiReply}
+  const prompt = `从这段对话中提取"留下了什么"。
+
+身份：${identity.userName}（用户）和${identity.aiName}（${identity.pronoun}）
+
+规则：
+- 用"${identity.userName}"和"${identity.aiName}"称呼，禁止用"用户""AI"
+- 不是记录说了什么，是留下了什么感觉
+- 每条不超过15字，最多3条
+- 没有留下什么就回复"无"
+
+${identity.userName}: ${userMessage}
+${identity.aiName}: ${aiReply}
+
 留下了：`;
 
   try {

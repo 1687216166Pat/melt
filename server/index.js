@@ -12,6 +12,7 @@ const { consolidateMemories, initCounters } = require("./services/memory");
 const { checkProactiveMessages } = require("./services/proactive");
 const { getPersonaList } = require("./services/prompt");
 const { checkScheduledMessages } = require("./services/scheduler");
+const { runDailySediment, runWeeklyInsight } = require("./services/sediment");
 
 const app = express();
 const server = http.createServer(app);
@@ -88,6 +89,20 @@ setInterval(() => {
 }, 60000);
 
 setInterval(checkProactiveMessages, 30 * 60 * 1000);
+
+// 每分钟检查是否到零点（触发每日总结）
+setInterval(() => {
+  const now = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }),
+  );
+  if (now.getHours() === 0 && now.getMinutes() === 0) {
+    runDailySediment();
+    // 每周日触发周洞察
+    if (now.getDay() === 0) {
+      runWeeklyInsight();
+    }
+  }
+}, 60000);
 
 server.listen(PORT, () => {
   console.log(`服务运行在 http://localhost:${PORT}`);
