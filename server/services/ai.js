@@ -450,6 +450,108 @@ async function handleChat(userMessage, ws, personaId) {
   // 时间线检测
   checkTimelineEvent(pid, userMessage, aiReply);
 
+  // AI 自主决定主动消息
+  try {
+    const { data: pConfig } = await db
+      .from("custom_personas")
+      .select("proactive_auto, proactive_max")
+      .eq("id", pid)
+      .limit(1);
+
+    let autoEnabled = false;
+    let maxPerDay = 3;
+
+    if (pConfig && pConfig.length > 0) {
+      autoEnabled = pConfig[0].proactive_auto;
+      maxPerDay = pConfig[0].proactive_max || 3;
+    } else {
+      const { data: configRow } = await db
+        .from("user_profile")
+        .select("value")
+        .eq("key", `persona_config_${pid}`)
+        .limit(1);
+      if (configRow && configRow.length > 0) {
+        const config = JSON.parse(configRow[0].value);
+        autoEnabled = config.proactiveAuto;
+        maxPerDay = config.proactiveMax || 3;
+      }
+    }
+
+    if (autoEnabled) {
+      // 检查今天已发送次数
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: todayCount } = await db
+        .from("scheduled_messages")
+        .select("id")
+        .eq("persona_id", pid)
+        .gte("trigger_at", today + "T00:00:00Z")
+        .eq("triggered", true);
+
+      if (!todayCount || todayCount.length < maxPerDay) {
+        // 让 AI 决定是否需要主动消息
+        const decidePrompt = `你刚刚和用户结束了一段对话。根据对话氛围，判断你是否需要在之后主动发一条消息。
+
+最近对话：
+用户: ${userMessage}
+你: ${aiReply}
+
+现在时间: ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" })}
+
+规则：
+- 如果对话自然结束了，不需要主动消息，回复"无"
+- 如果你觉得过一会儿应该关心一下用户，回复格式：时间|内容
+- 时间用分钟数表示（例如：30 表示30分钟后）
+- 内容是你到时候想说的话，简短自然
+- 不要每次都发，只在真的有必要时才发
+
+示例回复：
+无
+或
+60|睡了吗
+或
+30|刚才说的那个事，想到一个办法`;
+
+        const decideRes = await fetch(
+          `${process.env.AI_BASE_URL}/chat/completions`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              Authorization: `Bearer ${process.env.AI_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
+              messages: [{ role: "user", content: decidePrompt }],
+              max_tokens: 50,
+              temperature: 0.5,
+            }),
+          },
+        );
+
+        const decideData = await decideRes.json();
+        if (decideData.choices && decideData.choices[0]) {
+          const result = decideData.choices[0].message.content.trim();
+          if (result !== "无" && result.includes("|")) {
+            const [mins, content] = result.split("|");
+            const minutes = parseInt(mins);
+            if (minutes > 0 && content) {
+              const triggerAt = new Date(
+                Date.now() + minutes * 60 * 1000,
+              ).toISOString();
+              const { createScheduledMessage } = require("./scheduler");
+              await createScheduledMessage(pid, content.trim(), triggerAt);
+              console.log(
+                `[主动] ${pid} 将在 ${minutes} 分钟后发: ${content.trim()}`,
+              );
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // 静默失败，不影响正常回复
+  }
+
   // 获取今日消息数
   const today = new Date().toISOString().slice(0, 10);
   const { data: todayMsgs } = await db

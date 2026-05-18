@@ -111,7 +111,8 @@ onMounted(() => {
 
     // 加载自定义壁纸
     const savedWallpaper = localStorage.getItem('custom_wallpaper')
-    if (savedWallpaper) {
+    const wallpaperScope = localStorage.getItem('wallpaper_scope') || 'home'
+    if (savedWallpaper && wallpaperScope === 'global') {
         setTimeout(() => {
             const screen = document.querySelector('.phone-screen')
             if (screen) {

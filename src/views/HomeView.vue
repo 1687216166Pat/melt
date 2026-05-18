@@ -36,15 +36,18 @@
 
                         <div class="left-app-grid">
                             <div class="mini-app" @click="$router.push('/settings')">
-                                <AppIcon icon="settings"
+                                <img v-if="customIcons.settings" :src="customIcons.settings" class="custom-icon" />
+                                <AppIcon v-else icon="settings"
                                     gradient="linear-gradient(155deg, rgba(250,248,252,0.95), rgba(240,236,245,0.7))" />
                             </div>
                             <div class="mini-app" @click="$router.push('/logs')">
-                                <AppIcon icon="book"
+                                <img v-if="customIcons.book" :src="customIcons.book" class="custom-icon" />
+                                <AppIcon v-else icon="book"
                                     gradient="linear-gradient(155deg, rgba(248,245,252,0.95), rgba(238,232,245,0.7))" />
                             </div>
                             <div class="mini-app" @click="$router.push('/presence')">
-                                <AppIcon icon="heart"
+                                <img v-if="customIcons.heart" :src="customIcons.heart" class="custom-icon" />
+                                <AppIcon v-else icon="heart"
                                     gradient="linear-gradient(155deg, rgba(245,248,255,0.95), rgba(232,238,250,0.7))" />
                             </div>
                             <div class="mini-app placeholder-app">
@@ -57,19 +60,23 @@
                     <div class="right-column">
                         <div class="mini-app-grid">
                             <div class="mini-app" @click="$router.push('/about')">
-                                <AppIcon icon="heart"
+                                <img v-if="customIcons.heart" :src="customIcons.heart" class="custom-icon" />
+                                <AppIcon v-else icon="heart"
                                     gradient="linear-gradient(155deg, rgba(252,244,248,0.95), rgba(245,232,240,0.7))" />
                             </div>
                             <div class="mini-app" @click="$router.push('/memory')">
-                                <AppIcon icon="brain"
+                                <img v-if="customIcons.brain" :src="customIcons.brain" class="custom-icon" />
+                                <AppIcon v-else icon="brain"
                                     gradient="linear-gradient(155deg, rgba(246,250,252,0.95), rgba(235,242,248,0.7))" />
                             </div>
                             <div class="mini-app" @click="$router.push('/worldbook')">
-                                <AppIcon icon="book"
+                                <img v-if="customIcons.book" :src="customIcons.book" class="custom-icon" />
+                                <AppIcon v-else icon="book"
                                     gradient="linear-gradient(155deg, rgba(252,250,246,0.95), rgba(245,240,232,0.7))" />
                             </div>
                             <div class="mini-app" @click="$router.push('/customize')">
-                                <AppIcon icon="customize"
+                                <img v-if="customIcons.customize" :src="customIcons.customize" class="custom-icon" />
+                                <AppIcon v-else icon="customize"
                                     gradient="linear-gradient(155deg, rgba(250,245,252,0.95), rgba(242,232,248,0.7))" />
                             </div>
                         </div>
@@ -144,7 +151,8 @@
         <div class="dock-bar">
             <div class="dock-item" @click="openChat">
                 <div class="dock-icon-wrap">
-                    <svg viewBox="0 0 40 40" fill="none" class="dock-svg">
+                    <img v-if="customIcons.chat" :src="customIcons.chat" class="dock-custom-img" />
+                    <svg v-else viewBox="0 0 40 40" fill="none" class="dock-svg">
                         <rect x="8" y="14" width="20" height="14" rx="7" stroke="rgba(160,120,180,0.7)"
                             stroke-width="1.1" />
                         <path d="M14 28 L12 32 L17 28" stroke="rgba(160,120,180,0.7)" stroke-width="1.1"
@@ -223,6 +231,7 @@ const newCard = ref('')
 const todayCard = ref('还没有字卡...')
 const startDate = ref('')
 const showDaysEdit = ref(false)
+const customIcons = ref({})
 
 const pagesContainer = ref(null)
 let isDragging = false
@@ -370,6 +379,22 @@ function openCompanionSpace() {
 function openPhone() { }
 
 onMounted(() => {
+    // 主屏幕壁纸
+    const savedWallpaper = localStorage.getItem('custom_wallpaper')
+    const scope = localStorage.getItem('wallpaper_scope') || 'home'
+    if (savedWallpaper && scope === 'home') {
+        const page = document.querySelector('.home-screen')
+        if (page) {
+            page.style.backgroundImage = `url(${savedWallpaper})`
+            page.style.backgroundSize = 'cover'
+            page.style.backgroundPosition = 'center'
+        }
+    }
+
+    // 加载自定义图标
+    const savedIcons = localStorage.getItem('custom_app_icons')
+    if (savedIcons) customIcons.value = JSON.parse(savedIcons)
+
     loadCards()
     calculateDays()
     loadHomeData()
@@ -919,6 +944,21 @@ onMounted(() => {
     cursor: pointer;
     opacity: 0.4;
     padding: 4px 8px;
+}
+
+.custom-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    object-fit: cover;
+    box-shadow: 0 3px 12px rgba(200, 130, 160, 0.1);
+}
+
+.dock-custom-img {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    object-fit: cover;
 }
 
 /* 版本号 */

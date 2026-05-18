@@ -492,18 +492,7 @@ router.put("/persona/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
   const id = req.params.personaId;
-  const {
-    name,
-    content,
-    avatar,
-    avatarUrl,
-    note,
-    gender,
-    worldBookId,
-    call_user,
-    ai_relationship,
-    user_relationship,
-  } = req.body;
+  const body = req.body;
 
   const { data: existing } = await db
     .from("custom_personas")
@@ -512,60 +501,52 @@ router.put("/persona/:personaId", async (req, res) => {
     .limit(1);
 
   if (existing && existing.length > 0) {
-    // 自定义人格：只更新传了值的字段
     const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (content !== undefined) updateData.content = content;
-    if (avatar !== undefined) updateData.avatar = avatar;
-    if (note !== undefined) updateData.note = note;
-    if (gender !== undefined) updateData.gender = gender;
-    if (worldBookId !== undefined) updateData.world_book_id = worldBookId;
-    if (call_user !== undefined) updateData.call_user = call_user;
-    if (ai_relationship !== undefined)
-      updateData.ai_relationship = ai_relationship;
-    if (user_relationship !== undefined)
-      updateData.user_relationship = user_relationship;
-    if (content) updateData.description = content.slice(0, 30);
-    if (req.body.minMessages !== undefined)
-      updateData.min_messages = req.body.minMessages;
-    if (req.body.maxMessages !== undefined)
-      updateData.max_messages = req.body.maxMessages;
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.content !== undefined) updateData.content = body.content;
+    if (body.avatar !== undefined) updateData.avatar = body.avatar;
+    if (body.note !== undefined) updateData.note = body.note;
+    if (body.gender !== undefined) updateData.gender = body.gender;
+    if (body.worldBookId !== undefined)
+      updateData.world_book_id = body.worldBookId;
+    if (body.call_user !== undefined) updateData.call_user = body.call_user;
+    if (body.ai_relationship !== undefined)
+      updateData.ai_relationship = body.ai_relationship;
+    if (body.user_relationship !== undefined)
+      updateData.user_relationship = body.user_relationship;
+    if (body.content) updateData.description = body.content.slice(0, 30);
+    if (body.minMessages !== undefined)
+      updateData.min_messages = body.minMessages;
+    if (body.maxMessages !== undefined)
+      updateData.max_messages = body.maxMessages;
+    if (body.chatWallpaper !== undefined)
+      updateData.chat_wallpaper = body.chatWallpaper;
+    if (body.proactiveEnabled !== undefined)
+      updateData.proactive_enabled = body.proactiveEnabled;
+    if (body.proactiveInterval !== undefined)
+      updateData.proactive_interval = body.proactiveInterval;
+    if (body.proactiveUnit !== undefined)
+      updateData.proactive_unit = body.proactiveUnit;
+    if (body.proactiveMax !== undefined)
+      updateData.proactive_max = body.proactiveMax;
+    if (body.proactiveAuto !== undefined)
+      updateData.proactive_auto = body.proactiveAuto;
 
     const { error } = await db
       .from("custom_personas")
       .update(updateData)
       .eq("id", id);
-    if (error) {
-      console.error("[PUT persona] 更新失败:", error);
-      return res.status(500).json({ error: error.message });
-    }
+    if (error) return res.status(500).json({ error: error.message });
   } else {
-    // 内置人格：存到 user_profile
-    const configData = {
-      name,
-      note,
-      gender,
-      avatarUrl,
-      worldBookId,
-      call_user,
-      ai_relationship,
-      user_relationship,
-      minMessages: req.body.minMessages,
-      maxMessages: req.body.maxMessages,
-    };
-
     const { error } = await db.from("user_profile").upsert(
       {
         key: `persona_config_${id}`,
-        value: JSON.stringify(configData),
+        value: JSON.stringify(body),
         updated_at: new Date().toISOString(),
       },
       { onConflict: "key" },
     );
-    if (error) {
-      console.error("[PUT persona] 保存配置失败:", error);
-      return res.status(500).json({ error: error.message });
-    }
+    if (error) return res.status(500).json({ error: error.message });
   }
 
   res.json({ success: true });
@@ -640,6 +621,16 @@ router.put("/worldbooks/:id", async (req, res) => {
     updateData.keyword_enabled = keyword_enabled;
   if (bind_type !== undefined) updateData.bind_type = bind_type;
   if (bind_personas !== undefined) updateData.bind_personas = bind_personas;
+  if (req.body.proactiveEnabled !== undefined)
+    updateData.proactive_enabled = req.body.proactiveEnabled;
+  if (req.body.proactiveInterval !== undefined)
+    updateData.proactive_interval = req.body.proactiveInterval;
+  if (req.body.proactiveUnit !== undefined)
+    updateData.proactive_unit = req.body.proactiveUnit;
+  if (req.body.proactiveMax !== undefined)
+    updateData.proactive_max = req.body.proactiveMax;
+  if (req.body.proactiveAuto !== undefined)
+    updateData.proactive_auto = req.body.proactiveAuto;
 
   console.log("[PUT worldbook] id:", req.params.id, "updateData:", updateData);
 

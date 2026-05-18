@@ -18,10 +18,40 @@
                         <span class="file-label">或上传文件</span>
                         <input type="file" accept="image/*" @change="handleWallpaperUpload" class="file-input" />
                     </div>
+                    <div class="setting-row">
+                        <span>壁纸范围</span>
+                        <select v-model="wallpaperScope" @change="saveWallpaperScope">
+                            <option value="home">仅主屏幕</option>
+                            <option value="global">全局生效</option>
+                        </select>
+                    </div>
                     <div class="btn-row">
                         <SoftButton variant="primary" size="sm" @click="applyWallpaper">应用</SoftButton>
                         <SoftButton variant="ghost" size="sm" @click="clearWallpaper">清除</SoftButton>
                     </div>
+                </GlassCard>
+            </div>
+
+            <!-- 自定义图标 -->
+            <div class="section-block">
+                <h3 class="section-label">❋ App 图标</h3>
+                <p class="section-sub">上传图片替换主屏幕图标</p>
+                <GlassCard size="md">
+                    <div class="icon-grid">
+                        <div v-for="app in appIcons" :key="app.id" class="icon-edit-item">
+                            <div class="icon-preview">
+                                <img v-if="app.customIcon" :src="app.customIcon" />
+                                <span v-else>{{ app.emoji }}</span>
+                            </div>
+                            <span class="icon-edit-name">{{ app.name }}</span>
+                            <input type="file" accept="image/*" style="display:none"
+                                :ref="el => { if (el) fileInputs[app.id] = el }"
+                                @change="(e) => handleIconUpload(e, app.id)" />
+                            <button class="icon-edit-btn" @click="fileInputs[app.id]?.click()">换</button>
+                        </div>
+                    </div>
+                    <SoftButton v-if="hasCustomIcons" variant="ghost" size="sm" block @click="clearAllIcons">恢复默认图标
+                    </SoftButton>
                 </GlassCard>
             </div>
 
@@ -100,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import GlassCard from '@/components/ui/GlassCard.vue'
 import SoftButton from '@/components/ui/SoftButton.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
@@ -111,15 +141,39 @@ const fontUrl = ref('')
 const fontName = ref('')
 const chatEntryMode = ref('direct')
 const themeMode = ref('auto')
+const wallpaperScope = ref('home')
+const fileInputs = ref({})
+
+const appIcons = ref([
+    { id: 'heart', name: '关于他', emoji: '💕', customIcon: '' },
+    { id: 'brain', name: '记忆库', emoji: '🧠', customIcon: '' },
+    { id: 'book', name: '世界书', emoji: '📖', customIcon: '' },
+    { id: 'settings', name: '设置', emoji: '⚙️', customIcon: '' },
+    { id: 'customize', name: '美化', emoji: '🎨', customIcon: '' },
+    { id: 'chat', name: '共语', emoji: '💬', customIcon: '' },
+    { id: 'logs', name: '语料库', emoji: '📋', customIcon: '' },
+    { id: 'presence', name: '相遇', emoji: '📍', customIcon: '' },
+])
+
+
+const hasCustomIcons = computed(() => appIcons.value.some(a => a.customIcon))
 
 onMounted(() => {
-    // 加载已保存的设置
     wallpaper.value = localStorage.getItem('custom_wallpaper') || ''
     wallpaperUrl.value = wallpaper.value
     fontName.value = localStorage.getItem('custom_font_name') || ''
     fontUrl.value = localStorage.getItem('custom_font_url') || ''
     chatEntryMode.value = localStorage.getItem('chat_entry_mode') || 'direct'
     themeMode.value = localStorage.getItem('theme_mode') || 'auto'
+    wallpaperScope.value = localStorage.getItem('wallpaper_scope') || 'home'
+
+    const savedIcons = localStorage.getItem('custom_app_icons')
+    if (savedIcons) {
+        const icons = JSON.parse(savedIcons)
+        appIcons.value.forEach(app => {
+            if (icons[app.id]) app.customIcon = icons[app.id]
+        })
+    }
 })
 
 function handleWallpaperUpload(event) {
@@ -135,23 +189,31 @@ function handleWallpaperUpload(event) {
 function applyWallpaper() {
     wallpaper.value = wallpaperUrl.value
     localStorage.setItem('custom_wallpaper', wallpaperUrl.value)
-    // 应用到页面
-    document.querySelector('.phone-screen').style.backgroundImage = `url(${wallpaperUrl.value})`
-    document.querySelector('.phone-screen').style.backgroundSize = 'cover'
-    document.querySelector('.phone-screen').style.backgroundPosition = 'center'
+    setTimeout(() => {
+        const screen = document.querySelector('.phone-screen')
+        if (screen) {
+            screen.style.backgroundImage = `url(${wallpaperUrl.value})`
+            screen.style.backgroundSize = 'cover'
+            screen.style.backgroundPosition = 'center'
+        }
+    }, 100)
 }
 
 function clearWallpaper() {
     wallpaper.value = ''
     wallpaperUrl.value = ''
     localStorage.removeItem('custom_wallpaper')
-    document.querySelector('.phone-screen').style.backgroundImage = ''
+    const screen = document.querySelector('.phone-screen')
+    if (screen) screen.style.backgroundImage = ''
+}
+
+function saveWallpaperScope() {
+    localStorage.setItem('wallpaper_scope', wallpaperScope.value)
 }
 
 function setTheme(mode) {
     themeMode.value = mode
     localStorage.setItem('theme_mode', mode)
-    // 通知 App.vue 更新主题
     window.dispatchEvent(new CustomEvent('theme-change', { detail: mode }))
 }
 
@@ -173,12 +235,16 @@ function applyFont() {
     localStorage.setItem('custom_font_url', fontUrl.value)
     localStorage.setItem('custom_font_name', fontName.value)
 
-    // 动态加载字体
+    const old = document.getElementById('custom-font-style')
+    if (old) old.remove()
+
     const style = document.createElement('style')
+    style.id = 'custom-font-style'
     style.textContent = `
         @font-face {
             font-family: '${fontName.value}';
-            src: url('${fontUrl.value}');
+            src: url('${fontUrl.value}') format('woff2'), url('${fontUrl.value}');
+            font-display: swap;
         }
         html, body, #app, * {
             font-family: '${fontName.value}', -apple-system, BlinkMacSystemFont, sans-serif !important;
@@ -192,17 +258,41 @@ function clearFont() {
     fontName.value = ''
     localStorage.removeItem('custom_font_url')
     localStorage.removeItem('custom_font_name')
-    // 移除自定义字体样式
-    document.querySelectorAll('style').forEach(s => {
-        if (s.textContent.includes('@font-face')) s.remove()
-    })
+    const old = document.getElementById('custom-font-style')
+    if (old) old.remove()
 }
 
 function setChatEntry(mode) {
     chatEntryMode.value = mode
     localStorage.setItem('chat_entry_mode', mode)
 }
+
+function handleIconUpload(event, appId) {
+    const file = event.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        const app = appIcons.value.find(a => a.id === appId)
+        if (app) app.customIcon = e.target.result
+        saveIcons()
+    }
+    reader.readAsDataURL(file)
+}
+
+function saveIcons() {
+    const icons = {}
+    appIcons.value.forEach(app => {
+        if (app.customIcon) icons[app.id] = app.customIcon
+    })
+    localStorage.setItem('custom_app_icons', JSON.stringify(icons))
+}
+
+function clearAllIcons() {
+    appIcons.value.forEach(app => app.customIcon = '')
+    localStorage.removeItem('custom_app_icons')
+}
 </script>
+
 
 <style scoped>
 .customize-page {
@@ -365,5 +455,60 @@ function setChatEntry(mode) {
 .option-check {
     color: var(--color-primary);
     font-size: 16px;
+}
+
+.coming-soon {
+    text-align: center;
+    color: var(--color-text-light);
+    font-size: 12px;
+    opacity: 0.5;
+    padding: 20px;
+}
+
+.icon-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+.icon-edit-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.icon-preview {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--color-bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    overflow: hidden;
+}
+
+.icon-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+}
+
+.icon-edit-name {
+    font-size: 10px;
+    color: var(--color-text-light);
+}
+
+.icon-edit-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    color: var(--color-primary);
+    cursor: pointer;
 }
 </style>

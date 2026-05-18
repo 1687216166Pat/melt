@@ -111,9 +111,19 @@ async function loadPersonaName() {
         const res = await api(`/api/persona/${personaId.value}`)
         const data = await res.json()
         personaName.value = data.note || data.name || 'AI 助手'
-        if (data.maxMessages) maxBubbles.value = data.maxMessages
-        if (data.max_messages) maxBubbles.value = data.max_messages
-    } catch (e) { }
+        if (data.maxMessages || data.max_messages) {
+            maxBubbles.value = data.maxMessages || data.max_messages
+        }
+        // 加载聊天壁纸
+        if (data.chatWallpaper) {
+            const chatPage = document.querySelector('.chat-page')
+            if (chatPage) {
+                chatPage.style.backgroundImage = `url(${data.chatWallpaper})`
+                chatPage.style.backgroundSize = 'cover'
+                chatPage.style.backgroundPosition = 'center'
+            }
+        }
+    } catch (e) {}
 }
 
 function scrollToBottom() {

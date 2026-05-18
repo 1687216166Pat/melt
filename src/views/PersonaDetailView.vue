@@ -94,6 +94,46 @@
                 </GlassCard>
             </div>
 
+            <!-- 独立主动消息 -->
+            <div class="section-block">
+                <h3 class="section-label">主动消息（独立设置）</h3>
+                <GlassCard size="md">
+                    <div class="detail-row">
+                        <span class="detail-label">启用</span>
+                        <label class="toggle">
+                            <input type="checkbox" v-model="detail.proactiveEnabled" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div v-if="detail.proactiveEnabled" class="proactive-settings">
+                        <div class="detail-row">
+                            <span class="detail-label">间隔</span>
+                            <div class="interval-input">
+                                <input type="number" v-model.number="detail.proactiveInterval" min="1" max="99"
+                                    class="interval-number" />
+                                <select v-model="detail.proactiveUnit">
+                                    <option value="minutes">分钟</option>
+                                    <option value="hours">小时</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">每日最多</span>
+                            <input type="number" v-model.number="detail.proactiveMax" min="1" max="50"
+                                class="interval-number" />
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">AI自主决定</span>
+                            <label class="toggle">
+                                <input type="checkbox" v-model="detail.proactiveAuto" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <p class="setting-hint" v-if="detail.proactiveAuto">AI 会根据对话氛围自主决定何时主动发消息</p>
+                    </div>
+                </GlassCard>
+            </div>
+
             <!-- 回复条数 -->
             <div class="section-block">
                 <h3 class="section-label">回复分句</h3>
@@ -108,6 +148,23 @@
                         <input class="detail-value-input" type="number" v-model.number="detail.maxMessages" min="1"
                             max="10" />
                     </div>
+                </GlassCard>
+            </div>
+
+            <!-- 聊天壁纸 -->
+            <div class="section-block">
+                <h3 class="section-label">聊天壁纸</h3>
+                <GlassCard size="md">
+                    <div class="wallpaper-preview" v-if="detail.chatWallpaper">
+                        <img :src="detail.chatWallpaper" />
+                    </div>
+                    <DreamInput label="图片URL" v-model="detail.chatWallpaper" placeholder="输入图片链接..." />
+                    <div class="file-row">
+                        <span class="file-label">或上传文件</span>
+                        <input type="file" accept="image/*" @change="handleChatWallpaperUpload" class="file-input" />
+                    </div>
+                    <SoftButton v-if="detail.chatWallpaper" variant="ghost" size="sm"
+                        @click="detail.chatWallpaper = ''">清除</SoftButton>
                 </GlassCard>
             </div>
 
@@ -159,6 +216,13 @@ const detail = reactive({
     user_relationship: '',
     minMessages: 1,
     maxMessages: 3,
+    chatWallpaper: '',
+    proactiveEnabled: false,
+    proactiveInterval: 4,
+    proactiveUnit: 'hours',
+    proactiveMax: 3,
+    proactiveAuto: false,
+
 })
 
 async function loadDetail() {
@@ -166,14 +230,20 @@ async function loadDetail() {
         const res = await api(`/api/persona/${personaId}`)
         const data = await res.json()
         Object.assign(detail, data)
-        // 确保数字字段正确
         if (data.min_messages) detail.minMessages = data.min_messages
         if (data.max_messages) detail.maxMessages = data.max_messages
         if (data.world_book_id) detail.worldBookId = data.world_book_id
+        if (data.chat_wallpaper) detail.chatWallpaper = data.chat_wallpaper
+        if (data.proactive_enabled !== undefined) detail.proactiveEnabled = data.proactive_enabled
+        if (data.proactive_interval) detail.proactiveInterval = data.proactive_interval
+        if (data.proactive_unit) detail.proactiveUnit = data.proactive_unit
+        if (data.proactive_max) detail.proactiveMax = data.proactive_max
+        if (data.proactive_auto !== undefined) detail.proactiveAuto = data.proactive_auto
     } catch (e) {
         console.error('加载详情失败:', e)
     }
 }
+
 
 async function loadWorldBooks() {
     try {
@@ -202,6 +272,12 @@ async function saveDetail() {
                 user_relationship: detail.user_relationship,
                 minMessages: detail.minMessages,
                 maxMessages: detail.maxMessages,
+                chatWallpaper: detail.chatWallpaper,
+                proactiveEnabled: detail.proactiveEnabled,
+                proactiveInterval: detail.proactiveInterval,
+                proactiveUnit: detail.proactiveUnit,
+                proactiveMax: detail.proactiveMax,
+                proactiveAuto: detail.proactiveAuto,
             })
         })
         saveMsg.value = '已保存 ✓'
@@ -226,6 +302,16 @@ function toggleWorldBook(id) {
     const idx = detail.worldBookIds.indexOf(id)
     if (idx > -1) detail.worldBookIds.splice(idx, 1)
     else detail.worldBookIds.push(id)
+}
+
+function handleChatWallpaperUpload(event) {
+    const file = event.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        detail.chatWallpaper = e.target.result
+    }
+    reader.readAsDataURL(file)
 }
 
 async function clearMessages() {
@@ -624,5 +710,50 @@ onMounted(() => {
     color: var(--color-primary);
     margin-left: 6px;
     opacity: 0.7;
+}
+
+.wallpaper-preview {
+    width: 100%;
+    height: 100px;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.wallpaper-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.proactive-settings {
+    margin-top: 8px;
+}
+
+.interval-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.interval-number {
+    width: 50px;
+    height: 32px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 0 8px;
+    font-size: 13px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    outline: none;
+    text-align: center;
+}
+
+.setting-hint {
+    font-size: 11px;
+    color: var(--color-text-light);
+    opacity: 0.5;
+    margin-top: 8px;
+    font-style: italic;
 }
 </style>

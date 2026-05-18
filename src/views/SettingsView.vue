@@ -11,26 +11,33 @@
                 <h3>✦ 连接方式</h3>
                 <p class="section-sub">这里决定你们如何继续交流</p>
                 <GlassCard size="md">
+                    <!-- 已保存的配置列表 -->
+                    <div v-if="savedConfigs.length > 0" class="config-list">
+                        <div v-for="(config, idx) in savedConfigs" :key="idx" class="config-item"
+                            :class="{ active: currentConfigIdx === idx }">
+                            <div class="config-info" @click="selectConfig(idx)">
+                                <p class="config-name">{{ config.name || config.model || '未命名' }}</p>
+                                <p class="config-detail">{{ config.baseUrl?.slice(0, 30) }}</p>
+                            </div>
+                            <button class="config-delete" @click="deleteConfig(idx)">×</button>
+                        </div>
+                    </div>
+
+                    <DreamInput label="配置名称" v-model="apiConfig.name" placeholder="例：主力模型" />
                     <DreamInput label="API Key" type="password" v-model="apiConfig.key" placeholder="sk-..." />
                     <DreamInput label="API 地址" v-model="apiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
                     <DreamInput label="模型名称" v-model="apiConfig.model" placeholder="gpt-4o-mini" />
-                    <SoftButton variant="primary" block @click="saveApiConfig">保存 API 配置</SoftButton>
+
+                    <div class="btn-row">
+                        <SoftButton variant="primary" size="sm" @click="saveApiConfig">保存并使用</SoftButton>
+                        <SoftButton variant="glass" size="sm" @click="saveAsNewConfig">另存为新配置</SoftButton>
+                    </div>
                     <p class="save-tip" v-if="apiSaved">已保存 ✓</p>
 
                     <div class="api-actions">
                         <SoftButton variant="glass" size="sm" @click="fetchModels">获取模型</SoftButton>
                         <SoftButton variant="glass" size="sm" @click="testApiConnection">测试连接</SoftButton>
                     </div>
-
-                    <div v-if="modelList.length > 0" class="model-list">
-                        <p class="list-label">可用模型：</p>
-                        <div class="model-scroll">
-                            <div v-for="m in modelList" :key="m" class="model-item" @click="apiConfig.model = m">
-                                {{ m }}
-                            </div>
-                        </div>
-                    </div>
-
                     <p v-if="apiTestResult" class="api-result" :class="apiTestResult.success ? 'success' : 'error'">
                         {{ apiTestResult.message }}
                     </p>
@@ -218,12 +225,16 @@ const saved = ref(false)
 const apiSaved = ref(false)
 const importInput = ref(null)
 const proactivePersona = ref('')
+const savedConfigs = ref([])
+const currentConfigIdx = ref(-1)
 
 const apiConfig = reactive({
+    name: '',
     key: '',
     baseUrl: '',
     model: ''
 })
+
 
 const proactive = reactive({
     enabled: true,
@@ -256,6 +267,12 @@ onMounted(async () => {
     if (savedConfig) {
         Object.assign(apiConfig, JSON.parse(savedConfig))
     }
+
+    // 加载多配置
+    const configs = localStorage.getItem('api_configs')
+    if (configs) savedConfigs.value = JSON.parse(configs)
+    const activeIdx = localStorage.getItem('active_config_idx')
+    if (activeIdx !== null) currentConfigIdx.value = parseInt(activeIdx)
 
     // 加载输出偏好（本地存储）
     const savedPrefs = localStorage.getItem('output_prefs')
@@ -313,15 +330,60 @@ async function reRegisterPush() {
     // 先清除后端旧订阅
     try {
         await api('/api/push/clear', { method: 'POST' })
-    } catch {}
+    } catch { }
     // 重新注册
     await registerPushSubscription()
     pushTestResult.value = { success: true, message: '已清除旧订阅并重新注册' }
 }
 
 
+function selectConfig(idx) {
+    currentConfigIdx.value = idx
+    const config = savedConfigs.value[idx]
+    apiConfig.key = config.key || ''
+    apiConfig.baseUrl = config.baseUrl || ''
+    apiConfig.model = config.model || ''
+    apiConfig.name = config.name || ''
+    localStorage.setItem('active_config_idx', idx)
+    // 同步到后端
+    saveApiConfig()
+}
+
+function saveAsNewConfig() {
+    savedConfigs.value.push({
+        name: apiConfig.name || apiConfig.model || '未命名',
+        key: apiConfig.key,
+        baseUrl: apiConfig.baseUrl,
+        model: apiConfig.model,
+    })
+    currentConfigIdx.value = savedConfigs.value.length - 1
+    localStorage.setItem('api_configs', JSON.stringify(savedConfigs.value))
+    localStorage.setItem('active_config_idx', currentConfigIdx.value)
+    saveApiConfig()
+}
+
+function deleteConfig(idx) {
+    savedConfigs.value.splice(idx, 1)
+    localStorage.setItem('api_configs', JSON.stringify(savedConfigs.value))
+    if (currentConfigIdx.value >= savedConfigs.value.length) {
+        currentConfigIdx.value = savedConfigs.value.length - 1
+    }
+}
+
 async function saveApiConfig() {
     localStorage.setItem('api_config', JSON.stringify(apiConfig))
+
+    // 更新当前选中的配置
+    if (currentConfigIdx.value >= 0 && savedConfigs.value[currentConfigIdx.value]) {
+        savedConfigs.value[currentConfigIdx.value] = {
+            name: apiConfig.name || apiConfig.model || '未命名',
+            key: apiConfig.key,
+            baseUrl: apiConfig.baseUrl,
+            model: apiConfig.model,
+        }
+        localStorage.setItem('api_configs', JSON.stringify(savedConfigs.value))
+    }
+
     // 同步到后端
     await api('/api/settings/api', {
         method: 'POST',
@@ -933,5 +995,55 @@ textarea:focus {
 .unit-text {
     font-size: 12px;
     color: var(--color-text-light);
+}
+
+.config-list {
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 12px;
+}
+
+.config-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.config-item.active {
+    background: rgba(212, 137, 158, 0.06);
+}
+
+.config-info {
+    flex: 1;
+}
+
+.config-name {
+    font-size: 13px;
+    color: var(--color-text);
+}
+
+.config-detail {
+    font-size: 10px;
+    color: var(--color-text-light);
+    opacity: 0.5;
+}
+
+.config-delete {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: var(--color-text-light);
+    opacity: 0.4;
+    cursor: pointer;
+}
+
+.btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
 }
 </style>
