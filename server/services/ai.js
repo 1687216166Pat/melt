@@ -627,12 +627,37 @@ async function handleChat(userMessage, ws, personaId) {
 
   ws.send(payload);
 
-  // Push 推送（Service Worker 会判断页面是否可见）
-  const preview = aiReply.replace(/\n/g, "");
-  pushNotification(
-    pName,
-    preview.length > 60 ? preview.slice(0, 60) + "..." : preview,
-  );
+  // Push 推送（按空行分条）
+  const pushParts = aiReply
+    .split(/\n\s*\n/)
+    .map((s) => s.replace(/\n/g, "").trim())
+    .filter(Boolean);
+  if (pushParts.length <= 1) {
+    // 没有空行，尝试按单换行分（和前端 smartSplit 一致）
+    const lines = aiReply
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length > 1) {
+      lines.forEach((line, idx) => {
+        setTimeout(() => {
+          pushNotification(pName, line);
+        }, idx * 600);
+      });
+    } else {
+      const preview = aiReply.replace(/\n/g, "");
+      pushNotification(
+        pName,
+        preview.length > 60 ? preview.slice(0, 60) + "..." : preview,
+      );
+    }
+  } else {
+    pushParts.forEach((part, idx) => {
+      setTimeout(() => {
+        pushNotification(pName, part);
+      }, idx * 600);
+    });
+  }
 }
 
 module.exports = { handleChat };
