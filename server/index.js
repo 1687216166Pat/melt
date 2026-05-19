@@ -116,10 +116,7 @@ setInterval(() => {
   );
   if (now.getHours() === 0 && now.getMinutes() === 0) {
     runDailySediment();
-    // 每周日触发周洞察
-    if (now.getDay() === 0) {
-      runWeeklyInsight();
-    }
+    if (now.getDay() === 0) runWeeklyInsight();
   }
 }, 60000);
 

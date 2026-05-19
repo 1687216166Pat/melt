@@ -218,6 +218,8 @@
                     <SoftButton variant="secondary" block @click="triggerImport">导入数据 (JSON)</SoftButton>
                     <input type="file" ref="importInput" accept=".json" style="display:none" @change="importData" />
                     <SoftButton variant="primary" block @click="syncToCloud">上传至云端</SoftButton>
+                    <SoftButton variant="glass" block @click="forceSync">强制同步云端数据</SoftButton>
+                    <SoftButton variant="secondary" block @click="restoreBuiltinPersonas">恢复内置人格</SoftButton>
                 </GlassCard>
             </div>
 
@@ -689,6 +691,25 @@ async function importData(event) {
     } catch (e) {
         alert('导入失败: ' + e.message)
     }
+}
+
+async function restoreBuiltinPersonas() {
+    const builtinIds = ['xiaorou', 'cool', 'assistant']
+    for (const id of builtinIds) {
+        try {
+            await api(`/api/personas/builtin/${id}/restore`, { method: 'POST' })
+        } catch { }
+    }
+    localStorage.removeItem('hidden_personas')
+    alert('已恢复所有内置人格')
+}
+
+async function forceSync() {
+    Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('melt_cache_')) localStorage.removeItem(key)
+    })
+    alert('缓存已清除，刷新页面重新加载')
+    location.reload()
 }
 
 async function syncToCloud() {

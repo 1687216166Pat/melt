@@ -6,14 +6,13 @@
             <button class="setting-btn" @click="showPanel = !showPanel">✦</button>
         </div>
 
-        <!-- 漂浮面板 -->
         <transition name="panel">
             <div v-if="showPanel" class="float-panel" @click.self="showPanel = false">
                 <div class="panel-content">
                     <div class="panel-item" @click="goToDetail">
                         <span class="panel-icon">✧</span>
                         <div>
-                            <p class="panel-title">关于他</p>
+                            <p class="panel-title">关于</p>
                             <p class="panel-sub">进入人格空间</p>
                         </div>
                     </div>
@@ -21,7 +20,7 @@
                         <span class="panel-icon">◌</span>
                         <div>
                             <p class="panel-title">清理痕迹</p>
-                            <p class="panel-sub">清空这段时间的对话</p>
+                            <p class="panel-sub">清空对话</p>
                         </div>
                     </div>
                     <div class="panel-item" @click="$router.push('/worldbook')">
@@ -45,11 +44,7 @@
         </div>
 
         <DebugPanel :info="debugInfo" />
-        <ChatInput v-if="personaId !== 'wechat_sync'" @send="handleSend" />
-        <div v-else class="sync-notice">
-            <p>此对话来自微信同步，仅供查看</p>
-        </div>
-
+        <ChatInput @send="handleSend" />
     </div>
 </template>
 
@@ -64,6 +59,7 @@ import DebugPanel from '@/components/chat/DebugPanel.vue'
 import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { api } from '@/utils/api'
+import { setCache } from '@/utils/cache'
 
 const route = useRoute()
 const router = useRouter()
@@ -74,6 +70,12 @@ const isTyping = ref(false)
 const debugInfo = ref(null)
 const showPanel = ref(false)
 const maxBubbles = ref(3)
+const inputText = ref('')
+const inputRef = ref(null)
+const personaAvatar = ref('💬')
+const personaAvatarUrl = ref('')
+const currentTime = ref('')
+const todayDate = ref('')
 
 function smartSplit(content) {
     const bubbles = content.split(/\n\s*\n/).map(b => {
@@ -112,10 +114,11 @@ async function loadPersonaName() {
         const res = await api(`/api/persona/${personaId.value}`)
         const data = await res.json()
         personaName.value = data.note || data.name || 'AI 助手'
+        personaAvatar.value = data.avatar || '💬'
+        personaAvatarUrl.value = data.avatarUrl || ''
         if (data.maxMessages || data.max_messages) {
             maxBubbles.value = data.maxMessages || data.max_messages
         }
-        // 加载聊天壁纸
         if (data.chatWallpaper) {
             const chatPage = document.querySelector('.chat-page')
             if (chatPage) {
@@ -145,11 +148,12 @@ function handleSend(text) {
     send({ type: 'chat', content: text, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
+
+    // 更新缓存
+    setCache(`messages_${personaId.value}`, chatStore.allMessages.value)
 }
 
 function handleIncoming(data) {
-
-    console.log('[收到消息]', data.type, data.content?.slice(0, 20))
     if (data.type === 'bus_message') {
         if (data.message.conversation_id === personaId.value && personaId.value === 'wechat_sync') {
             chatStore.addMessage({
@@ -165,7 +169,6 @@ function handleIncoming(data) {
     if (data.type === 'chat' || data.type === 'push') {
         isTyping.value = false
         const parts = smartSplit(data.content)
-        console.log('[smartSplit结果]', parts)
 
         let final = parts
         if (parts.length > maxBubbles.value) {
@@ -180,6 +183,10 @@ function handleIncoming(data) {
             setTimeout(() => {
                 chatStore.addMessage({ role: 'ai', content: line, timestamp: data.timestamp })
                 scrollToBottom()
+                // 最后一条消息添加完后更新缓存
+                if (idx === final.length - 1) {
+                    setCache(`messages_${personaId.value}`, chatStore.allMessages.value)
+                }
             }, idx * 500)
         })
 
@@ -187,6 +194,33 @@ function handleIncoming(data) {
             debugInfo.value = data.debug
         }
     }
+}
+
+// 更新时间
+function updateTime() {
+    const now = new Date()
+    currentTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+    todayDate.value = `${now.getFullYear()}.${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getDate().toString().padStart(2, '0')}`
+}
+
+function isEmojiOnly(text) {
+    const emojiRegex = /^[\p{Emoji}\s]+$/u
+    return emojiRegex.test(text) && text.length <= 4
+}
+
+function autoResize() {
+    const el = inputRef.value
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px'
+}
+
+function sendMessage(e) {
+    if (e && e.type === 'keydown') e.preventDefault()
+    if (!inputText.value.trim()) return
+    handleSend(inputText.value.trim())
+    inputText.value = ''
+    nextTick(() => autoResize())
 }
 
 function loadOlder() {
@@ -222,6 +256,8 @@ async function handleRegenerate(msgId) {
 }
 
 onMounted(async () => {
+    updateTime()
+    setInterval(updateTime, 60000)
     document.querySelector('.screen-content').style.overflow = 'hidden'
     removeHandler(handleIncoming)
     onMessage(handleIncoming)
@@ -237,7 +273,6 @@ onUnmounted(() => {
 
 watch(() => chatStore.messages.length, scrollToBottom)
 </script>
-
 
 <style scoped>
 .chat-page {
@@ -272,41 +307,7 @@ watch(() => chatStore.messages.length, scrollToBottom)
     font-size: 15px;
     font-weight: 500;
     color: var(--color-text);
-    letter-spacing: 0.03em;
-}
-
-.setting-btn {
-    background: none;
-    border: none;
-    font-size: 15px;
-    color: var(--color-text-light);
-    cursor: pointer;
-    padding: 4px;
-    opacity: 0.5;
-}
-
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 22px 0;
-    -webkit-overflow-scrolling: touch;
-    scroll-behavior: smooth;
-    min-height: 0;
-}
-
-.load-more {
-    text-align: center;
-    padding: 18px;
-    color: var(--color-text-light);
-    font-size: 11px;
-    cursor: pointer;
-    opacity: 0.4;
-    transition: opacity var(--duration-normal);
-    letter-spacing: 0.5px;
-}
-
-.load-more:active {
-    opacity: 0.7;
+    letter-spacing: 0.02em;
 }
 
 .setting-btn {
@@ -317,14 +318,8 @@ watch(() => chatStore.messages.length, scrollToBottom)
     cursor: pointer;
     padding: 4px 8px;
     opacity: 0.5;
-    transition: opacity var(--duration-normal);
 }
 
-.setting-btn:active {
-    opacity: 0.8;
-}
-
-/* 漂浮面板 */
 .float-panel {
     position: absolute;
     top: 0;
@@ -357,7 +352,6 @@ watch(() => chatStore.messages.length, scrollToBottom)
     padding: 12px 14px;
     border-radius: 14px;
     cursor: pointer;
-    transition: background var(--duration-normal) var(--ease-soft);
 }
 
 .panel-item:active {
@@ -374,7 +368,6 @@ watch(() => chatStore.messages.length, scrollToBottom)
 .panel-title {
     font-size: 13px;
     color: var(--color-text);
-    font-weight: 400;
 }
 
 .panel-sub {
@@ -384,7 +377,6 @@ watch(() => chatStore.messages.length, scrollToBottom)
     margin-top: 1px;
 }
 
-/* 面板动画 */
 .panel-enter-active {
     transition: opacity 0.3s var(--ease-soft);
 }
@@ -419,12 +411,21 @@ watch(() => chatStore.messages.length, scrollToBottom)
     transform: translateY(-4px) scale(0.97);
 }
 
-.sync-notice {
-    padding: 16px;
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 0;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    min-height: 0;
+}
+
+.load-more {
     text-align: center;
+    padding: 16px;
     color: var(--color-text-light);
     font-size: 12px;
-    opacity: 0.5;
-    flex-shrink: 0;
+    cursor: pointer;
+    opacity: 0.4;
 }
 </style>

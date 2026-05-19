@@ -290,9 +290,23 @@ async function saveDetail() {
 function handleAvatarUpload(event) {
     const file = event.target.files[0]
     if (!file) return
+    const img = new Image()
     const reader = new FileReader()
     reader.onload = (e) => {
-        detail.avatarUrl = e.target.result
+        img.onload = () => {
+            const canvas = document.createElement('canvas')
+            const maxSize = 200
+            let w = img.width, h = img.height
+            if (w > maxSize || h > maxSize) {
+                if (w > h) { h = h * maxSize / w; w = maxSize }
+                else { w = w * maxSize / h; h = maxSize }
+            }
+            canvas.width = w
+            canvas.height = h
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+            detail.avatarUrl = canvas.toDataURL('image/jpeg', 0.8)
+        }
+        img.src = e.target.result
     }
     reader.readAsDataURL(file)
 }
@@ -329,20 +343,25 @@ async function clearMemory() {
 }
 
 async function deletePersona() {
-    if (!confirm('确定删除这个对话？AI本身不会被删除。')) return
-    await api(`/api/messages/${personaId}`, { method: 'DELETE' })
-    router.push('/about')
-}
-
-async function deleteAi() {
-    if (!confirm('确定删除这个AI？所有对话和记忆都会被清除，此操作不可恢复。')) return
+    if (!confirm('确定删除？所有对话和记忆都会被清除。')) return
     try {
-        // 删除消息
         await api(`/api/messages/${personaId}`, { method: 'DELETE' })
-        // 删除记忆
         await api(`/api/memories/${personaId}/clear`, { method: 'DELETE' })
-        // 删除自定义人格
-        await api(`/api/personas/custom/${personaId}`, { method: 'DELETE' })
+
+        // 判断是自定义还是内置
+        if (detail.custom) {
+            await api(`/api/personas/custom/${personaId}`, { method: 'DELETE' })
+        } else {
+            // 内置人格：隐藏
+            await api(`/api/personas/builtin/${personaId}/hide`, { method: 'POST' })
+        }
+
+        const hidden = JSON.parse(localStorage.getItem('hidden_personas') || '[]')
+        if (!hidden.includes(personaId)) {
+            hidden.push(personaId)
+            localStorage.setItem('hidden_personas', JSON.stringify(hidden))
+        }
+
         router.push('/')
     } catch (e) {
         saveMsg.value = '删除失败'

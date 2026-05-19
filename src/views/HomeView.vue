@@ -4,97 +4,101 @@
 
         <div class="pages-container" ref="pagesContainer" @scroll="handlePageScroll" @mousedown="handleMouseDown"
             @mousemove="handleMouseMove" @mouseup="handleMouseUp" @mouseleave="handleMouseUp">
+            <!-- 第一页 -->
             <div class="page">
-                <div class="folder-note" @click="showCardEditor = true">
-                    <div class="folder-back">
-                        <p class="note-text">{{ todayCard }}</p>
-                    </div>
-                    <div class="folder-front">
-                        <span class="folder-front-text">{{ currentAi.note || currentAi.name || '...' }}今天选了这张</span>
-                        <div class="folder-tab-ext"></div>
+                <!-- 1. 小纸条组件（全宽） -->
+                <div class="note-card" @click="showCardEditor = true">
+                    <p class="note-tag">✦ 今日小纸条</p>
+                    <p class="note-content">{{ todayCard }}</p>
+                    <div class="note-footer">
+                        <span>{{ currentAi.note || currentAi.name || '...' }}今天选了这张 · 🍵</span>
                     </div>
                 </div>
 
-                <div class="main-content">
-                    <div class="left-column">
-                        <GlassCard size="md" class="days-card" @click="showDaysEdit = true">
-                            <div class="days-decor">
-                                <span class="decor-heart d1">♡</span>
-                                <span class="decor-heart d2">♡</span>
-                                <span class="decor-star">✧</span>
-                            </div>
-                            <p class="days-label">在一起</p>
+                <!-- 2. 中间行：左纪念日 | 右2×2 app -->
+                <div class="middle-row">
+                    <div class="days-card" @click="showDaysEdit = true">
+                        <p class="days-top-label">在一起</p>
+                        <div class="days-center">
                             <p class="days-number">{{ togetherDays }}</p>
-                            <p class="days-unit">天</p>
-                        </GlassCard>
-
-                        <div class="left-app-grid">
-                            <div class="mini-app" @click="$router.push('/settings')">
-                                <img v-if="customIcons.settings" :src="customIcons.settings" class="custom-icon" />
-                                <AppIcon v-else icon="settings"
-                                    gradient="linear-gradient(155deg, rgba(250,248,252,0.95), rgba(240,236,245,0.7))" />
-                            </div>
-                            <div class="mini-app" @click="$router.push('/logs')">
-                                <img v-if="customIcons.logs" :src="customIcons.logs" class="custom-icon" />
-                                <AppIcon v-else icon="book"
-                                    gradient="linear-gradient(155deg, rgba(248,245,252,0.95), rgba(238,232,245,0.7))" />
-                            </div>
-                            <div class="mini-app" @click="$router.push('/presence')">
-                                <img v-if="customIcons.presence" :src="customIcons.presence" class="custom-icon" />
-                                <AppIcon v-else icon="heart"
-                                    gradient="linear-gradient(155deg, rgba(245,248,255,0.95), rgba(232,238,250,0.7))" />
-                            </div>
-                            <div class="mini-app" @click="$router.push('/diary')">
-                                <img v-if="customIcons.diary" :src="customIcons.diary" class="custom-icon" />
-                                <AppIcon v-else icon="book"
-                                    gradient="linear-gradient(155deg, rgba(252,248,245,0.95), rgba(245,238,230,0.7))" />
-                            </div>
+                            <p class="days-unit-text">天 ✿</p>
                         </div>
+                        <p class="days-bottom-label">纪念日</p>
                     </div>
 
-                    <div class="right-column">
-                        <div class="mini-app-grid">
-                            <div class="mini-app" @click="$router.push('/about')">
-                                <img v-if="customIcons.about" :src="customIcons.about" class="custom-icon" />
-                                <AppIcon v-else icon="heart"
-                                    gradient="linear-gradient(155deg, rgba(252,244,248,0.95), rgba(245,232,240,0.7))" />
-                            </div>
-                            <div class="mini-app" @click="$router.push('/memory')">
-                                <img v-if="customIcons.brain" :src="customIcons.brain" class="custom-icon" />
-                                <AppIcon v-else icon="brain"
-                                    gradient="linear-gradient(155deg, rgba(246,250,252,0.95), rgba(235,242,248,0.7))" />
-                            </div>
-                            <div class="mini-app" @click="$router.push('/worldbook')">
-                                <img v-if="customIcons.worldbook" :src="customIcons.worldbook" class="custom-icon" />
-                                <AppIcon v-else icon="book"
-                                    gradient="linear-gradient(155deg, rgba(252,250,246,0.95), rgba(245,240,232,0.7))" />
-                            </div>
-                            <div class="mini-app" @click="$router.push('/customize')">
-                                <img v-if="customIcons.customize" :src="customIcons.customize" class="custom-icon" />
-                                <AppIcon v-else icon="customize"
-                                    gradient="linear-gradient(155deg, rgba(250,245,252,0.95), rgba(242,232,248,0.7))" />
-                            </div>
+                    <div class="middle-apps">
+                        <div class="mini-app" @click="$router.push('/about')">
+                            <img v-if="customIcons.about" :src="customIcons.about" class="custom-icon" />
+                            <AppIcon v-else icon="heart"
+                                gradient="linear-gradient(155deg, rgba(252,244,248,0.95), rgba(245,232,240,0.7))" />
                         </div>
+                        <div class="mini-app" @click="$router.push('/memory')">
+                            <img v-if="customIcons.brain" :src="customIcons.brain" class="custom-icon" />
+                            <AppIcon v-else icon="brain"
+                                gradient="linear-gradient(155deg, rgba(246,250,252,0.95), rgba(235,242,248,0.7))" />
+                        </div>
+                        <div class="mini-app" @click="$router.push('/worldbook')">
+                            <img v-if="customIcons.worldbook" :src="customIcons.worldbook" class="custom-icon" />
+                            <AppIcon v-else icon="book"
+                                gradient="linear-gradient(155deg, rgba(252,250,246,0.95), rgba(245,240,232,0.7))" />
+                        </div>
+                        <div class="mini-app" @click="$router.push('/customize')">
+                            <img v-if="customIcons.customize" :src="customIcons.customize" class="custom-icon" />
+                            <AppIcon v-else icon="customize"
+                                gradient="linear-gradient(155deg, rgba(250,245,252,0.95), rgba(242,232,248,0.7))" />
+                        </div>
+                    </div>
+                </div>
 
-                        <div class="bubble-widget">
-                            <div class="widget-bubble left">
-                                <div class="widget-avatar">
-                                    <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
-                                    <span v-else>{{ currentAi.avatar || '💬' }}</span>
-                                </div>
-                                <div class="widget-text">{{ leftBubbleText }}</div>
-                            </div>
-                            <div class="widget-bubble right">
-                                <div class="widget-text">{{ rightBubbleText }}</div>
-                                <div class="widget-avatar user">
-                                    <span>{{ userAvatar }}</span>
-                                </div>
-                            </div>
+                <!-- 3. 对话框组件（全宽） -->
+                <div class="chat-widget" @click="openChat">
+                    <div class="chat-widget-header">
+                        <div class="chat-widget-avatar">
+                            <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
+                            <span v-else>{{ currentAi.avatar || '💬' }}</span>
                         </div>
+                        <div class="chat-widget-info">
+                            <p class="chat-widget-name">{{ currentAi.note || currentAi.name || '...' }}</p>
+                            <p class="chat-widget-time">刚刚</p>
+                        </div>
+                        <button class="chat-widget-edit" @click.stop="showBubbleEdit = true">✎</button>
+                    </div>
+                    <div class="chat-widget-bubbles">
+                        <div class="cw-bubble left">
+                            <p>{{ leftBubbleText }}</p>
+                        </div>
+                        <div class="cw-bubble right">
+                            <p>{{ rightBubbleText }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. 下方4个app图标（一排） -->
+                <div class="bottom-apps">
+                    <div class="mini-app" @click="$router.push('/settings')">
+                        <img v-if="customIcons.settings" :src="customIcons.settings" class="custom-icon-sm" />
+                        <AppIcon v-else icon="settings"
+                            gradient="linear-gradient(155deg, rgba(250,248,252,0.95), rgba(240,236,245,0.7))" />
+                    </div>
+                    <div class="mini-app" @click="$router.push('/logs')">
+                        <img v-if="customIcons.logs" :src="customIcons.logs" class="custom-icon-sm" />
+                        <AppIcon v-else icon="book"
+                            gradient="linear-gradient(155deg, rgba(248,245,252,0.95), rgba(238,232,245,0.7))" />
+                    </div>
+                    <div class="mini-app" @click="$router.push('/presence')">
+                        <img v-if="customIcons.presence" :src="customIcons.presence" class="custom-icon-sm" />
+                        <AppIcon v-else icon="heart"
+                            gradient="linear-gradient(155deg, rgba(245,248,255,0.95), rgba(232,238,250,0.7))" />
+                    </div>
+                    <div class="mini-app" @click="$router.push('/diary')">
+                        <img v-if="customIcons.diary" :src="customIcons.diary" class="custom-icon-sm" />
+                        <AppIcon v-else icon="book"
+                            gradient="linear-gradient(155deg, rgba(252,248,245,0.95), rgba(245,238,230,0.7))" />
                     </div>
                 </div>
             </div>
 
+            <!-- 第二页 -->
             <div class="page">
                 <div class="vinyl-player">
                     <div class="vinyl-disc">
@@ -109,11 +113,56 @@
             </div>
         </div>
 
+        <!-- 分页指示器 -->
         <div class="page-dots">
             <span class="dot" :class="{ active: currentPage === 0 }"></span>
             <span class="dot" :class="{ active: currentPage === 1 }"></span>
         </div>
 
+        <!-- 5. 底部dock栏 -->
+        <div class="dock-bar">
+            <div class="dock-item" @click="openChat">
+                <div class="dock-icon-wrap">
+                    <img v-if="customIcons.chat" :src="customIcons.chat" class="dock-custom-img" />
+                    <svg v-else viewBox="0 0 40 40" fill="none" class="dock-svg">
+                        <rect x="8" y="14" width="20" height="14" rx="7" stroke="rgba(160,120,180,0.7)"
+                            stroke-width="1.1" />
+                        <path d="M14 28 L12 32 L17 28" stroke="rgba(160,120,180,0.7)" stroke-width="1.1"
+                            stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="14" cy="21" r="1.2" fill="rgba(160,120,180,0.5)" />
+                        <circle cx="18" cy="21" r="1.2" fill="rgba(160,120,180,0.4)" />
+                        <circle cx="22" cy="21" r="1.2" fill="rgba(160,120,180,0.3)" />
+                    </svg>
+                </div>
+                <span class="dock-label">共语</span>
+            </div>
+            <div class="dock-item" @click="openCompanionSpace">
+                <div class="dock-icon-wrap">
+                    <svg viewBox="0 0 40 40" fill="none" class="dock-svg">
+                        <circle cx="20" cy="18" r="4" stroke="rgba(200,130,160,0.7)" stroke-width="1"
+                            fill="rgba(200,130,160,0.05)" />
+                        <path d="M20 26v4M18 30h4" stroke="rgba(200,130,160,0.6)" stroke-width="1"
+                            stroke-linecap="round" />
+                        <circle cx="20" cy="20" r="11" stroke="rgba(200,130,160,0.3)" stroke-width="0.7"
+                            stroke-dasharray="3 2" />
+                    </svg>
+                </div>
+                <span class="dock-label">共栖</span>
+            </div>
+            <div class="dock-item" @click="openPhone">
+                <div class="dock-icon-wrap">
+                    <svg viewBox="0 0 40 40" fill="none" class="dock-svg">
+                        <path d="M28 12c0-1.1-.9-2-2-2H14c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V12z"
+                            stroke="rgba(120,140,180,0.7)" stroke-width="1.1" fill="rgba(120,140,180,0.05)" />
+                        <circle cx="20" cy="27" r="1.5" stroke="rgba(120,140,180,0.5)" stroke-width="0.8" />
+                        <path d="M17 11h6" stroke="rgba(120,140,180,0.4)" stroke-width="0.8" stroke-linecap="round" />
+                    </svg>
+                </div>
+                <span class="dock-label">电话</span>
+            </div>
+        </div>
+
+        <!-- 弹窗 -->
         <BlurModal :visible="showDaysEdit" @close="showDaysEdit = false">
             <h3>设置纪念日</h3>
             <DreamInput label="开始日期" type="date" v-model="startDate" />
@@ -138,51 +187,18 @@
             </div>
         </BlurModal>
 
-        <div class="dock-bar">
-            <div class="dock-item" @click="openChat">
-                <div class="dock-icon-wrap">
-                    <img v-if="customIcons.chat" :src="customIcons.chat" class="dock-custom-img" />
-                    <svg v-else viewBox="0 0 40 40" fill="none" class="dock-svg">
-                        <rect x="8" y="14" width="20" height="14" rx="7" stroke="rgba(160,120,180,0.7)"
-                            stroke-width="1.1" />
-                        <path d="M14 28 L12 32 L17 28" stroke="rgba(160,120,180,0.7)" stroke-width="1.1"
-                            stroke-linecap="round" stroke-linejoin="round" />
-                        <circle cx="14" cy="21" r="1.2" fill="rgba(160,120,180,0.5)" />
-                        <circle cx="18" cy="21" r="1.2" fill="rgba(160,120,180,0.4)" />
-                        <circle cx="22" cy="21" r="1.2" fill="rgba(160,120,180,0.3)" />
-                    </svg>
-                </div>
-                <span class="dock-label">共语</span>
+        <!-- 对话框编辑弹窗 -->
+        <BlurModal :visible="showBubbleEdit" @close="showBubbleEdit = false">
+            <h3>自定义对话框</h3>
+            <DreamInput label="对方说的话" v-model="editLeftBubble" placeholder="在想你..." />
+            <DreamInput label="我说的话" v-model="editRightBubble" placeholder="我也是..." />
+            <div class="modal-actions">
+                <SoftButton variant="secondary" @click="showBubbleEdit = false">取消</SoftButton>
+                <SoftButton variant="primary" @click="saveBubbles">保存</SoftButton>
             </div>
+        </BlurModal>
 
-            <div class="dock-item" @click="openCompanionSpace">
-                <div class="dock-icon-wrap">
-                    <svg viewBox="0 0 40 40" fill="none" class="dock-svg">
-                        <circle cx="20" cy="18" r="4" stroke="rgba(200,130,160,0.7)" stroke-width="1"
-                            fill="rgba(200,130,160,0.05)" />
-                        <path d="M20 26v4M18 30h4" stroke="rgba(200,130,160,0.6)" stroke-width="1"
-                            stroke-linecap="round" />
-                        <circle cx="20" cy="20" r="11" stroke="rgba(200,130,160,0.3)" stroke-width="0.7"
-                            stroke-dasharray="3 2" />
-                    </svg>
-                </div>
-                <span class="dock-label">共栖</span>
-            </div>
-
-            <div class="dock-item" @click="openPhone">
-                <div class="dock-icon-wrap">
-                    <svg viewBox="0 0 40 40" fill="none" class="dock-svg">
-                        <path d="M28 12c0-1.1-.9-2-2-2H14c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V12z"
-                            stroke="rgba(120,140,180,0.7)" stroke-width="1.1" fill="rgba(120,140,180,0.05)" />
-                        <circle cx="20" cy="27" r="1.5" stroke="rgba(120,140,180,0.5)" stroke-width="0.8" />
-                        <path d="M17 11h6" stroke="rgba(120,140,180,0.4)" stroke-width="0.8" stroke-linecap="round" />
-                    </svg>
-                </div>
-                <span class="dock-label">电话</span>
-            </div>
-        </div>
-
-        <p class="version-text">v1.2.0</p>
+        <p class="version-text">v1.1.1</p>
     </div>
 </template>
 
@@ -222,6 +238,9 @@ const todayCard = ref('还没有字卡...')
 const startDate = ref('')
 const showDaysEdit = ref(false)
 const customIcons = ref({})
+const showBubbleEdit = ref(false)
+const editLeftBubble = ref('')
+const editRightBubble = ref('')
 
 const pagesContainer = ref(null)
 let isDragging = false
@@ -287,6 +306,19 @@ function saveDaysDate() {
     calculateDays()
     showDaysEdit.value = false
 }
+
+function saveBubbles() {
+    if (editLeftBubble.value.trim()) {
+        leftBubbleText.value = editLeftBubble.value.trim()
+        localStorage.setItem('home_bubble_left', leftBubbleText.value)
+    }
+    if (editRightBubble.value.trim()) {
+        rightBubbleText.value = editRightBubble.value.trim()
+        localStorage.setItem('home_bubble_right', rightBubbleText.value)
+    }
+    showBubbleEdit.value = false
+}
+
 
 function calculateDays() {
     const saved = localStorage.getItem('together_start_date')
@@ -385,6 +417,9 @@ onMounted(() => {
     const savedIcons = localStorage.getItem('custom_app_icons')
     if (savedIcons) customIcons.value = JSON.parse(savedIcons)
 
+    editLeftBubble.value = leftBubbleText.value
+    editRightBubble.value = rightBubbleText.value
+
     loadCards()
     calculateDays()
     loadHomeData()
@@ -402,139 +437,81 @@ onMounted(() => {
     position: relative;
 }
 
-/* ========== 灵动岛 ========== */
 .dynamic-island {
     width: 100px;
     height: 28px;
     background: #1a1418;
     border-radius: 20px;
-    margin: 0 auto 20px;
+    margin: 0 auto 14px;
     opacity: 0.85;
 }
 
-/* ========== 纸条组件 ========== */
-.folder-note {
+/* 小纸条 */
+.note-card {
     position: relative;
-    height: 150px;
-    margin-bottom: 18px;
-    animation: fadeIn 0.6s var(--ease-soft);
-    border-radius: 16px;
-    overflow: hidden;
-    border: 1px solid var(--color-border);
-}
-
-.folder-back {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(248, 245, 252, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px 20px 55px;
-}
-
-.note-text {
-    font-size: 14px;
-    color: var(--color-text);
-    text-align: center;
-    line-height: 1.7;
-    font-weight: 400;
-}
-
-.folder-front {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 42px;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255, 255, 255, 0.6);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-}
-
-.folder-front-text {
-    font-size: 11px;
-    color: var(--color-text-light);
-    opacity: 0.6;
-}
-
-.folder-tab-ext {
-    position: absolute;
-    right: 0;
-    bottom: 42px;
-    width: 33%;
-    height: 50px;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-left: 1px solid rgba(255, 255, 255, 0.6);
-    border-top: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 12px 0 0 0;
-}
-
-/* 右侧凸起标签页 */
-.folder-tab-ext {
-    position: absolute;
-    right: 0px;
-    top: -20px;
-    width: 30%;
-    height: 20px;
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid var(--color-border);
-    border-bottom: none;
-    border-radius: 20px 20px 0 0;
-}
-
-/* ========== 主内容区 ========== */
-.main-content {
-    display: flex;
-    gap: 14px;
-    flex: 1;
-    margin-bottom: 12px;
-    animation: fadeIn 0.6s var(--ease-soft) 0.1s backwards;
-}
-
-.days-card {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: space-between;
-    min-height: 120px;
-    background: var(--color-card);
+    background: rgba(255, 255, 255, 0.75);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    border: 1px solid var(--color-border);
-    border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(200, 130, 160, 0.04);
-    padding: 14px 16px;
-    position: relative;
+    border: 1px solid rgba(249, 200, 212, 0.3);
+    border-radius: 22px;
+    padding: 18px 22px 14px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 12px rgba(249, 200, 212, 0.06);
     overflow: hidden;
+    cursor: pointer;
+    animation: fadeUp 0.5s var(--ease-soft) backwards;
 }
 
-
-.days-decor {
+.note-card::before {
+    content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    top: -20px;
+    right: -20px;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(249, 200, 212, 0.25) 0%, transparent 70%);
     pointer-events: none;
 }
 
-.decor-heart {
-    position: absolute;
-    color: var(--color-primary);
-    opacity: 0.15;
+.note-tag {
+    font-size: 10px;
+    color: #e8a0b4;
+    letter-spacing: 1.5px;
+    opacity: 0.8;
+    margin-bottom: 10px;
+}
+
+.note-content {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 16px;
+    color: #5c3d4a;
+    line-height: 1.6;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.note-footer {
+    border-top: 1px dashed rgba(249, 200, 212, 0.3);
+    padding-top: 10px;
+    font-size: 11px;
+    color: #b09aa8;
+}
+
+.note-text {
+    font-family: 'Shippori Mincho', serif;
     font-size: 14px;
+    color: var(--color-text);
+    text-align: center;
+    line-height: 1.8;
+}
+
+/* 2. 中间行 */
+.middle-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    animation: fadeUp 0.5s var(--ease-soft) 0.08s backwards;
 }
 
 .decor-heart.d1 {
@@ -544,187 +521,295 @@ onMounted(() => {
 }
 
 .decor-heart.d2 {
-    bottom: 14px;
+    bottom: 12px;
     left: 10px;
     font-size: 10px;
-    opacity: 0.1;
+    opacity: 0.12;
     animation: softFloat 8s ease-in-out infinite 1s;
 }
 
-.decor-star {
-    position: absolute;
-    top: 28px;
-    right: 32px;
-    color: var(--color-primary);
-    opacity: 0.12;
-    font-size: 8px;
-    animation: twinkle 3s ease-in-out infinite;
-}
-
-@keyframes twinkle {
-
-    0%,
-    100% {
-        opacity: 0.08;
-        transform: scale(0.9);
-    }
-
-    50% {
-        opacity: 0.2;
-        transform: scale(1.1);
-    }
-}
-
-.days-label {
-    font-size: 11px;
-    color: var(--color-text);
-    text-align: left;
-    font-weight: 400;
+/* 纪念日 */
+.days-card {
+    flex: 1;
+    min-height: 160px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(249, 200, 212, 0.3);
+    border-radius: 22px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     position: relative;
-    z-index: 1;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(249, 200, 212, 0.06);
+    animation: fadeUp 0.5s var(--ease-soft) 0.08s backwards;
+}
+
+.days-card::after {
+    content: '♡';
+    position: absolute;
+    bottom: 10px;
+    right: 14px;
+    font-size: 28px;
+    color: #f9c8d4;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.days-top-label {
+    font-size: 10px;
+    color: #b09aa8;
+    letter-spacing: 1px;
+}
+
+.days-center {
+    text-align: center;
 }
 
 .days-number {
-    font-size: 38px;
-    font-weight: 200;
-    color: var(--color-primary);
+    font-family: 'Shippori Mincho', serif;
+    font-size: 48px;
+    font-weight: 500;
+    color: #e8a0b4;
     line-height: 1;
-    text-align: center;
-    flex: 1;
+    letter-spacing: -1px;
+}
+
+.days-unit-text {
+    font-size: 12px;
+    color: #b09aa8;
+    margin-top: 4px;
+}
+
+.days-bottom-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #5c3d4a;
+}
+
+.middle-apps {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    align-content: center;
+}
+
+/* 3. 对话框组件 */
+.chat-widget {
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(237, 224, 245, 0.1);
+    border-radius: 20px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    cursor: pointer;
+    animation: fadeUp 0.5s var(--ease-soft) 0.16s backwards;
+}
+
+.chat-widget-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.chat-widget-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(249, 200, 212, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    z-index: 1;
+    font-size: 14px;
+    overflow: hidden;
 }
 
-.days-unit {
-    font-size: 11px;
+.chat-widget-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.chat-widget-info {
+    flex: 1;
+}
+
+.chat-widget-name {
+    font-size: 13px;
     color: var(--color-text);
-    text-align: right;
-    font-weight: 400;
-    position: relative;
-    z-index: 1;
+    font-weight: 500;
 }
 
-.days-date {
-    display: none;
+.chat-widget-time {
+    font-size: 10px;
+    color: var(--color-text-light);
+    opacity: 0.4;
+    margin-top: 1px;
 }
 
-.left-column {
-    flex: 1;
+.chat-widget-bubbles {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 6px;
 }
 
-.left-app-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+/* 对话框组件 */
+.chat-widget {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(249, 200, 212, 0.3);
+    border-radius: 22px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(249, 200, 212, 0.06);
+    animation: fadeUp 0.5s var(--ease-soft) 0.16s backwards;
 }
 
-.placeholder-app {
-    opacity: 0.3;
-}
-
-.app-placeholder {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
-    background: var(--color-bg-secondary);
-    border: 1px dashed var(--color-border);
-    margin: 0 auto;
-}
-
-.right-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.mini-app-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-/* 对话气泡组件 */
-.bubble-widget {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.widget-bubble {
+.chat-widget-header {
     display: flex;
     align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.chat-widget-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f9c8d4, #ede0f5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    overflow: hidden;
+}
+
+.chat-widget-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.chat-widget-info {
+    flex: 1;
+}
+
+.chat-widget-name {
+    font-size: 13px;
+    color: #5c3d4a;
+    font-weight: 500;
+}
+
+.chat-widget-time {
+    font-size: 9px;
+    color: #b09aa8;
+    margin-top: 1px;
+}
+
+.chat-widget-edit {
+    background: none;
+    border: none;
+    font-size: 14px;
+    color: #b09aa8;
+    cursor: pointer;
+    opacity: 0.4;
+    padding: 4px;
+}
+
+.chat-widget-bubbles {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+}
+
+.cw-bubble {
+    max-width: 75%;
+    padding: 8px 13px;
+    border-radius: 16px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #5c3d4a;
+}
+
+.cw-bubble.left {
+    align-self: flex-start;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(249, 200, 212, 0.12);
+    border-radius: 16px 16px 16px 4px;
+}
+
+.cw-bubble.right {
+    align-self: flex-end;
+    background: linear-gradient(135deg, rgba(249, 200, 212, 0.2), rgba(237, 224, 245, 0.15));
+    border: 1px solid rgba(249, 200, 212, 0.1);
+    border-radius: 16px 16px 4px 16px;
 }
 
 .widget-bubble.right {
     justify-content: flex-end;
 }
 
-.widget-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--color-bg-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    overflow: hidden;
-    flex-shrink: 0;
-}
-
-.widget-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.widget-avatar.user {
-    background: rgba(212, 137, 158, 0.15);
-}
-
 .widget-text {
-    padding: 8px 12px;
+    padding: 7px 12px;
     border-radius: 14px;
     font-size: 11px;
     color: var(--color-text);
-    background: var(--color-card);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border: 1px solid var(--color-border);
     max-width: 75%;
+    line-height: 1.4;
+}
+
+.widget-bubble.left .widget-text {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(249, 200, 212, 0.06);
 }
 
 .widget-bubble.right .widget-text {
-    background: rgba(212, 137, 158, 0.08);
-    border-color: rgba(212, 137, 158, 0.1);
+    background: rgba(249, 200, 212, 0.1);
+    border: 1px solid rgba(249, 200, 212, 0.06);
 }
 
+/* 4. 下方4个app */
+.bottom-apps {
+    display: flex;
+    justify-content: space-around;
+    padding: 0 8px;
+    margin-bottom: 14px;
+    animation: fadeUp 0.5s var(--ease-soft) 0.24s backwards;
+}
 
-/* ========== Dock 栏 ========== */
+.custom-icon-sm {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    object-fit: cover;
+    box-shadow: 0 2px 6px rgba(249, 200, 212, 0.08);
+}
+
+/* 5. Dock */
 .dock-bar {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 36px;
-    padding: 12px 40px;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-    background: var(--color-card);
+    gap: 30px;
+    padding: 12px 32px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    background: rgba(255, 255, 255, 0.5);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid rgba(249, 200, 212, 0.06);
     border-radius: 22px 22px 0 0;
     margin: 0 auto;
-    width: 75%;
-    max-width: 280px;
+    width: 78%;
+    max-width: 290px;
     flex-shrink: 0;
+    animation: fadeUp 0.5s var(--ease-soft) 0.32s backwards;
 }
 
 .dock-item {
@@ -735,15 +820,15 @@ onMounted(() => {
 }
 
 .dock-icon-wrap {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(155deg, rgba(250, 248, 252, 0.95), rgba(240, 235, 245, 0.7));
-    box-shadow: 0 2px 10px rgba(200, 130, 160, 0.08);
-    transition: transform var(--duration-slow) var(--ease-soft);
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 2px 6px rgba(249, 200, 212, 0.06);
+    transition: transform 0.3s var(--ease-soft);
 }
 
 .dock-item:active .dock-icon-wrap {
@@ -751,19 +836,42 @@ onMounted(() => {
 }
 
 .dock-svg {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
+}
+
+.dock-custom-img {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    object-fit: cover;
 }
 
 .dock-label {
-    margin-top: 6px;
+    margin-top: 4px;
     font-size: 9px;
     color: var(--color-text-light);
-    font-weight: 400;
-    opacity: 0.6;
+    opacity: 0.45;
 }
 
-/* 分页容器 */
+/* 通用 */
+.mini-app {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.custom-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+    object-fit: cover;
+    box-shadow: 0 2px 6px rgba(249, 200, 212, 0.08);
+    display: block;
+}
+
+/* 分页 */
 .pages-container {
     flex: 1;
     display: flex;
@@ -781,63 +889,64 @@ onMounted(() => {
 
 .page {
     min-width: 100%;
+    height: 100%;
     scroll-snap-align: start;
     display: flex;
     flex-direction: column;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding: 0 2px;
 }
 
-/* 分页指示器 */
 .page-dots {
     display: flex;
     justify-content: center;
-    gap: 6px;
-    padding: 10px 0;
+    gap: 5px;
+    padding: 6px 0;
+    flex-shrink: 0;
 }
 
 .dot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: var(--color-text-light);
+    background: #f9c8d4;
     opacity: 0.2;
     transition: opacity 0.3s, transform 0.3s;
 }
 
 .dot.active {
-    opacity: 0.6;
+    opacity: 0.65;
     transform: scale(1.3);
 }
 
-/* 黑胶播放器 */
+/* 黑胶 */
 .vinyl-player {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 30px 0;
+    padding: 40px 0;
 }
 
 .vinyl-disc {
-    width: 180px;
-    height: 180px;
+    width: 150px;
+    height: 150px;
     border-radius: 50%;
     background: linear-gradient(135deg, #2a2228, #1a1418);
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    animation: vinylSpin 8s linear infinite paused;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .vinyl-groove {
     position: absolute;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.vinyl-groove:nth-child(1) {
+.vinyl-groove:first-child {
     width: 85%;
     height: 85%;
 }
@@ -853,47 +962,58 @@ onMounted(() => {
 }
 
 .vinyl-label {
-    width: 50px;
-    height: 50px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-primary), rgba(212, 137, 158, 0.6));
-    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.2);
-}
-
-.vinyl-arm {
-    width: 3px;
-    height: 60px;
-    background: rgba(200, 160, 180, 0.3);
-    border-radius: 2px;
-    position: absolute;
-    top: 20px;
-    right: 60px;
-    transform: rotate(25deg);
-    transform-origin: top center;
+    background: linear-gradient(135deg, #f9c8d4, #ede0f5);
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.12);
 }
 
 .vinyl-title {
-    margin-top: 20px;
-    font-size: 14px;
+    margin-top: 18px;
+    font-size: 13px;
     color: var(--color-text);
-    font-weight: 400;
 }
 
 .vinyl-subtitle {
     font-size: 11px;
     color: var(--color-text-light);
-    opacity: 0.5;
-    margin-top: 4px;
+    opacity: 0.4;
+    margin-top: 3px;
 }
 
-@keyframes vinylSpin {
+/* 动画 */
+@keyframes fadeUp {
     from {
-        transform: rotate(0deg);
+        opacity: 0;
+        transform: translateY(10px);
     }
 
     to {
-        transform: rotate(360deg);
+        opacity: 1;
+        transform: translateY(0);
     }
+}
+
+@keyframes twinkle {
+
+    0%,
+    100% {
+        opacity: 0.1;
+        transform: scale(0.9);
+    }
+
+    50% {
+        opacity: 0.25;
+        transform: scale(1.1);
+    }
+}
+
+/* 弹窗 */
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
 }
 
 .card-input-row {
@@ -936,28 +1056,20 @@ onMounted(() => {
     padding: 4px 8px;
 }
 
-.custom-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    object-fit: cover;
-    box-shadow: 0 3px 12px rgba(200, 130, 160, 0.1);
+.empty-text {
+    color: var(--color-text-light);
+    font-size: 12px;
+    opacity: 0.5;
+    text-align: center;
+    padding: 12px;
 }
 
-.dock-custom-img {
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    object-fit: cover;
-}
-
-/* 版本号 */
 .version-text {
     position: absolute;
     top: calc(env(safe-area-inset-top, 44px) + 2px);
     right: 4px;
     font-size: 9px;
     color: var(--color-text-light);
-    opacity: 0.15;
+    opacity: 0.12;
 }
 </style>

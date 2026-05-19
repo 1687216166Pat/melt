@@ -264,6 +264,7 @@ import GlassTag from '@/components/ui/GlassTag.vue'
 import TimelineCard from '@/components/ui/TimelineCard.vue'
 import BlurModal from '@/components/ui/BlurModal.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
+import { getCache, setCache } from '@/utils/cache'
 
 const personas = ref([])
 const currentPersona = ref('')
@@ -416,9 +417,15 @@ async function loadTimeline() {
 }
 
 async function loadDetail() {
+    // 先用缓存
+    const cached = getCache(`persona_${currentPersona.value}`)
+    if (cached) personaDetail.value = cached.data
+
     try {
         const res = await api(`/api/persona/${currentPersona.value}`)
-        personaDetail.value = await res.json()
+        const data = await res.json()
+        personaDetail.value = data
+        setCache(`persona_${currentPersona.value}`, data)
     } catch { }
 }
 

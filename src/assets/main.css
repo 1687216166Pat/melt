@@ -38,6 +38,10 @@
   scrollbar-color: transparent transparent;
 }
 
+html {
+    font-family: 'Zen Maru Gothic', -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+}
+
 html, body {
   margin: 0;
   padding: 0;

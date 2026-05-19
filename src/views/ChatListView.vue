@@ -162,6 +162,9 @@ async function loadPersonas() {
         const pinnedList = JSON.parse(localStorage.getItem('pinned_personas') || '[]')
         detailed.forEach(p => { p.pinned = pinnedList.includes(p.id) })
 
+        const hiddenPersonas = JSON.parse(localStorage.getItem('hidden_personas') || '[]')
+        personas.value = detailed.filter(p => !hiddenPersonas.includes(p.id))
+
         personas.value = detailed
     } catch (e) {
         console.error('加载失败:', e)

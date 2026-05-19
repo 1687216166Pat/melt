@@ -50,6 +50,22 @@ router.get("/phone/status", async (req, res) => {
   res.json(status);
 });
 
+router.get("/messages/latest-persona", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("messages")
+    .select("persona_id")
+    .order("id", { ascending: false })
+    .limit(1);
+
+  if (data && data.length > 0) {
+    res.json({ personaId: data[0].persona_id });
+  } else {
+    res.json({ personaId: null });
+  }
+});
+
 // 聊天记录 - 按人格获取
 router.get("/messages/:personaId/last", async (req, res) => {
   const { getDB } = require("../db/index");
@@ -115,9 +131,29 @@ router.post("/user", async (req, res) => {
 });
 
 // Prompt 管理
-router.get("/prompts/personas", (req, res) => {
+router.get("/prompts/personas", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+
+  let allPersonas = getPersonaList();
+
+  // 过滤掉隐藏的内置人格
+  try {
+    const { data: hiddenRows } = await db
+      .from("user_profile")
+      .select("key")
+      .like("key", "persona_hidden_%");
+
+    if (hiddenRows && hiddenRows.length > 0) {
+      const hiddenIds = hiddenRows.map((r) =>
+        r.key.replace("persona_hidden_", ""),
+      );
+      allPersonas = allPersonas.filter((p) => !hiddenIds.includes(p.id));
+    }
+  } catch {}
+
   res.json({
-    personas: getPersonaList(),
+    personas: allPersonas,
     active: getActivePersona(),
   });
 });
@@ -1242,6 +1278,32 @@ router.put("/diary/:pageId", async (req, res) => {
   const { content } = req.body;
   const result = await updateNotionPage(req.params.pageId, content);
   res.json({ success: !!result });
+});
+
+// 隐藏内置人格
+router.post("/personas/builtin/:id/hide", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("user_profile").upsert(
+    {
+      key: `persona_hidden_${req.params.id}`,
+      value: "true",
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+  res.json({ success: true });
+});
+
+// 恢复内置人格
+router.post("/personas/builtin/:id/restore", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db
+    .from("user_profile")
+    .delete()
+    .eq("key", `persona_hidden_${req.params.id}`);
+  res.json({ success: true });
 });
 
 module.exports = router;

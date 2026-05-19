@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { api } from "@/utils/api";
+import { getCache, setCache } from "@/utils/cache";
 
 function smartSplit(content) {
   const bubbles = content
@@ -41,34 +42,51 @@ export const useChatStore = defineStore("chat", () => {
     allMessages.value.push(newMsg);
   }
 
+  function processMessages(data) {
+    const processed = [];
+    data.forEach((m) => {
+      if (m.role === "ai") {
+        const parts = smartSplit(m.content);
+        parts.forEach((line, idx) => {
+          processed.push({
+            id: m.id + "_" + idx,
+            role: m.role,
+            content: line,
+            timestamp: m.timestamp,
+          });
+        });
+      } else {
+        processed.push({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp,
+        });
+      }
+    });
+    return processed;
+  }
+
   async function loadPersonaMessages(personaId) {
     if (!personaId) return;
+
+    // 先从缓存加载（立刻显示）
+    const cached = getCache(`messages_${personaId}`);
+    if (cached) {
+      const processed = processMessages(cached.data);
+      allMessages.value = processed;
+      messages.value =
+        processed.length > pageSize ? processed.slice(-pageSize) : processed;
+      hasMore.value = processed.length > pageSize;
+    }
+
+    // 后台从服务器更新
     try {
       const res = await api(`/api/messages/${personaId}`);
       const data = await res.json();
+      setCache(`messages_${personaId}`, data);
 
-      const processed = [];
-      data.forEach((m) => {
-        if (m.role === "ai") {
-          const parts = smartSplit(m.content);
-          parts.forEach((line, idx) => {
-            processed.push({
-              id: m.id + "_" + idx,
-              role: m.role,
-              content: line,
-              timestamp: m.timestamp,
-            });
-          });
-        } else {
-          processed.push({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            timestamp: m.timestamp,
-          });
-        }
-      });
-
+      const processed = processMessages(data);
       allMessages.value = processed;
       if (processed.length > pageSize) {
         messages.value = processed.slice(-pageSize);
@@ -78,7 +96,7 @@ export const useChatStore = defineStore("chat", () => {
         hasMore.value = false;
       }
     } catch (e) {
-      console.error("加载消息失败:", e);
+      if (!cached) console.error("加载消息失败:", e);
     }
   }
 

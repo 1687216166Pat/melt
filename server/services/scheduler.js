@@ -15,13 +15,11 @@ async function checkScheduledMessages() {
   if (!data || data.length === 0) return;
 
   for (const msg of data) {
-    // 标记已触发
     await db
       .from("scheduled_messages")
       .update({ triggered: true })
       .eq("id", msg.id);
 
-    // 存入消息表
     await db.from("messages").insert({
       persona_id: msg.persona_id,
       role: "ai",
@@ -29,8 +27,23 @@ async function checkScheduledMessages() {
       timestamp: new Date().toISOString(),
     });
 
-    // 推送给前端
+    // 获取人格名字
+    let pName = "AI 助手";
+    try {
+      const { data: pDetail } = await db
+        .from("custom_personas")
+        .select("name, note")
+        .eq("id", msg.persona_id)
+        .limit(1);
+      if (pDetail && pDetail.length > 0) {
+        pName = pDetail[0].note || pDetail[0].name || "AI 助手";
+      }
+    } catch {}
+
     pushToAll(msg.content);
+    // 单独发 Push 通知带名字
+    const { pushNotification } = require("./push");
+    pushNotification(pName, msg.content);
 
     console.log(`[定时] ${msg.persona_id}: ${msg.content}`);
   }

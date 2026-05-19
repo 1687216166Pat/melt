@@ -297,9 +297,9 @@ async function processMemory(personaId, userMessage, aiReply) {
     return;
   }
 
-  // 即时提取（每15条提取一次轻量记忆）
+  // 即时提取（每8条提取一次轻量记忆）
   const counter = getCounter(personaId);
-  if (counter.total % 15 === 0) {
+  if (counter.total % 8 === 0) {
     await extractQuickMemory(personaId, userMessage, aiReply);
   }
 }
