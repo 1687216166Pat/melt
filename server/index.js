@@ -30,40 +30,69 @@ setTimeout(async () => {
     const { getDB } = require("./db/index");
     const db = getDB();
 
-    // 加载主 API 配置
+    // 1. 安全加载主 API 配置
     const { data } = await db
       .from("user_profile")
       .select("key, value")
       .in("key", ["api_key", "api_base_url", "api_model"]);
     if (data) {
       data.forEach((row) => {
-        if (row.key === "api_key" && row.value)
+        if (
+          row.key === "api_key" &&
+          row.value &&
+          row.value.trim() !== "undefined"
+        )
           process.env.AI_API_KEY = row.value;
-        if (row.key === "api_base_url" && row.value)
+        if (
+          row.key === "api_base_url" &&
+          row.value &&
+          row.value.trim() !== "undefined" &&
+          row.value.startsWith("http")
+        )
           process.env.AI_BASE_URL = row.value;
-        if (row.key === "api_model" && row.value) {
+        if (
+          row.key === "api_model" &&
+          row.value &&
+          row.value.trim() !== "undefined"
+        ) {
           process.env.AI_MODEL = row.value;
           process.env.AI_MEMORY_MODEL = row.value;
         }
       });
-      console.log("已从数据库加载 API 配置, 模型:", process.env.AI_MODEL);
+      console.log("已从数据库安全加载主 API 配置, 模型:", process.env.AI_MODEL);
     }
 
-    // 加载副 API 配置
+    // 2. 安全加载副 API 配置
     const { data: subData } = await db
       .from("user_profile")
       .select("key, value")
       .in("key", ["sub_api_key", "sub_api_base_url", "sub_api_model"]);
     if (subData) {
       subData.forEach((row) => {
-        if (row.key === "sub_api_key" && row.value)
+        if (
+          row.key === "sub_api_key" &&
+          row.value &&
+          row.value.trim() !== "undefined"
+        )
           process.env.AI_SUB_API_KEY = row.value;
-        if (row.key === "sub_api_base_url" && row.value)
+        if (
+          row.key === "sub_api_base_url" &&
+          row.value &&
+          row.value.trim() !== "undefined" &&
+          row.value.startsWith("http")
+        )
           process.env.AI_SUB_BASE_URL = row.value;
-        if (row.key === "sub_api_model" && row.value)
+        if (
+          row.key === "sub_api_model" &&
+          row.value &&
+          row.value.trim() !== "undefined"
+        )
           process.env.AI_SUB_MODEL = row.value;
       });
-      console.log("已从数据库加载副 API 配置, 模型:", process.env.AI_SUB_MODEL);
+      console.log(
+        "已从数据库安全加载副 API 配置, 模型:",
+        process.env.AI_SUB_MODEL,
+      );
     }
   } catch (e) {
     console.error("加载 API 配置失败:", e);

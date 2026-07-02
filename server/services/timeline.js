@@ -28,16 +28,23 @@ function fuzzyTime(date) {
   return "很久很久以前";
 }
 
-// 检查是否应该生成时间线事件
-async function checkTimelineEvent(personaId, userMessage, aiReply, context) {
+// 💡 改造：检查并生成时间线（支持 Beta 模式）
+async function checkTimelineEvent(
+  personaId,
+  userMessage,
+  aiReply,
+  isBeta = false,
+) {
   const db = getDB();
+  // 根据 isBeta 决定写入哪个表
+  const tableName = isBeta ? "timeline_beta" : "timeline_events";
 
   const { getRelationshipAtmosphere } = require("./relationship");
   const atmosphere = await getRelationshipAtmosphere(personaId);
 
-  // 不要太频繁生成（至少间隔 2 小时）
+  // 1. 冷却检查：同一表内至少间隔 2 小时才生成
   const { data: lastEvent } = await db
-    .from("timeline_events")
+    .from(tableName)
     .select("created_at")
     .eq("persona_id", personaId)
     .order("created_at", { ascending: false })
@@ -50,7 +57,10 @@ async function checkTimelineEvent(personaId, userMessage, aiReply, context) {
     if (hoursSince < 2) return;
   }
 
-  // 让 AI 判断是否值得记入时间线
+  // 2. 获取称呼配置
+  const { getIdentityConfig } = require("./sediment");
+  const identity = await getIdentityConfig(personaId);
+
   const toneGuide =
     atmosphere.phase === "initial"
       ? "语气：像刚开始记录的观察者，客观温和"
@@ -60,9 +70,7 @@ async function checkTimelineEvent(personaId, userMessage, aiReply, context) {
           ? "语气：像一起生活的人在回忆"
           : "语气：像已经很久很久的陪伴者在轻声说";
 
-  const { getIdentityConfig } = require("./sediment");
-  const identity = await getIdentityConfig(personaId);
-
+  // 3. 构建 Prompt
   const prompt = `你是一个时间线记录系统。判断以下对话是否包含"值得留下痕迹"的瞬间。
 
 ${toneGuide}
@@ -70,14 +78,14 @@ ${toneGuide}
 - AI的名字：${identity.aiName}
 - 用户的称呼：${identity.userName}
 - AI的代词：${identity.pronoun}
-- 禁止使用"用户""AI""你""他/她"这些泛称，必须用上面的具体名字
+- 禁止使用"用户""AI""你""他/她"这些泛称，必须用上面的具体名字。
 
 只有以下类型才值得记录：
 - 高情绪波动
 - 关系变化
 - 长期习惯形成
 - 共同经历
-- 特别的瞬间
+- 特别瞬间
 
 如果不值得记录，回复"无"。
 如果值得，用以下格式回复（一行）：
@@ -101,8 +109,8 @@ AI: ${aiReply}
 
     if (!content || content.length < 4) return;
 
-    // 存入时间线
-    await db.from("timeline_events").insert({
+    // 4. 存入对应的时间线表
+    await db.from(tableName).insert({
       persona_id: personaId,
       content,
       period: fuzzyTime(new Date()),
@@ -110,17 +118,21 @@ AI: ${aiReply}
       tags,
     });
 
-    console.log(`[时间线] ${personaId}: ${content}`);
+    console.log(
+      `[时间线] (${isBeta ? "Beta" : "正式"}) ${personaId}: ${content}`,
+    );
   } catch (e) {
     console.error("[时间线] 生成失败:", e.message);
   }
 }
 
-// 获取时间线数据（按时间分组）
-async function getTimeline(personaId) {
+// 💡 改造：获取时间线数据（支持 Beta 模式）
+async function getTimeline(personaId, isBeta = false) {
   const db = getDB();
+  const tableName = isBeta ? "timeline_beta" : "timeline_events";
+
   const { data } = await db
-    .from("timeline_events")
+    .from(tableName)
     .select("*")
     .eq("persona_id", personaId)
     .order("created_at", { ascending: false })
@@ -128,7 +140,6 @@ async function getTimeline(personaId) {
 
   if (!data || data.length === 0) return [];
 
-  // 按日期分组
   const groups = {};
   data.forEach((event) => {
     const date = new Date(event.created_at).toISOString().slice(0, 10);
@@ -147,7 +158,6 @@ async function getTimeline(personaId) {
     });
   });
 
-  // 转成数组，按日期倒序
   return Object.entries(groups)
     .sort((a, b) => b[0].localeCompare(a[0]))
     .map(([date, events]) => ({
@@ -164,14 +174,10 @@ function formatDateLabel(dateStr) {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const yesterday = new Date(now - 86400000).toISOString().slice(0, 10);
-
   if (dateStr === today) return "今天";
   if (dateStr === yesterday) return "昨天";
-
   const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
   if (diff < 7) return `${diff}天前`;
-  if (diff < 30) return `${Math.floor(diff / 7)}周前`;
-
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 

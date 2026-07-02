@@ -265,6 +265,21 @@
                 </GlassCard>
             </div>
 
+            <div class="section">
+                <h3>🛠️ 开发者 Beta 模式</h3>
+                <p class="section-sub">开启后使用独立数据库，不污染原有角色记忆</p>
+                <GlassCard size="md">
+                    <div class="setting-row">
+                        <span>启用 Beta 环境</span>
+                        <label class="toggle">
+                            <input type="checkbox" v-model="isBetaMode" @change="toggleBetaMode" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <p class="setting-hint" v-if="isBetaMode">当前处于 Beta 沙盒，数据独立存储</p>
+                </GlassCard>
+            </div>
+
         </div>
     </div>
 </template>
@@ -275,6 +290,7 @@ import { api } from '@/utils/api'
 import GlassCard from '@/components/ui/GlassCard.vue'
 import SoftButton from '@/components/ui/SoftButton.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
+import GlassTag from '@/components/ui/GlassTag.vue' // 💡 补上这个导入！
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const { registerPushSubscription } = useWebSocket()
@@ -323,6 +339,14 @@ const outputPrefs = reactive({
 })
 
 const enabledAiNames = computed(() => '全部')
+
+const isBetaMode = ref(localStorage.getItem('is_beta_mode') === 'true')
+
+function toggleBetaMode() {
+    localStorage.setItem('is_beta_mode', isBetaMode.value)
+    // 通知后端或强制刷新
+    window.location.reload()
+}
 
 // ========== 初始化 ==========
 onMounted(async () => {

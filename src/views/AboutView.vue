@@ -168,7 +168,10 @@
                 <GlassCard size="md">
                     <div class="observe-header">
                         <h4 class="block-title">对你的长期观察</h4>
-                        <button class="edit-observe-btn" @click="startEditProfile">✎</button>
+                        <div class="observe-actions">
+                            <button class="mini-sync-btn" @click="generateSediment">✦ 立即沉淀</button>
+                            <button class="edit-observe-btn" @click="startEditProfile">✎</button>
+                        </div>
                     </div>
                     <p class="content-text" v-if="memoryProfile">{{ memoryProfile }}</p>
                     <p class="content-text empty" v-else>还没有足够的观察...</p>
@@ -253,6 +256,7 @@
 
         </div>
     </div>
+    <p v-if="saveMsg" class="save-msg-float">{{ saveMsg }}</p>
 </template>
 
 <script setup>
@@ -267,6 +271,7 @@ import DreamInput from '@/components/ui/DreamInput.vue'
 import { getCache, setCache } from '@/utils/cache'
 
 const personas = ref([])
+const saveMsg = ref('')
 const currentPersona = ref('')
 const personaDetail = ref({})
 const relationData = ref(null)
@@ -405,6 +410,20 @@ async function loadSediment() {
         const iRes = await api(`/api/sediment/${currentPersona.value}/insights`)
         insights.value = await iRes.json()
     } catch { }
+}
+
+async function generateSediment() {
+    saveMsg.value = '正在记录今天的氛围...'
+    try {
+        // 调用我们刚才在后端加的手动生成接口
+        await api(`/api/sediment/${currentPersona.value}/generate`, { method: 'POST' })
+        // 重新加载数据，这样页面会立刻刷新
+        await loadSediment()
+        saveMsg.value = '今日总结已生成 ✓'
+    } catch (e) {
+        saveMsg.value = '生成失败'
+    }
+    setTimeout(() => { saveMsg.value = '' }, 2000)
 }
 
 async function loadTimeline() {
@@ -1195,4 +1214,43 @@ onMounted(loadPersonas)
     line-height: 1.6;
     font-style: italic;
 }
+
+.observe-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mini-sync-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: all 0.3s;
+    opacity: 0.6;
+}
+
+.mini-sync-btn:active {
+    background: rgba(212, 137, 158, 0.05);
+    opacity: 1;
+}
+
+.save-msg-float {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(92, 61, 74, 0.8);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 12px;
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
 </style>

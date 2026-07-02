@@ -38,21 +38,21 @@ function connect() {
     console.log("WebSocket 已连接");
   };
 
-socket.onmessage = (event) => {
-    const data = JSON.parse(event.data)
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
 
-    const contentKey = (data.content || '') + (data.type || '')
-    const now = Date.now()
+    const contentKey = (data.content || "") + (data.type || "");
+    const now = Date.now();
     if (contentKey === lastReceivedContent && now - lastReceivedTime < 5000) {
-        return
+      return;
     }
-    lastReceivedContent = contentKey
-    lastReceivedTime = now
+    lastReceivedContent = contentKey;
+    lastReceivedTime = now;
 
-    messageHandlers.forEach((handler) => handler(data))
+    messageHandlers.forEach((handler) => handler(data));
 
     // 不在这里发任何通知，完全交给 Service Worker 的 Push
-}
+  };
 
   socket.onclose = () => {
     isConnected.value = false;
@@ -67,7 +67,9 @@ socket.onmessage = (event) => {
 
 function send(data) {
   if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify(data));
+    // 💡 读取本地的 Beta 模式标记
+    const isBeta = localStorage.getItem("is_beta_mode") === "true";
+    socket.send(JSON.stringify({ ...data, isBeta }));
   }
 }
 

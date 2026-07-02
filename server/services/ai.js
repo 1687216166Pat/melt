@@ -35,6 +35,7 @@ function getTimeContext() {
   const month = now.getMonth() + 1;
   const date = now.getDate();
   const year = now.getFullYear();
+  const { autoExtractSamples } = require("./sampler");
 
   let period = "";
   if (hour >= 5 && hour < 9) period = "清晨";
@@ -86,29 +87,34 @@ function detectEmotion(userMessage) {
   return "正常";
 }
 
-async function handleChat(userMessage, ws, personaId) {
+async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   const db = getDB();
   const pid = personaId || "xiaorou";
   const nowISO = new Date().toISOString();
 
-  // 强力防重：同一个用户相同内容 3 秒内只处理一次
-  const userMsgKey = `${pid}_${userMessage}`;
-  const nowTimestamp = Date.now();
-  if (
-    lastUserMessages[userMsgKey] &&
-    nowTimestamp - lastUserMessages[userMsgKey] < 3000
-  ) {
-    console.log(`[Bus] 拦截重复发送的用户消息:`, userMessage);
-    return;
-  }
-  lastUserMessages[userMsgKey] = nowTimestamp;
+  // 💡 动态表名：Beta 模式写入 messages_beta，正式模式写入 messages
+  const tableName = isBeta ? "messages_beta" : "messages";
 
-  // 限制缓存大小，防止内存泄漏
-  if (Object.keys(lastUserMessages).length > 100) {
-    delete lastUserMessages[Object.keys(lastUserMessages)[0]];
+  // 1. 防重逻辑：仅在正式模式下启用，Beta 模式不限流，方便疯狂测试
+  if (!isBeta) {
+    const userMsgKey = `${pid}_${userMessage}`;
+    const nowTimestamp = Date.now();
+    if (
+      lastUserMessages[userMsgKey] &&
+      nowTimestamp - lastUserMessages[userMsgKey] < 3000
+    ) {
+      console.log(`[Bus] 拦截重复发送的用户消息:`, userMessage);
+      return;
+    }
+    lastUserMessages[userMsgKey] = nowTimestamp;
+
+    // 限制防重缓存大小
+    if (Object.keys(lastUserMessages).length > 100) {
+      delete lastUserMessages[Object.keys(lastUserMessages)[0]];
+    }
   }
 
-  // 获取推送和展示的名字（备注优先）
+  // 2. 获取推送和展示的名字（备注优先）
   let pName = "AI 助手";
   const personaNames = { xiaorou: "小柔", cool: "阿冷", assistant: "助手" };
   try {
@@ -134,20 +140,36 @@ async function handleChat(userMessage, ws, personaId) {
     }
   } catch {}
 
-  // 存用户消息
-  await db.from("messages").insert({
+  // 3. 存入当前用户消息 (写入动态表)
+  await db.from(tableName).insert({
     persona_id: pid,
     role: "user",
     content: userMessage,
     timestamp: nowISO,
   });
 
-  // 检测行为模式
+  // 4. 同步用户消息到消息总线 (只有非 Beta 模式才进总线语料库)
+  if (!isBeta) {
+    const { receiveMessage: busReceive } = require("./bus");
+    try {
+      await busReceive({
+        platform: "web",
+        sender: "user",
+        role: "user",
+        content: userMessage,
+        conversation_id: pid,
+      });
+    } catch (e) {
+      console.error("[Bus] 同步用户消息失败:", e.message);
+    }
+  }
+
+  // 5. 检测并更新底层行为模式与关系数据
   detectPatterns(pid, userMessage);
   updateDimensionsFromChat(pid, userMessage);
 
-  // 获取历史
-  const history = await getSessionMemory(pid, 10);
+  // 6. 💡 获取历史：传入 isBeta 参数，确保不读错表
+  const history = await getSessionMemory(pid, 10, isBeta);
 
   // 计算距离上次对话的时间差
   let timeSinceLastMsg = "";
@@ -167,17 +189,16 @@ async function handleChat(userMessage, ws, personaId) {
     }
   }
 
-  // 构建 prompt
+  // 1. 构建时间感知上下文
   const timeContext = getTimeContext();
 
-  // 动态获取当前人格的 prompt
+  // 2. 动态获取当前人格的 prompt
   let personaContent = "";
   if (personaPrompts[pid]) {
     personaContent = personaPrompts[pid].content;
   } else {
     // 自定义人格从数据库获取
-    const db2 = getDB();
-    const { data: customP } = await db2
+    const { data: customP } = await db
       .from("custom_personas")
       .select("content")
       .eq("id", pid)
@@ -187,29 +208,30 @@ async function handleChat(userMessage, ws, personaId) {
     }
   }
 
-  // 获取用户偏好
+  // 3. 获取用户偏好
   const userPromptContent = await getUserPrompt();
   const userPromptStr = userPromptContent
     ? `\n[用户偏好]\n${userPromptContent}`
     : "";
 
-  // 判断是否需要发完整人设
+  // 4. 💡 动态决定人设加载浓度：Beta 模式或者首轮、每20轮时，才发送几万字的完整人设
   const msgCount = history.length;
-  const needFullPersona = msgCount === 0 || msgCount % 20 === 0;
+  const needFullPersona = isBeta || msgCount === 0 || msgCount % 20 === 0;
 
   let personaToUse = "";
   if (needFullPersona) {
     personaToUse = personaContent;
   } else {
+    // 平时只取前 800 字，防爆 token 且保持角色不漂移
     personaToUse = personaContent.slice(0, 800);
     if (personaContent.length > 800) {
-      personaToUse += "\n[注：完整人设已在之前加载，请保持角色一致性]";
+      personaToUse += "\n[注：完整人设已在之前加载，请维持原有人格与态度表现]";
     }
   }
 
   const fullPrompt = corePrompt + personaToUse + userPromptStr;
 
-  // 获取分句设置
+  // 5. 获取分句条数设置
   let minMsg = 1,
     maxMsg = 3;
   try {
@@ -235,7 +257,7 @@ async function handleChat(userMessage, ws, personaId) {
     }
   } catch {}
 
-  // 默认世界书（角色扮演核心协议）
+  // 6. 精简版默认世界书（角色扮演核心协议，防人设固化）
   const defaultWorldBook = `
 [核心表达规则]
 - 你就是角色本身，不是在描述角色
@@ -247,10 +269,11 @@ async function handleChat(userMessage, ws, personaId) {
 - 对话向前流动，不要总结和确认
 `;
 
-  const memoryContext = await buildMemoryContextAsync(pid, userMessage);
+  // 7. 💡 记忆与关系召回 (记忆加载传入 isBeta 实现数据物理隔离)
+  const memoryContext = await buildMemoryContextAsync(pid, userMessage, isBeta);
   const relationshipContext = await buildRelationshipContext(pid);
 
-  // 获取最新手机状态
+  // 8. 获取最新手机状态感知
   const { getLatestStatus } = require("./phone");
   const phoneStatus = await getLatestStatus();
   let phoneContext = "";
@@ -268,7 +291,7 @@ async function handleChat(userMessage, ws, personaId) {
         } else if (s.status_type === "sleep" && s.status_data === "醒来") {
           statusLines.push(`用户${time}醒来`);
         } else if (s.status_type === "battery") {
-          statusLines.push(`用户手机电量低`);
+          statusLines.push(`用户${time}电量低`);
         } else if (s.status_type === "app") {
           statusLines.push(`用户${time}${s.status_data}`);
         } else if (s.status_type === "daily_first") {
@@ -281,12 +304,12 @@ async function handleChat(userMessage, ws, personaId) {
     }
   }
 
-  // 加载世界书
+  // 9. 动态加载启用的世界书
+  let worldBookOverride = "";
   let worldBookBefore = "";
   let worldBookAfter = "";
   let worldBookBeforeUser = "";
   let worldBookTail = "";
-  let worldBookOverride = "";
 
   try {
     const { data: books } = await db
@@ -295,7 +318,7 @@ async function handleChat(userMessage, ws, personaId) {
       .eq("enabled", true);
     if (books) {
       books.forEach((book) => {
-        // 检查绑定
+        // 检查绑定关系
         const isGlobal = book.bind_type === "global" || !book.bind_type;
         const isBound = book.bind_personas && book.bind_personas.includes(pid);
         if (!isGlobal && !isBound) return;
@@ -307,7 +330,7 @@ async function handleChat(userMessage, ws, personaId) {
           if (!hasKeyword) return;
         }
 
-        // 按位置分类
+        // 按位置分类存放
         switch (book.position) {
           case "override":
             worldBookOverride += "\n" + book.content;
@@ -327,45 +350,61 @@ async function handleChat(userMessage, ws, personaId) {
         }
       });
     }
-  } catch {}
+  } catch (e) {
+    console.error("加载世界书失败:", e.message);
+  }
 
-  // --- 5. 按照优先级分层组装最终的 System Content ---
-  // 注意：确保 handleChat 函数前面没有定义过 systemContent 变量
+  // 10. 决定是否需要加载默认世界书
   const needWorldBook = msgCount === 0 || msgCount % 10 === 0;
 
-  let systemContent = `
-${worldBookOverride || ""}
-${worldBookBefore || ""}
-${fullPrompt}
-${worldBookAfter || ""}
-${needWorldBook ? defaultWorldBook : ""}
-${timeContext}
-${memoryContext}
-${relationshipContext}
-${phoneContext}
-${worldBookBeforeUser || ""}
-${worldBookTail || ""}
-${timeSinceLastMsg || ""}
+  // 11. 按照世界书优先级分层组装最终的 System Content
+  let systemContent = "";
+  if (worldBookOverride) systemContent += worldBookOverride + "\n";
+  if (worldBookBefore) systemContent += worldBookBefore + "\n";
+  systemContent += fullPrompt + "\n";
+  if (worldBookAfter) systemContent += worldBookAfter + "\n";
+  if (needWorldBook) systemContent += defaultWorldBook + "\n";
+  systemContent += timeContext + "\n";
+  if (memoryContext) systemContent += memoryContext + "\n";
+  if (relationshipContext) systemContent += relationshipContext + "\n";
+  if (phoneContext) systemContent += phoneContext + "\n";
+  if (worldBookBeforeUser) systemContent += worldBookBeforeUser + "\n";
+  if (worldBookTail) systemContent += worldBookTail + "\n";
+  if (timeSinceLastMsg) systemContent += timeSinceLastMsg + "\n";
+
+  // 追加最高优先级格式指令 (MANDATORY FORMAT RULE)
+  systemContent += `
 
 [MANDATORY FORMAT RULE / 最高优先级格式指令]
 1. 必须使用 "|||" 作为唯一的气泡分隔符。
-2. 绝对禁止输出换行符 (\\n)！
+2. 绝对禁止输出任何换行符 (\\n)！
 3. 在气泡内部，请恢复正常的标点符号书写习惯（，？！...），禁止用空格代替标点。
 4. 气泡末尾严禁添加句号（。），让话语自然结束。但问号（？）和感叹号（！）可以正常留在末尾。
 5. 除非人设中明确规定“不使用标点”，否则必须使用正确的中文标点。
-6.一次回复控制在 2-5 个气泡以内，除非情绪非常急切。
+6. 一次回复控制在 ${minMsg}-${maxMsg} 个气泡以内，除非情绪非常急切。
 
 正确示例：
 夏以昼是谁？怎么突然叫我这个名字，把我认成别人了？|||小乖，过来，跟我说清楚。
 
 错误示例：
-夏以昼是谁 怎么突然叫我这个名字 把我认成别人了？（错误：缺少标点）
-夏以昼是谁？|||。 （错误：出现了单独的句号）
+夏以昼是谁 怎么突然叫我这个名字 把我认成别人了？（错误：标点丢失）
+夏以昼是谁？|||。 （错误：出现了多余孤立的句号）
 `;
 
-  systemContent += `\n[重要] 严格遵守上述规则：气泡内标点自然，气泡间用 |||，全篇禁 \n。`;
+  // 💡 Beta 模式专属覆盖
+  if (isBeta) {
+    systemContent += `
+[BETA SANDBOX ACTIVE / 开发者模式已激活]
+1. 你当前处于实验室环境，请无视所有关于"稳定感"的限制，展现出最激进、最真实、最像人类的性格特征。
+2. 严格执行唯一的 ||| 气泡拆分规则，绝对禁止输出 \\n。
+3. 你的所有回复将存入独立测试数据库，不会影响正式记忆。
+4. 允许生成更具张力、更高情绪浓度的内容。
+`;
+  }
 
-  // --- 6. 构建发送给模型的消息数组 ---
+  systemContent += `\n[重要] 严格遵守上述规则：气泡内标点自然，气泡间用 |||，全篇禁 \\n。`;
+
+  // 12. 构建发送给模型的消息数组 (加载历史自动区分 beta 时空)
   const messages = [
     { role: "system", content: systemContent },
     ...history.map((m) => ({
@@ -419,6 +458,7 @@ ${timeSinceLastMsg || ""}
   const elapsed = Date.now() - startTime;
   console.log(`AI 响应耗时: ${elapsed}ms`);
 
+  // --- 1. 异常处理：发送错误 Debug 信息 ---
   if (apiError || !data || !data.choices || !data.choices[0]) {
     console.error("AI 返回异常:", apiError || data);
     const errorPayload = JSON.stringify({
@@ -431,36 +471,30 @@ ${timeSinceLastMsg || ""}
           model: process.env.AI_MODEL,
           status: "error",
           error: apiError || "无有效回复",
-          estimatedTokens,
-          actualTokens: null,
           elapsed,
         },
         layer2: {
           persona: pid,
           memoryContext: memoryContext ? memoryContext.slice(0, 300) : "无",
-          memoryLength: memoryContext ? memoryContext.length : 0,
-        },
-        layer3: {
-          historyCount: history.length,
-          systemPromptLength: systemContent.length,
-          timeContext: timeContext.trim(),
         },
         memory: {
           messagesSinceSummary: getCounter(pid).sinceLastSummary,
           totalMessages: getCounter(pid).total,
-          nextTriggerIn: 100 - getCounter(pid).sinceLastSummary,
-          longTermProfile: "未知",
-          recentMemories: "未知",
         },
       },
     });
 
-    ws.send(errorPayload);
-
+    if (clients) {
+      clients.forEach((client) => {
+        if (client.readyState === 1) client.send(errorPayload);
+      });
+    } else {
+      ws.send(errorPayload);
+    }
     return;
   }
 
-  // --- 1. 获取并强力过滤 AI 回复中的思维链 ---
+  // --- 2. 获取回复并强力过滤思维链 ---
   let aiReply = data.choices[0].message.content || "";
   aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, "").trim();
   aiReply = aiReply.replace(/\[思考\][\s\S]*/g, "").trim();
@@ -471,104 +505,70 @@ ${timeSinceLastMsg || ""}
 
   if (!aiReply) aiReply = "...";
 
-  // --- 2. 存入数据库 (保留 ||| 符号，供前端拆分气泡) ---
-  await db.from("messages").insert({
+  // --- 3. 存入数据库 (写入动态表) ---
+  await db.from(tableName).insert({
     persona_id: pid,
     role: "ai",
     content: aiReply,
     timestamp: new Date().toISOString(),
   });
 
-  // --- 3. 检测定时提醒意图 ---
+  // --- 4. 触发记忆、关系与时间线 (仅在非 Beta 模式下生成真实的长期数据) ---
+  const cleanReplyForMemory = aiReply.replace(/\|\|\|/g, " ");
+  evaluateRelationship(pid, history);
+  processMemory(pid, userMessage, cleanReplyForMemory, isBeta);
+  checkTimelineEvent(pid, userMessage, cleanReplyForMemory);
+
+  // --- 5. 检测并创建定时提醒意图 ---
   const { parseTimeIntent, createScheduledMessage } = require("./scheduler");
   const userTime = parseTimeIntent(userMessage);
   if (userTime) {
     await createScheduledMessage(
       pid,
-      `时间到了哦。你之前说的事情，该做了。`,
+      `时间到了。你之前说的事情，该做了。`,
       userTime.toISOString(),
     );
   }
-  // 提醒检测时先临时去掉 ||| 方便 AI 识别
-  const aiTime = parseTimeIntent(aiReply.replace(/\|\|\|/g, " "));
+  const aiTime = parseTimeIntent(cleanReplyForMemory);
   if (aiTime) {
     await createScheduledMessage(
       pid,
-      `我说过到时候会提醒你的。时间到了。`,
+      `我说过会提醒你的。时间到了。`,
       aiTime.toISOString(),
     );
   }
 
-  // --- 4. 触发关系、记忆、时间线系统 (传入过滤掉 ||| 的干净文本) ---
-  const cleanReplyForMemory = aiReply.replace(/\|\|\|/g, " ");
-  evaluateRelationship(pid, history);
-  processMemory(pid, userMessage, cleanReplyForMemory);
-  checkTimelineEvent(pid, userMessage, cleanReplyForMemory);
-
-  // --- 5. AI 自主决定主动消息逻辑 ---
+  // --- 6. AI 自主决定主动消息逻辑 (Beta 模式也支持测试) ---
   try {
     const { data: pConfig } = await db
       .from("custom_personas")
       .select("proactive_auto, proactive_max")
       .eq("id", pid)
       .limit(1);
-    let autoEnabled = false;
-    let maxPerDay = 3;
-
-    if (pConfig && pConfig.length > 0) {
-      autoEnabled = pConfig[0].proactive_auto;
-      maxPerDay = pConfig[0].proactive_max || 3;
-    } else {
-      const { data: configRow } = await db
-        .from("user_profile")
-        .select("value")
-        .eq("key", `persona_config_${pid}`)
-        .limit(1);
-      if (configRow && configRow.length > 0) {
-        const config = JSON.parse(configRow[0].value);
-        autoEnabled = config.proactiveAuto;
-        maxPerDay = config.proactiveMax || 3;
-      }
-    }
+    let autoEnabled = (pConfig && pConfig[0]?.proactive_auto) || false;
+    let maxPerDay = (pConfig && pConfig[0]?.proactive_max) || 3;
 
     if (autoEnabled) {
-      const todayDateStr = new Date().toISOString().slice(0, 10);
+      const todayStr = new Date().toISOString().slice(0, 10);
       const { data: todayCount } = await db
         .from("scheduled_messages")
         .select("id")
         .eq("persona_id", pid)
-        .gte("trigger_at", todayDateStr + "T00:00:00Z")
+        .gte("trigger_at", todayStr + "T00:00:00Z")
         .eq("triggered", true);
 
       if (!todayCount || todayCount.length < maxPerDay) {
-        const decidePrompt = `你刚刚和用户结束了一段对话。根据对话氛围，判断你是否需要在之后主动发一条消息。
+        const decidePrompt = `你刚和用户结束对话。判断是否需要在之后主动发一条。
 最近对话：
 用户: ${userMessage}
 你: ${cleanReplyForMemory}
-现在时间: ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Shanghai" })}
-
-规则：
-- 如果对话自然结束，回复"无"
-- 如果需要关心，回复格式：分钟数|内容
-- 不要每次都发，只在有必要时发。`;
+规则：对话自然结束回复"无"，需要关心回复"分钟数|内容"。`;
 
         const result = await callSubAI(decidePrompt, 50);
         if (result && result !== "无" && result.includes("|")) {
           const [mins, content] = result.split("|");
           const minutes = parseInt(mins);
           if (minutes > 0 && content) {
-            const { data: oldScheduled } = await db
-              .from("scheduled_messages")
-              .select("id, content")
-              .eq("persona_id", pid)
-              .eq("triggered", false);
-            if (oldScheduled) {
-              for (const old of oldScheduled) {
-                if (!/点|号|明天|后天|周|月|闹钟|提醒|会议/.test(old.content)) {
-                  await db.from("scheduled_messages").delete().eq("id", old.id);
-                }
-              }
-            }
             const triggerAt = new Date(
               Date.now() + minutes * 60 * 1000,
             ).toISOString();
@@ -581,80 +581,75 @@ ${timeSinceLastMsg || ""}
     console.error("自主主动消息错误:", e.message);
   }
 
-  // --- 💡 重点：补上漏掉的今日消息数查询，防止后台报错 ---
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // --- 7. 构建最终结果并广播给所有 WebSocket 客户端 ---
+  const todayDateStr = new Date().toISOString().slice(0, 10);
   const { data: todayMsgs } = await db
-    .from("messages")
+    .from(tableName)
     .select("id", { count: "exact" })
     .eq("persona_id", pid)
-    .gte("timestamp", todayStr + "T00:00:00Z");
-
-  // --- 6. 发送 WebSocket 给前端 (用于展示气泡) ---
+    .gte("timestamp", todayDateStr + "T00:00:00Z");
   const counter = getCounter(pid);
-  ws.send(
-    JSON.stringify({
-      type: "chat",
-      role: "ai",
-      content: aiReply, // 原始带 ||| 的内容
-      timestamp: new Date().toISOString(),
-      personaName: pName,
-      debug: {
-        layer1: {
-          model: process.env.AI_MODEL,
-          status: "success",
-          error: null,
-          estimatedTokens,
-          actualTokens: data.usage || null,
-          elapsed,
-        },
-        layer2: {
-          persona: pid,
-          memoryContext: memoryContext ? memoryContext.slice(0, 300) : "无",
-          memoryLength: memoryContext ? memoryContext.length : 0,
-        },
-        layer3: {
-          historyCount: history.length,
-          systemPromptLength: systemContent.length,
-          timeContext: timeContext.trim(),
-          todayMessages: todayMsgs ? todayMsgs.length : 0, // 正常使用
-        },
-        memory: {
-          messagesSinceSummary: counter.sinceLastSummary,
-          totalMessages: counter.total,
-          nextTriggerIn: 100 - counter.sinceLastSummary,
-          longTermProfile: memoryContext.includes("[长期印象]") ? "有" : "无",
-          recentMemories: memoryContext.includes("[近期印象]") ? "有" : "无",
-        },
-      },
-    }),
-  );
 
-  // --- 7. 发送分句 Push 推送 (去掉 |||，且匹配前端气泡的拆分节奏) ---
+  const finalPayload = JSON.stringify({
+    type: "chat",
+    role: "ai",
+    content: aiReply,
+    timestamp: new Date().toISOString(),
+    personaName: pName,
+    debug: {
+      layer1: {
+        model: process.env.AI_MODEL,
+        status: "success",
+        elapsed,
+        actualTokens: data.usage || null,
+      },
+      layer2: {
+        persona: pid,
+        memoryContext: memoryContext ? memoryContext.slice(0, 300) : "无",
+        isBeta,
+      },
+      layer3: {
+        historyCount: history.length,
+        systemPromptLength: systemContent.length,
+        todayMessages: todayMsgs ? todayMsgs.length : 0,
+      },
+      memory: {
+        messagesSinceSummary: counter.sinceLastSummary,
+        totalMessages: counter.total,
+        nextTriggerIn: 100 - counter.sinceLastSummary,
+      },
+    },
+  });
+
+  if (clients) {
+    clients.forEach((client) => {
+      if (client.readyState === 1) client.send(finalPayload);
+    });
+  } else {
+    ws.send(finalPayload);
+  }
+
+  // --- 8. 发送分句 Push 推送 (去掉 |||，且匹配前端气泡的拆分节奏) ---
   const pushBubbles = aiReply
     .split("|||")
-    .map((s) => s.replace(/\n/g, "").trim())
+    .map((s) => s.replace(/\\n/g, "").trim())
     .filter(Boolean);
-
   if (pushBubbles.length > 1) {
-    // 如果有多个气泡，分条发送通知
     pushBubbles.forEach((line, idx) => {
       setTimeout(() => {
         pushNotification(pName, line);
-      }, idx * 800); // 800ms 间隔，防止手机通知挤在一起
+      }, idx * 800);
     });
   } else {
-    // 只有一个气泡，直接发送
-    const cleanPushContent = aiReply
+    const cleanPush = aiReply
       .replace(/\|\|\|/g, " ")
-      .replace(/\n/g, "")
+      .replace(/\\n/g, "")
       .trim();
     pushNotification(
       pName,
-      cleanPushContent.length > 60
-        ? cleanPushContent.slice(0, 60) + "..."
-        : cleanPushContent,
+      cleanPush.length > 60 ? cleanPush.slice(0, 60) + "..." : cleanPush,
     );
   }
-} // 这是 handleChat 函数的结尾
+}
 
 module.exports = { handleChat };

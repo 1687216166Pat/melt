@@ -53,8 +53,11 @@ router.get("/phone/status", async (req, res) => {
 router.get("/messages/latest-persona", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+  const tableName = isBeta ? "messages_beta" : "messages";
+
   const { data } = await db
-    .from("messages")
+    .from(tableName)
     .select("persona_id")
     .order("id", { ascending: false })
     .limit(1);
@@ -70,8 +73,11 @@ router.get("/messages/latest-persona", async (req, res) => {
 router.get("/messages/:personaId/last", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+  const tableName = isBeta ? "messages_beta" : "messages";
+
   const { data } = await db
-    .from("messages")
+    .from(tableName)
     .select("role, content")
     .eq("persona_id", req.params.personaId)
     .order("id", { ascending: false })
@@ -82,19 +88,35 @@ router.get("/messages/:personaId/last", async (req, res) => {
 router.get("/messages/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
-  const { data } = await db
-    .from("messages")
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+  const tableName = isBeta ? "messages_beta" : "messages";
+
+  console.log(
+    `[GET messages] 正在从 ${tableName} 读取 ${req.params.personaId} 的历史记录...`,
+  );
+
+  const { data, error } = await db
+    .from(tableName)
     .select("*")
     .eq("persona_id", req.params.personaId)
     .order("id", { ascending: false })
     .limit(50);
+
+  if (error) console.error("[GET messages] 读取失败:", error.message);
   res.json((data || []).reverse());
 });
 
 // 记忆管理 - 按人格
 router.get("/memories/:personaId", async (req, res) => {
-  const profile = await getMemoryProfile(req.params.personaId);
-  const recent = await getRecentMemories(req.params.personaId, 50);
+  const personaId = req.params.personaId;
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+
+  const { getMemoryProfile, getRecentMemories } = require("../services/memory");
+
+  // 💡 记得把 isBeta 传给 service 函数，我们在 memory.js 里已经改好了接收逻辑
+  const profile = await getMemoryProfile(personaId, isBeta);
+  const recent = await getRecentMemories(personaId, 50, isBeta);
+
   res.json({ profile, recent });
 });
 
@@ -627,7 +649,10 @@ router.put("/persona/:personaId", async (req, res) => {
 router.delete("/messages/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
-  await db.from("messages").delete().eq("persona_id", req.params.personaId);
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+  const tableName = isBeta ? "messages_beta" : "messages";
+
+  await db.from(tableName).delete().eq("persona_id", req.params.personaId);
   res.json({ success: true });
 });
 
@@ -766,8 +791,11 @@ router.post("/push/test", async (req, res) => {
 
 // 时间线
 router.get("/timeline/:personaId", async (req, res) => {
+  const personaId = req.params.personaId;
+  const isBeta = req.headers["x-beta-mode"] === "true";
+
   const { getTimeline } = require("../services/timeline");
-  const data = await getTimeline(req.params.personaId);
+  const data = await getTimeline(personaId, isBeta); // 💡 传入 isBeta
   res.json(data);
 });
 
@@ -1168,21 +1196,31 @@ router.get("/personas/all", async (req, res) => {
 router.get("/samples/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
+  const personaId = req.params.personaId;
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+
+  // 决定读取哪个表
+  const tableName = isBeta ? "samples_beta" : "persona_samples";
+
   const { data } = await db
-    .from("persona_samples")
+    .from(tableName)
     .select("*")
-    .eq("persona_id", req.params.personaId)
-    .order("created_at", { ascending: false })
-    .limit(50);
+    .eq("persona_id", personaId)
+    .order("created_at", { ascending: false });
   res.json(data || []);
 });
 
 router.post("/samples/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
+  const personaId = req.params.personaId;
+  const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+
+  const tableName = isBeta ? "samples_beta" : "persona_samples";
+
   const { type, data } = req.body;
-  await db.from("persona_samples").insert({
-    persona_id: req.params.personaId,
+  await db.from(tableName).insert({
+    persona_id: personaId,
     type,
     data,
   });
@@ -1303,6 +1341,32 @@ router.post("/personas/builtin/:id/restore", async (req, res) => {
     .delete()
     .eq("key", `persona_hidden_${req.params.id}`);
   res.json({ success: true });
+});
+
+router.post("/sediment/:personaId/generate", async (req, res) => {
+  try {
+    const { generateDailySummary } = require("../services/sediment");
+    const { autoExtractSamples } = require("../services/sampler");
+    const { getSessionMemory } = require("../services/memory");
+    const personaId = req.params.personaId;
+    const isBeta = req.headers["x-beta-mode"] === "true"; // 💡 识别时空
+
+    console.log(
+      `[手动触发] 正在强制更新 ${personaId} (${isBeta ? "Beta" : "正式"}) 的所有数据...`,
+    );
+
+    // 1. 生成每日总结 (传入 isBeta)
+    await generateDailySummary(personaId, isBeta);
+
+    // 2. 提取语料采样 (传入 isBeta)
+    const history = await getSessionMemory(personaId, 20, isBeta);
+    await autoExtractSamples(personaId, history, isBeta);
+
+    res.json({ success: true });
+  } catch (e) {
+    console.error("手动沉淀失败:", e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

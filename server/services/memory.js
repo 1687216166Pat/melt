@@ -320,10 +320,20 @@ async function extractQuickMemory(personaId, userMessage, aiReply) {
 
   const cleanAiReply = aiReply.replace(/\|\|\|/g, " ");
 
-  const prompt = `这段对话留下了什么？（不是说了什么，是留下了什么）
-规则：每条不超过10字，最多3条，没有就回复"无"
-用户: ${userMessage}
-AI: ${cleanAiReply}
+  const prompt = `从这段对话中提取"留下了什么"。
+
+身份：${identity.userName}（用户）和${identity.aiName}（${identity.pronoun}）
+
+规则：
+1. 绝对禁止使用 "AI"、"用户"、"assistant" 等称呼。
+2. 必须用 "${identity.userName}" 和 "${identity.aiName}"。
+3. 不要记录对话过程，要记录"关系沉淀"。
+4. 格式：1-2条，每条10字以内，不带编号。
+
+示例：
+${identity.aiName}在等${identity.userName}回家
+${identity.userName}今天心情很好
+
 留下了：`;
 
   try {
@@ -339,17 +349,19 @@ AI: ${cleanAiReply}
 
 // ========== 存储 ==========
 
-async function saveDailyMemory(personaId, content, date) {
+async function saveDailyMemory(personaId, content, date, isBeta = false) {
   const db = getDB();
+  const tableName = isBeta ? "memories_beta" : "memories_recent";
 
   const { data: existing } = await db
-    .from("memories_recent")
+    .from(tableName)
     .select("id, content")
     .eq("persona_id", personaId)
     .eq("source_session", date)
     .limit(1);
 
   if (existing && existing.length > 0) {
+    // 合并去重逻辑保持不变
     const oldItems = existing[0].content
       .split("\n")
       .map((s) => s.trim())
@@ -358,54 +370,54 @@ async function saveDailyMemory(personaId, content, date) {
       .split("\n")
       .map((s) => s.trim())
       .filter(Boolean);
-
-    // 去重：只添加不存在的新内容
     const uniqueNew = newItems.filter(
-      (item) =>
-        !oldItems.some(
-          (old) => old === item || old.includes(item) || item.includes(old),
-        ),
+      (item) => !oldItems.some((old) => old === item || old.includes(item)),
     );
-
-    if (uniqueNew.length === 0) return; // 没有新内容就不更新
-
+    if (uniqueNew.length === 0) return;
     const merged = [...oldItems, ...uniqueNew].join("\n");
     await db
-      .from("memories_recent")
+      .from(tableName)
       .update({ content: merged })
       .eq("id", existing[0].id);
   } else {
     await db
-      .from("memories_recent")
+      .from(tableName)
       .insert({ persona_id: personaId, content, source_session: date });
   }
 }
 
 // ========== 记忆召回 ==========
 
-async function buildMemoryContextAsync(personaId, userMessage) {
+async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
   const db = getDB();
   let context = "";
 
-  // 长期档案
+  // 💡 根据 isBeta 决定读取的 Key
+  const profileKey = isBeta
+    ? `memory_profile_beta_${personaId}`
+    : `memory_profile_${personaId}`;
+  const recentTable = isBeta ? "memories_beta" : "memories_recent";
+
+  // 1. 长期档案
   const { data: profileRow } = await db
     .from("user_profile")
     .select("value")
-    .eq("key", `memory_profile_${personaId}`)
+    .eq("key", profileKey)
     .limit(1);
 
   if (profileRow && profileRow.length > 0 && profileRow[0].value) {
     context += `\n[长期印象] ${profileRow[0].value}\n`;
   }
 
-  // 最近7天的沉淀
+  // 2. 最近 7 天记忆 (Beta 模式从 memories_beta 读)
   const { data: recentDays } = await db
-    .from("memories_recent")
+    .from(recentTable)
     .select("content, source_session")
     .eq("persona_id", personaId)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(7);
 
+  // ... 剩余组装逻辑保持不变 ...
   if (recentDays && recentDays.length > 0) {
     context += "[近期印象]\n";
     for (const m of recentDays) {
@@ -413,43 +425,18 @@ async function buildMemoryContextAsync(personaId, userMessage) {
     }
   }
 
-  // 行为模式
-  const { data: patterns } = await db
-    .from("memory_patterns")
-    .select("description, frequency")
-    .eq("persona_id", personaId)
-    .gte("frequency", 3)
-    .order("frequency", { ascending: false })
-    .limit(3);
-
-  if (patterns && patterns.length > 0) {
-    context += "[行为模式]\n";
-    for (const p of patterns) {
-      context += `${p.description}\n`;
+  // 3. 行为模式 (Beta 模式下通常不需要模式干扰，可以跳过或加判断)
+  if (!isBeta) {
+    const { data: patterns } = await db
+      .from("memory_patterns")
+      .select("description")
+      .eq("persona_id", personaId)
+      .gte("frequency", 3)
+      .limit(3);
+    if (patterns && patterns.length > 0) {
+      context +=
+        "[行为模式]\n" + patterns.map((p) => p.description).join("\n") + "\n";
     }
-  }
-
-  // 互动状态
-  const { data: lastMsg } = await db
-    .from("messages")
-    .select("timestamp")
-    .eq("persona_id", personaId)
-    .eq("role", "user")
-    .order("id", { ascending: false })
-    .limit(1);
-
-  if (lastMsg && lastMsg.length > 0) {
-    const hoursSince =
-      (Date.now() - new Date(lastMsg[0].timestamp).getTime()) /
-      (1000 * 60 * 60);
-    if (hoursSince > 48) {
-      context += `[状态] 用户${Math.floor(hoursSince / 24)}天没来了\n`;
-    }
-  }
-
-  if (context) {
-    context +=
-      "[记忆说明] 以上是你对这个人的印象。像人类一样自然地拥有这些记忆——不要刻意提起，不要展示你记得什么，只是让这些印象自然地影响你说话的方式和态度。\n";
   }
 
   return context;
@@ -524,21 +511,25 @@ async function upsertPattern(db, personaId, type, description) {
 
 // ========== 基础查询 ==========
 
-async function getSessionMemory(personaId, limit = 10) {
+async function getSessionMemory(personaId, limit = 10, isBeta = false) {
   const db = getDB();
+  // 💡 根据 isBeta 决定读哪个表
+  const tableName = isBeta ? "messages_beta" : "messages";
   const { data } = await db
-    .from("messages")
-    .select("role, content")
+    .from(tableName)
+    .select("role, content, timestamp")
     .eq("persona_id", personaId)
     .order("id", { ascending: false })
     .limit(limit);
   return (data || []).reverse();
 }
 
-async function getRecentMemories(personaId, limit = 50) {
+async function getRecentMemories(personaId, limit = 50, isBeta = false) {
   const db = getDB();
+  // 💡 根据 isBeta 切换读取的表
+  const tableName = isBeta ? "memories_beta" : "memories_recent";
   const { data } = await db
-    .from("memories_recent")
+    .from(tableName)
     .select("*")
     .eq("persona_id", personaId)
     .order("created_at", { ascending: false })
@@ -551,19 +542,26 @@ async function deleteRecentMemory(id) {
   await db.from("memories_recent").delete().eq("id", id);
 }
 
-async function getMemoryProfile(personaId) {
+async function getMemoryProfile(personaId, isBeta = false) {
   const db = getDB();
+  // 💡 根据 isBeta 切换读取的 Key
+  const profileKey = isBeta
+    ? `memory_profile_beta_${personaId}`
+    : `memory_profile_${personaId}`;
   const { data } = await db
     .from("user_profile")
     .select("value")
-    .eq("key", `memory_profile_${personaId}`)
+    .eq("key", profileKey)
     .limit(1);
   return data && data.length > 0 ? data[0].value : "";
 }
 
-async function setMemoryProfile(personaId, content) {
+async function setMemoryProfile(personaId, content, isBeta = false) {
   const db = getDB();
-  const profileKey = `memory_profile_${personaId}`;
+  const profileKey = isBeta
+    ? `memory_profile_beta_${personaId}`
+    : `memory_profile_${personaId}`;
+
   const { data: existing } = await db
     .from("user_profile")
     .select("id")

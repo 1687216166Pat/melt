@@ -16,8 +16,10 @@ function initWebSocket(server) {
     ws.on("message", async (data) => {
       try {
         const msg = JSON.parse(data);
+
         if (msg.type === "chat") {
-          await handleChat(msg.content, ws, msg.personaId);
+          // 💡 将 msg.isBeta 传给 handleChat
+          await handleChat(msg.content, ws, msg.personaId, msg.isBeta);
         }
       } catch (err) {
         console.error("消息处理错误:", err);

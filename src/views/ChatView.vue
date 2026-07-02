@@ -139,58 +139,57 @@ function scrollToBottom() {
 }
 
 function handleSend(text) {
-    chatStore.addMessage({ role: 'user', content: text })
+    // 💡 增加保护判断，防止报错
+    if (!text || !personaId.value) return;
 
-    if (personaId.value === 'wechat_sync') {
-        return
+    chatStore.addMessage({ role: 'user', content: text });
+
+    if (personaId.value === 'wechat_sync') return;
+
+    send({ type: 'chat', content: text, personaId: personaId.value });
+    isTyping.value = true;
+    scrollToBottom();
+
+    // 💡 这里的更新缓存增加保护
+    if (chatStore.allMessages) {
+        setCache(`messages_${personaId.value}`, chatStore.allMessages);
     }
-
-    send({ type: 'chat', content: text, personaId: personaId.value })
-    isTyping.value = true
-    scrollToBottom()
-
-    // 更新缓存
-    setCache(`messages_${personaId.value}`, chatStore.allMessages.value)
 }
 
 function handleIncoming(data) {
     if (data.type === 'chat' || data.type === 'push') {
-        isTyping.value = false
+        isTyping.value = false;
 
-        // 1. 基础过滤
         let cleanContent = data.content
             .replace(/\[思考\][\s\S]*?\[思考\]/g, "")
             .replace(/[\s\S]*?<\/think>/g, "")
-            .trim()
+            .trim();
 
-        // 2. 只按 ||| 拆分，且强行把所有换行 \n 抹平为空格
-        const bubbles = cleanContent.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
+        const bubbles = cleanContent.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean);
 
-        // 3. 气泡数量限制
-        let final = bubbles
+        let final = bubbles;
         const limit = maxBubbles.value || 3;
         if (bubbles.length > limit) {
-            final = []
-            const chunkSize = Math.ceil(bubbles.length / limit)
+            final = [];
+            const chunkSize = Math.ceil(bubbles.length / limit);
             for (let i = 0; i < bubbles.length; i += chunkSize) {
-                final.push(bubbles.slice(i, i + chunkSize).join(' '))
+                final.push(bubbles.slice(i, i + chunkSize).join(' '));
             }
         }
 
-        // 4. 发送给前端 store 展示
         final.forEach((line, idx) => {
             setTimeout(() => {
-                chatStore.addMessage({ role: 'ai', content: line, timestamp: data.timestamp })
-                scrollToBottom()
-                // 存入本地缓存
-                if (idx === final.length - 1) {
-                    setCache(`messages_${personaId.value}`, chatStore.allMessages.value)
+                chatStore.addMessage({ role: 'ai', content: line, timestamp: data.timestamp });
+                scrollToBottom();
+                // 💡 只有最后一条才更新缓存
+                if (idx === final.length - 1 && chatStore.allMessages) {
+                    setCache(`messages_${personaId.value}`, chatStore.allMessages);
                 }
-            }, idx * 600)
-        })
+            }, idx * 600);
+        });
 
         if (data.debug) {
-            debugInfo.value = data.debug
+            debugInfo.value = data.debug;
         }
     }
 }
