@@ -463,7 +463,7 @@
                     </div>
 
                     <!-- 次级图标条：每个胶囊独立聚焦 -->
-                    <div class="secondary-bar-v8">
+                    <div class="secondary-bar-v8" style="position: relative; overflow: visible;">
                         <div class="sec-item focusable-card" @click="$router.push('/worldbook')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                 stroke-linecap="round">
@@ -474,7 +474,6 @@
                             </svg>
                             <span>世界书</span>
                         </div>
-
                         <div class="sec-item focusable-card" @click="$router.push('/diary')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                 stroke-linecap="round">
@@ -482,11 +481,9 @@
                                 <polyline points="14 2 14 8 20 8" />
                                 <line x1="16" y1="13" x2="8" y2="13" />
                                 <line x1="16" y1="17" x2="8" y2="17" />
-                                <polyline points="10 9 9 9 8 9" />
                             </svg>
                             <span>日记</span>
                         </div>
-
                         <div class="sec-item focusable-card" @click="$router.push('/presence')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                 stroke-linecap="round">
@@ -505,6 +502,61 @@
                             </svg>
                             <span>设置</span>
                         </div>
+
+                        <!-- 更多按钮：只有加号图标，无文字 -->
+                        <div class="sec-item sec-more focusable-card" @click.stop="showMoreApps = !showMoreApps">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                stroke-linecap="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 8v8M8 12h8" />
+                            </svg>
+                        </div>
+
+                        <!-- 遮罩 -->
+                        <div v-if="showMoreApps" class="more-apps-overlay" @click="showMoreApps = false"></div>
+
+                        <!-- 更多卡片 -->
+                        <Transition name="more-pop">
+                            <div v-if="showMoreApps" class="more-apps-card">
+                                <div class="more-apps-row">
+                                    <div class="sec-item more-app-sec"
+                                        @click="$router.push('/about'); showMoreApps = false">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                            stroke-linecap="round">
+                                            <circle cx="12" cy="8" r="4" />
+                                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                                        </svg>
+                                        <span>镜中</span>
+                                    </div>
+                                    <div class="sec-item more-app-sec" @click="openPhone(); showMoreApps = false">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                            stroke-linecap="round">
+                                            <path
+                                                d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                        </svg>
+                                        <span>电话</span>
+                                    </div>
+                                    <div class="sec-item more-app-sec"
+                                        @click="$router.push('/memory'); showMoreApps = false">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                            stroke-linecap="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                                            <path d="M3 9h18M9 21V9" />
+                                        </svg>
+                                        <span>记忆</span>
+                                    </div>
+                                    <div class="sec-item more-app-sec"
+                                        @click="$router.push('/logs'); showMoreApps = false">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                            stroke-linecap="round">
+                                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                                            <path d="M7 8h10M7 12h10M7 16h6" />
+                                        </svg>
+                                        <span>语料库</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Transition>
                     </div>
 
                     <!-- 聊天预览条：独立聚焦 -->
@@ -662,7 +714,7 @@
                                         <span v-else>{{ contextMenu.persona?.avatar || '💬' }}</span>
                                     </div>
                                     <span class="ctx-name">{{ contextMenu.persona?.note || contextMenu.persona?.name
-                                    }}</span>
+                                        }}</span>
                                 </div>
                                 <div class="ctx-divider"></div>
                                 <button class="ctx-item" @click="pinFromMenu(contextMenu.persona?.id)">
@@ -1052,14 +1104,25 @@ async function loadHomeData() {
     try {
         const res = await api('/api/messages/latest-persona')
         const d = await res.json()
-        const detail = await api(`/api/persona/${d.personaId || 'xiaorou'}`)
+        const pid = d.personaId || 'xiaorou'
+
+        const detail = await api(`/api/persona/${pid}`)
         const ai = await detail.json()
-        Object.assign(currentAi.value, ai)
-        const savedLeft = localStorage.getItem('home_bubble_left')
-        if (savedLeft) leftBubbleText.value = savedLeft
-        // 恢复上次选择的 char
+        Object.assign(currentAi.value, { ...ai, personaId: pid })
+
+        // 读取最新一条消息
+        const msgRes = await api(`/api/messages/${pid}/last`)
+        const lastMsg = await msgRes.json()
+        if (lastMsg) {
+            const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+            leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
+        } else {
+            const savedLeft = localStorage.getItem('home_bubble_left')
+            if (savedLeft) leftBubbleText.value = savedLeft
+        }
+
         const savedCharId = localStorage.getItem('home_char_id')
-        if (savedCharId && savedCharId !== currentAi.value.personaId) {
+        if (savedCharId && savedCharId !== pid) {
             const charRes = await api(`/api/persona/${savedCharId}`)
             const charData = await charRes.json()
             Object.assign(currentAi.value, charData)
@@ -1460,6 +1523,7 @@ const newPersona = reactive({
     content: ''
 })
 const contextMenu = ref({ visible: false, persona: null, x: 0, y: 0 })
+const showMoreApps = ref(false)
 
 
 async function togglePin(id) {
@@ -2893,7 +2957,7 @@ onMounted(async () => {
 
 .hb-heart {
     position: absolute;
-    top: 50%;
+    top: 55%;
     left: 50%;
     transform: translate(-50%, -50%);
     width: 22px;
@@ -4131,7 +4195,7 @@ onMounted(async () => {
 
 .ec-heart {
     position: absolute;
-    top: 50%;
+    top: 30%;
     left: 50%;
     transform: translate(-50%, -60%);
     width: 20px;
@@ -4629,5 +4693,157 @@ onMounted(async () => {
 
 .ctx-danger:hover {
     background: rgba(192, 112, 112, 0.08);
+}
+
+/* 更多按钮 */
+.sec-more {
+    background: rgba(232, 192, 201, 0.1);
+    border: 1px dashed rgba(232, 192, 201, 0.4);
+    padding: 7px 10px;
+}
+
+.sec-more:hover {
+    background: rgba(232, 192, 201, 0.18);
+}
+
+.sec-more svg {
+    stroke: #D9A3AF;
+}
+
+.more-apps-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: transparent;
+}
+
+.more-apps-card {
+    position: absolute;
+    bottom: calc(100% + 10px);
+    right: 0;
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-radius: 28px;
+    padding: 8px 10px;
+    box-shadow:
+        0 8px 32px rgba(180, 140, 150, 0.22),
+        0 2px 8px rgba(255, 255, 255, 0.8) inset;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    z-index: 51;
+}
+
+.more-apps-row {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.more-app-sec {
+    flex-shrink: 0;
+}
+
+.more-pop-enter-active {
+    transition: all 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.more-pop-leave-active {
+    transition: all 0.18s ease;
+}
+
+.more-pop-enter-from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+}
+
+.more-pop-leave-to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+}
+
+.more-apps-title {
+    font-size: 10px;
+    color: #B8A9AC;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding: 0 2px;
+}
+
+.more-apps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.more-app-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    background: rgba(248, 243, 244, 0.6);
+}
+
+.more-app-item:hover {
+    background: rgba(232, 192, 201, 0.12);
+}
+
+.more-app-item:active {
+    transform: scale(0.95);
+}
+
+.more-app-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.more-app-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.more-app-item span {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6B5B5E;
+}
+
+/* 弹出动画 */
+.more-pop-enter-active {
+    transition: all 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.more-pop-leave-active {
+    transition: all 0.18s ease;
+}
+
+.more-pop-enter-from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+}
+
+.more-pop-leave-to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+}
+
+.secondary-bar-v8 {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: visible;
+    /* 改成 visible 让浮层不被裁剪 */
+    padding: 2px 0;
 }
 </style>
