@@ -33,51 +33,103 @@
                         </div>
                     </div>
 
-                    <!-- 心率连接卡片 -->
-                    <div class="heartbeat-card">
-                        <!-- user 侧 -->
-                        <div class="hb-user hb-side" @click="openUserEdit">
-                            <div class="hb-avatar hb-avatar-user" style="cursor:pointer">
-                                <img v-if="userAvatar && userAvatar.startsWith('http')" :src="userAvatar" />
-                                <span v-else>{{ userAvatar || '🌙' }}</span>
+                    <!-- 情侣卡片 -->
+                    <div class="couple-card" @click="openCoupleEdit">
+                        <!-- 底层背景 -->
+                        <div class="couple-bg">
+                            <img v-if="coupleBgImage" :src="coupleBgImage" class="couple-bg-img" />
+                            <div v-else class="couple-bg-default">
+                                <div class="couple-bg-blob b1"></div>
+                                <div class="couple-bg-blob b2"></div>
+                                <div class="couple-bg-grid"></div>
                             </div>
-                            <span class="hb-name">{{ userName || '我' }}</span>
                         </div>
 
-                        <div class="hb-line-wrap">
-                            <svg class="hb-line-svg" viewBox="0 0 120 40" fill="none" preserveAspectRatio="none">
-                                <path class="hb-path"
-                                    d="M0 20 L20 20 L28 8 L36 32 L44 4 L52 36 L60 20 L80 20 L100 20 L120 20"
-                                    stroke="url(#heartGrad)" stroke-width="2" stroke-linecap="round"
-                                    stroke-linejoin="round" />
-                                <defs>
-                                    <linearGradient id="heartGrad" x1="0" y1="0" x2="1" y2="0">
-                                        <stop offset="0%" stop-color="#E8C0C9" />
-                                        <stop offset="100%" stop-color="#D9A3AF" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
-
-                            <!-- 爱心 -->
-                            <div class="hb-heart" @click="showCharSwitch = true" style="cursor:pointer">
-                                <svg viewBox="0 0 24 24" fill="#E8C0C9" stroke="none">
-                                    <path
-                                        d="M12 21.593c-5.63-5.539-11-10.297-11-14.402C1 3.335 4.08 1 7.5 1c1.8 0 3.5.754 4.5 2 1-1.246 2.7-2 4.5-2C19.92 1 23 3.335 23 7.191c0 4.105-5.37 8.863-11 14.402z" />
-                                </svg>
+                        <!-- 前卡磨砂夹层 -->
+                        <div class="couple-front">
+                            <!-- 头像区 -->
+                            <div class="couple-avatars">
+                                <div class="couple-avatar-wrap" @click.stop="openUserEdit">
+                                    <div class="couple-avatar ca-user">
+                                        <img v-if="userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data'))"
+                                            :src="userAvatar" />
+                                        <span v-else>{{ userAvatar || '🌙' }}</span>
+                                    </div>
+                                </div>
+                                <div class="couple-heart-mid">
+                                    <svg viewBox="0 0 24 24" fill="#E8C0C9"
+                                        filter="drop-shadow(0 2px 6px rgba(232,192,201,0.5))">
+                                        <path
+                                            d="M12 21.593c-5.63-5.539-11-10.297-11-14.402C1 3.335 4.08 1 7.5 1c1.8 0 3.5.754 4.5 2 1-1.246 2.7-2 4.5-2C19.92 1 23 3.335 23 7.191c0 4.105-5.37 8.863-11 14.402z" />
+                                    </svg>
+                                </div>
+                                <div class="couple-avatar-wrap" @click.stop="showCharSwitch = true">
+                                    <div class="couple-avatar ca-char">
+                                        <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
+                                        <span v-else>{{ currentAi.avatar || '💬' }}</span>
+                                    </div>
+                                </div>
                             </div>
 
-                        </div>
-                        <div class="hb-ai hb-side">
-                            <div class="hb-avatar hb-avatar-ai">
-                                <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
-                                <span v-else>{{ currentAi.avatar || '💬' }}</span>
+                            <!-- 文案区 -->
+                            <div class="couple-texts">
+                                <div class="couple-text-main" @click.stop="startEditText('main')"
+                                    v-if="!editingTextField || editingTextField !== 'main'">
+                                    {{ coupleTextMain || `${userName || '我'} · ${currentAi.note || currentAi.name}` }}
+                                </div>
+                                <input v-else class="couple-text-input couple-text-input-main"
+                                    v-model="editingTextValue" @blur="saveTextEdit('main')"
+                                    @keyup.enter="saveTextEdit('main')" autofocus />
+
+                                <div class="couple-text-days" @click.stop="startEditText('days')"
+                                    v-if="!editingTextField || editingTextField !== 'days'">
+                                    {{ coupleTextDays || `相遇以来的第 ${togetherDays} 天` }}
+                                </div>
+                                <input v-else class="couple-text-input couple-text-input-days"
+                                    v-model="editingTextValue" @blur="saveTextEdit('days')"
+                                    @keyup.enter="saveTextEdit('days')" autofocus />
+
+                                <div class="couple-text-tagline" @click.stop="startEditText('tagline')"
+                                    v-if="!editingTextField || editingTextField !== 'tagline'">
+                                    {{ coupleTagline }}
+                                </div>
+                                <input v-else class="couple-text-input couple-text-input-tagline"
+                                    v-model="editingTextValue" @blur="saveTextEdit('tagline')"
+                                    @keyup.enter="saveTextEdit('tagline')" autofocus />
                             </div>
-                            <span class="hb-name">{{ currentAi.note || currentAi.name }}</span>
                         </div>
                     </div>
 
+                    <!-- 情侣卡片编辑弹窗 -->
+                    <BlurModal :visible="showCoupleEdit" @close="showCoupleEdit = false">
+                        <h3>编辑情侣卡片</h3>
+                        <div class="couple-bg-upload">
+                            <div class="couple-bg-preview">
+                                <img v-if="coupleBgImage" :src="coupleBgImage" />
+                                <span v-else>背景图片</span>
+                            </div>
+                            <div class="couple-upload-opts">
+                                <DreamInput label="背景图 URL" v-model="editCoupleBg" placeholder="https://..." />
+                                <div class="file-row">
+                                    <span class="file-label">或上传图片</span>
+                                    <label class="avatar-upload-btn">
+                                        选择文件
+                                        <input type="file" accept="image/*" style="display:none"
+                                            @change="handleCoupleBgUpload" />
+                                    </label>
+                                </div>
+                                <button v-if="coupleBgImage" class="couple-clear-btn"
+                                    @click="clearCoupleBg">清除背景</button>
+                            </div>
+                        </div>
+                        <DreamInput label="自定义短句" v-model="editTagline" placeholder="你走的每一步，我都在" />
+                        <div class="modal-actions">
+                            <SoftButton variant="secondary" @click="showCoupleEdit = false">取消</SoftButton>
+                            <SoftButton variant="primary" @click="saveCoupleEdit">保存</SoftButton>
+                        </div>
+                    </BlurModal>
+
                     <!-- 关系数据横滑 -->
-                    <div class="section-label">✦ 我们的数据</div>
                     <div class="relation-slider">
                         <div class="relation-card rc-days">
                             <span class="rc-label">在一起</span>
@@ -86,12 +138,12 @@
                         </div>
                         <div class="relation-card rc-msg">
                             <span class="rc-label">消息总数</span>
-                            <div class="rc-value">{{ totalMessages || '—' }}</div>
+                            <div class="rc-value">{{ totalMessages !== null ? totalMessages : '—' }}</div>
                             <span class="rc-unit">条对话</span>
                         </div>
                         <div class="relation-card rc-streak">
                             <span class="rc-label">连续聊天</span>
-                            <div class="rc-value">{{ streak || '—' }}</div>
+                            <div class="rc-value">{{ streak !== null ? streak : '—' }}</div>
                             <span class="rc-unit">天</span>
                         </div>
                         <div class="relation-card rc-mood">
@@ -132,43 +184,183 @@
                         </svg>
                     </div>
 
-                    <!-- 月日历 -->
-                    <div class="section-label" style="margin-top:16px;">✦ 日历</div>
-                    <div class="calendar-card">
-                        <!-- 日历头部 -->
-                        <div class="cal-header">
-                            <button class="cal-nav" @click="prevMonth">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    <!-- 日历区域 -->
+                    <div class="calendar-section">
+                        <!-- 右上角切换按钮 -->
+                        <div class="section-label-row">
+                            <span class="section-label" style="margin:0;">✦ 日历</span>
+                            <button class="schedule-view-btn" @click="showScheduleView = true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                     stroke-linecap="round">
-                                    <path d="M15 18l-6-6 6-6" />
+                                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                                    <path d="M16 2v4M8 2v4M3 10h18" />
+                                    <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
                                 </svg>
-                            </button>
-                            <span class="cal-title">{{ calYear }}年 {{ calMonth + 1 }}月</span>
-                            <button class="cal-nav" @click="nextMonth">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                    stroke-linecap="round">
-                                    <path d="M9 18l6-6-6-6" />
-                                </svg>
+                                日程
                             </button>
                         </div>
-                        <!-- 星期头 -->
-                        <div class="cal-weekdays">
-                            <span v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d">{{ d }}</span>
-                        </div>
-                        <!-- 日期格子 -->
-                        <div class="cal-grid">
-                            <div v-for="(day, idx) in calDays" :key="idx" class="cal-day" :class="{
-                                'cal-empty': !day,
-                                'cal-today': day && isToday(day),
-                                'cal-has-event': day && getDayEvents(day).length > 0,
-                                'cal-period': day && isPeriodDay(day),
-                                'cal-selected': day && selectedDay === day
-                            }" @click="day && selectDay(day)">
-                                <span v-if="day">{{ day }}</span>
-                                <div class="cal-status-dot" v-if="day && getDayStatusForGrid(day)"
-                                    :style="{ background: getDayStatusForGrid(day).color }">
-                                </div>
 
+                        <!-- 日历卡片 -->
+                        <div class="calendar-card">
+                            <div class="cal-header">
+                                <button class="cal-nav" @click="prevMonth">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round">
+                                        <path d="M15 18l-6-6 6-6" />
+                                    </svg>
+                                </button>
+                                <span class="cal-title">{{ calYear }}年 {{ calMonth + 1 }}月</span>
+                                <button class="cal-nav" @click="nextMonth">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round">
+                                        <path d="M9 18l6-6-6-6" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="cal-weekdays">
+                                <span v-for="d in ['日', '一', '二', '三', '四', '五', '六']" :key="d">{{ d }}</span>
+                            </div>
+                            <div class="cal-grid">
+                                <div v-for="(day, idx) in calDays" :key="idx" class="cal-day" :class="{
+                                    'cal-empty': !day,
+                                    'cal-today': day && isToday(day),
+                                    'cal-has-event': day && (getDayEvents(day, 'user').length > 0 || getDayEvents(day, 'char').length > 0),
+                                    'cal-period': day && isPeriodDay(day)
+                                }" @click="day && selectDay(day)">
+                                    <span v-if="day">{{ day }}</span>
+                                    <div v-if="day && getDayStatusForGrid(day)" class="cal-status-dot"
+                                        :style="{ background: getDayStatusForGrid(day).color }"></div>
+                                </div>
+                            </div>
+                            <!-- 状态图例 + 统计 -->
+                            <div class="cal-legend">
+                                <div v-for="s in calMonthStats" :key="s.key" class="cal-legend-item">
+                                    <div class="cal-legend-dot" :style="{ background: s.color }"></div>
+                                    <span class="cal-legend-emoji">{{ s.emoji }}</span>
+                                    <span class="cal-legend-count">{{ s.count }}</span>
+                                </div>
+                                <div v-if="calPeriodCount > 0" class="cal-legend-item">
+                                    <div class="cal-legend-dot" style="background: rgba(232,192,201,0.6)"></div>
+                                    <span class="cal-legend-emoji">🌸</span>
+                                    <span class="cal-legend-count">{{ calPeriodCount }}</span>
+                                </div>
+                                <div v-if="calEventCount > 0" class="cal-legend-item">
+                                    <div class="cal-legend-dot" style="background: #D9A3AF"></div>
+                                    <span class="cal-legend-emoji">📅</span>
+                                    <span class="cal-legend-count">{{ calEventCount }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 日程视图弹窗 -->
+                    <div v-if="showScheduleView" class="schedule-overlay" @click.self="showScheduleView = false">
+                        <div class="schedule-panel">
+                            <!-- 头部 -->
+                            <div class="schedule-header">
+                                <div class="schedule-range-tabs">
+                                    <button class="sr-tab" :class="{ active: scheduleRange === 1 }"
+                                        @click="scheduleRange = 1">今天</button>
+                                    <button class="sr-tab" :class="{ active: scheduleRange === 7 }"
+                                        @click="scheduleRange = 7">7天</button>
+                                    <button class="sr-tab" :class="{ active: scheduleRange === 30 }"
+                                        @click="scheduleRange = 30">30天</button>
+                                </div>
+                                <button class="schedule-close" @click="showScheduleView = false">×</button>
+                            </div>
+
+                            <!-- 双栏标题 -->
+                            <div class="schedule-cols-header">
+                                <div class="sch-col-title">
+                                    <div class="sch-col-avatar ca-user-sm">
+                                        <img v-if="userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data'))"
+                                            :src="userAvatar" />
+                                        <span v-else>{{ userAvatar || '🌙' }}</span>
+                                    </div>
+                                    <span>{{ userName || '我' }}</span>
+                                </div>
+                                <div class="sch-col-divider"></div>
+                                <div class="sch-col-title">
+                                    <div class="sch-col-avatar ca-char-sm">
+                                        <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
+                                        <span v-else>{{ currentAi.avatar || '💬' }}</span>
+                                    </div>
+                                    <span>{{ currentAi.note || currentAi.name }}</span>
+                                </div>
+                            </div>
+
+                            <!-- 内容区 -->
+                            <div class="schedule-content">
+                                <!-- 1天：时间轴视图 -->
+                                <template v-if="scheduleRange === 1">
+                                    <div class="schedule-timeline-wrap">
+                                        <!-- 左：user -->
+                                        <div class="sch-timeline-col">
+                                            <template v-if="getScheduleData(1, 'user').length > 0">
+                                                <div v-for="(item, idx) in getScheduleData(1, 'user')" :key="idx"
+                                                    class="sch-tl-item">
+                                                    <div class="sch-tl-dot"></div>
+                                                    <div class="sch-tl-card">{{ item.text }}</div>
+                                                </div>
+                                            </template>
+                                            <div v-else class="sch-empty">今天暂无日程</div>
+                                        </div>
+                                        <!-- 中间轴 -->
+                                        <div class="sch-center-axis">
+                                            <div class="sch-axis-line"></div>
+                                            <div class="sch-axis-date">今天</div>
+                                        </div>
+                                        <!-- 右：char -->
+                                        <div class="sch-timeline-col sch-col-right">
+                                            <template v-if="getScheduleData(1, 'char').length > 0">
+                                                <div v-for="(item, idx) in getScheduleData(1, 'char')" :key="idx"
+                                                    class="sch-tl-item sch-tl-right">
+                                                    <div class="sch-tl-card">{{ item.text }}</div>
+                                                    <div class="sch-tl-dot sch-dot-char"></div>
+                                                </div>
+                                            </template>
+                                            <div v-else class="sch-empty">今天暂无日程</div>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- 7天/30天：分组列表 -->
+                                <template v-else>
+                                    <div class="schedule-list-wrap">
+                                        <!-- 左：user -->
+                                        <div class="sch-list-col">
+                                            <template v-if="getScheduleData(scheduleRange, 'user').length > 0">
+                                                <div v-for="group in groupScheduleByDate(getScheduleData(scheduleRange, 'user'))"
+                                                    :key="group.date" class="sch-date-group">
+                                                    <div class="sch-date-label">{{ group.label }}</div>
+                                                    <div v-for="(item, idx) in group.items" :key="idx"
+                                                        class="sch-list-item">
+                                                        <div class="sch-list-dot"></div>
+                                                        <span>{{ item.text }}</span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <div v-else class="sch-empty">暂无日程</div>
+                                        </div>
+                                        <!-- 分隔 -->
+                                        <div class="sch-list-divider"></div>
+                                        <!-- 右：char -->
+                                        <div class="sch-list-col">
+                                            <template v-if="getScheduleData(scheduleRange, 'char').length > 0">
+                                                <div v-for="group in groupScheduleByDate(getScheduleData(scheduleRange, 'char'))"
+                                                    :key="group.date" class="sch-date-group">
+                                                    <div class="sch-date-label">{{ group.label }}</div>
+                                                    <div v-for="(item, idx) in group.items" :key="idx"
+                                                        class="sch-list-item sch-list-item-char">
+                                                        <div class="sch-list-dot sch-dot-char"></div>
+                                                        <span>{{ item.text }}</span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <div v-else class="sch-empty">暂无日程</div>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </div>
@@ -900,6 +1092,9 @@
                     <input v-model="newEventText" class="dp-input" placeholder="添加日程（可选）..." @keyup.enter="addEvent" />
                     <button class="dp-add-btn" @click="addEvent">+</button>
                 </div>
+
+                <div v-if="showSaveToast" class="save-toast">已保存 ✓</div>
+
             </div>
         </div>
 
@@ -953,6 +1148,14 @@ const startDate = ref('')
 const customIcons = ref({})
 const allPersonas = ref([])
 const focusedCard = ref(null)
+const coupleTextMain = ref(localStorage.getItem('couple_text_main') || '')
+const coupleTextDays = ref(localStorage.getItem('couple_text_days') || '')
+const editingTextField = ref(null)
+const editingTextValue = ref('')
+const showSaveToast = ref(false)
+const showScheduleView = ref(false)
+const scheduleRange = ref(7)
+
 
 // 共栖空间
 const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
@@ -963,6 +1166,28 @@ const timelineEvents = ref([])
 const showTimelineAdd = ref(false)
 const newTimelineText = ref('')
 const newTimelinePeriod = ref('')
+
+// 情侣卡片
+const coupleTagline = ref(localStorage.getItem('couple_tagline') || '你走的每一步，我都在')
+const coupleBgImage = ref(localStorage.getItem('couple_bg') || '')
+const showCoupleEdit = ref(false)
+const editCoupleBg = ref('')
+const editTagline = ref('')
+
+function startEditText(field) {
+    editingTextField.value = field
+    if (field === 'main') editingTextValue.value = coupleTextMain.value || `${userName.value || '我'} · ${currentAi.value.note || currentAi.value.name}`
+    if (field === 'days') editingTextValue.value = coupleTextDays.value || `相遇以来的第 ${togetherDays.value} 天`
+    if (field === 'tagline') editingTextValue.value = coupleTagline.value
+}
+
+function saveTextEdit(field) {
+    if (field === 'main') { coupleTextMain.value = editingTextValue.value; localStorage.setItem('couple_text_main', editingTextValue.value) }
+    if (field === 'days') { coupleTextDays.value = editingTextValue.value; localStorage.setItem('couple_text_days', editingTextValue.value) }
+    if (field === 'tagline') { coupleTagline.value = editingTextValue.value; localStorage.setItem('couple_tagline', editingTextValue.value) }
+    editingTextField.value = null
+    editingTextValue.value = ''
+}
 
 // 收藏
 const showBookmarks = ref(false)
@@ -978,6 +1203,37 @@ const newEventText = ref('')
 const calViewMode = ref('user')
 const calendarData = ref(JSON.parse(localStorage.getItem('calendar_data') || '{}'))
 const periodData = ref(JSON.parse(localStorage.getItem('period_data') || '[]'))
+function getScheduleData(days, role) {
+    const result = []
+    const today = new Date()
+    for (let i = 0; i < days; i++) {
+        const d = new Date(today)
+        d.setDate(today.getDate() + i)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const events = calendarData.value[key]?.[role]?.events || []
+        events.forEach(ev => result.push({ ...ev, date: key, dateObj: d }))
+    }
+    return result
+}
+
+function groupScheduleByDate(items) {
+    const groups = {}
+    items.forEach(item => {
+        const key = item.date
+        if (!groups[key]) {
+            const d = new Date(key)
+            const today = new Date()
+            const diff = Math.round((d - today) / 86400000)
+            let label
+            if (diff === 0) label = '今天'
+            else if (diff === 1) label = '明天'
+            else label = `${d.getMonth() + 1}/${d.getDate()}`
+            groups[key] = { date: key, label, items: [] }
+        }
+        groups[key].items.push(item)
+    })
+    return Object.values(groups)
+}
 
 // 事件编辑
 const editingEventIdx = ref(-1)
@@ -1001,6 +1257,37 @@ const editUserName = ref('')
 const editUserAvatar = ref('')
 
 const editUserAvatarEmoji = ref('')
+
+function handleCoupleBgUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+        coupleBgImage.value = ev.target.result
+        localStorage.setItem('couple_bg', ev.target.result)
+    }
+    reader.readAsDataURL(file)
+}
+
+function clearCoupleBg() {
+    coupleBgImage.value = ''
+    localStorage.removeItem('couple_bg')
+    editCoupleBg.value = ''
+}
+
+function saveCoupleEdit() {
+    if (editCoupleBg.value.trim()) {
+        coupleBgImage.value = editCoupleBg.value.trim()
+        localStorage.setItem('couple_bg', coupleBgImage.value)
+    }
+    if (editTagline.value.trim()) {
+        coupleTagline.value = editTagline.value.trim()
+        localStorage.setItem('couple_tagline', coupleTagline.value)
+    }
+    showCoupleEdit.value = false
+}
+
+// openUserEdit 在弹窗里打开，点头像也触发
 
 function openUserEdit() {
     editUserName.value = userName.value
@@ -1102,33 +1389,74 @@ const handleMouseUp = () => { isDragging = false }
 // ===== 数据加载 =====
 async function loadHomeData() {
     try {
-        const res = await api('/api/messages/latest-persona')
-        const d = await res.json()
-        const pid = d.personaId || 'xiaorou'
+        // 优先用 user 自定义选择的角色
+        const savedCharId = localStorage.getItem('home_char_id')
+
+        let pid
+        if (savedCharId) {
+            pid = savedCharId
+        } else {
+            const res = await api('/api/messages/latest-persona')
+            const d = await res.json()
+            pid = d.personaId || 'xiaorou'
+        }
 
         const detail = await api(`/api/persona/${pid}`)
         const ai = await detail.json()
         Object.assign(currentAi.value, { ...ai, personaId: pid })
 
-        // 读取最新一条消息
-        const msgRes = await api(`/api/messages/${pid}/last`)
-        const lastMsg = await msgRes.json()
-        if (lastMsg) {
-            const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
-            leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
-        } else {
-            const savedLeft = localStorage.getItem('home_bubble_left')
-            if (savedLeft) leftBubbleText.value = savedLeft
-        }
+        // 读取这个角色的最新消息作为信息条预览
+        try {
+            const msgRes = await api(`/api/messages/${pid}/last`)
+            const lastMsg = await msgRes.json()
+            if (lastMsg) {
+                const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+                leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
+            } else {
+                const savedLeft = localStorage.getItem('home_bubble_left')
+                if (savedLeft) leftBubbleText.value = savedLeft
+            }
+        } catch { }
 
-        const savedCharId = localStorage.getItem('home_char_id')
-        if (savedCharId && savedCharId !== pid) {
-            const charRes = await api(`/api/persona/${savedCharId}`)
-            const charData = await charRes.json()
-            Object.assign(currentAi.value, charData)
-        }
     } catch { }
 }
+
+const calMonthStats = computed(() => {
+    const counts = {}
+    statusOptions.forEach(s => { counts[s.key] = 0 })
+
+    const daysInMonth = new Date(calYear.value, calMonth.value + 1, 0).getDate()
+    for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${calYear.value}-${String(calMonth.value + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        const userStatus = calendarData.value[key]?.user?.status
+        const charStatus = calendarData.value[key]?.char?.status
+        if (userStatus && counts[userStatus] !== undefined) counts[userStatus]++
+        if (charStatus && charStatus !== userStatus && counts[charStatus] !== undefined) counts[charStatus]++
+    }
+
+    return statusOptions
+        .filter(s => counts[s.key] > 0)
+        .map(s => ({ ...s, count: counts[s.key] }))
+})
+
+const calPeriodCount = computed(() => {
+    return periodData.value.filter(k => {
+        const [y, m] = k.split('-')
+        return parseInt(y) === calYear.value && parseInt(m) === calMonth.value + 1
+    }).length
+})
+
+const calEventCount = computed(() => {
+    let count = 0
+    const daysInMonth = new Date(calYear.value, calMonth.value + 1, 0).getDate()
+    for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${calYear.value}-${String(calMonth.value + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        const userEvents = calendarData.value[key]?.user?.events?.length || 0
+        const charEvents = calendarData.value[key]?.char?.events?.length || 0
+        count += userEvents + charEvents
+    }
+    return count
+})
 
 async function loadAllPersonas() {
     try {
@@ -1194,8 +1522,32 @@ async function loadTogetherData() {
                 }
             })
             timelineEvents.value = flat.slice(0, 15)
-        } else {
-            timelineEvents.value = []
+        }
+    } catch { }
+
+    // 统计消息总数
+    try {
+        const pid = currentAi.value.personaId || 'xiaorou'
+        const res = await api(`/api/messages/${pid}`)
+        const msgs = await res.json()
+        totalMessages.value = Array.isArray(msgs) ? msgs.length : 0
+
+        // 计算连续聊天天数
+        if (Array.isArray(msgs)) {
+            const days = new Set(msgs.map(m => m.timestamp?.slice(0, 10)).filter(Boolean))
+            const sortedDays = [...days].sort().reverse()
+            let s = 0
+            const today = new Date().toISOString().slice(0, 10)
+            let check = today
+            for (const d of sortedDays) {
+                if (d === check) {
+                    s++
+                    const prev = new Date(check)
+                    prev.setDate(prev.getDate() - 1)
+                    check = prev.toISOString().slice(0, 10)
+                } else break
+            }
+            streak.value = s
         }
     } catch { }
 }
@@ -1316,14 +1668,10 @@ function setDayStatus(day, status) {
     if (!calendarData.value[key][r]) calendarData.value[key][r] = { events: [], status: null }
     calendarData.value[key][r].status = calendarData.value[key][r].status === status.key ? null : status.key
     localStorage.setItem('calendar_data', JSON.stringify(calendarData.value))
-}
 
-function selectDay(day) {
-    selectedDay.value = day
-    showDayPanel.value = true
-    newEventText.value = ''
-    editingEventIdx.value = -1
-    calViewMode.value = 'user'
+    // 保存提示
+    showSaveToast.value = true
+    setTimeout(() => { showSaveToast.value = false }, 1500)
 }
 
 function addEvent() {
@@ -1335,7 +1683,20 @@ function addEvent() {
     calendarData.value[key][r].events.push({ id: Date.now(), text: newEventText.value.trim() })
     localStorage.setItem('calendar_data', JSON.stringify(calendarData.value))
     newEventText.value = ''
+
+    // 保存提示
+    showSaveToast.value = true
+    setTimeout(() => { showSaveToast.value = false }, 1500)
 }
+
+function selectDay(day) {
+    selectedDay.value = day
+    showDayPanel.value = true
+    newEventText.value = ''
+    editingEventIdx.value = -1
+    calViewMode.value = 'user'
+}
+
 
 function removeEvent(day, idx) {
     const key = getDayKey(day)
@@ -1377,13 +1738,25 @@ function togglePeriod(day) {
 }
 
 // ===== user/char 编辑 =====
-function switchChar(persona) {
+async function switchChar(persona) {
     Object.assign(currentAi.value, persona)
     localStorage.setItem('home_char_id', persona.id)
     showCharSwitch.value = false
-    loadTogetherData()
-    loadPersonaInsights()
-    loadBookmarks()
+
+    // 重新加载这个 char 的数据
+    await loadTogetherData()
+    await loadPersonaInsights()
+    await loadBookmarks()
+
+    // 更新信息条最新消息
+    try {
+        const msgRes = await api(`/api/messages/${persona.id}/last`)
+        const lastMsg = await msgRes.json()
+        if (lastMsg) {
+            const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+            leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
+        }
+    } catch { }
 }
 
 // ===== AI 画像 =====
@@ -1715,7 +2088,7 @@ onMounted(async () => {
     height: 28px;
     background: #1a1418;
     border-radius: 20px;
-    margin: 6px auto 14px;
+    margin: 4px auto 14px;
     opacity: 0.85;
     flex-shrink: 0;
     z-index: 10;
@@ -2820,67 +3193,6 @@ onMounted(async () => {
     box-shadow: 0 4px 12px rgba(217, 163, 175, 0.12);
 }
 
-/* 心率连接卡片 */
-.heartbeat-card {
-    background: rgba(255, 251, 251, 0.75);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-radius: 28px;
-    padding: 24px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 20px;
-    box-shadow: 0 10px 30px rgba(217, 163, 175, 0.14);
-    position: relative;
-    overflow: hidden;
-    border: 1px solid rgba(255, 240, 242, 0.6);
-}
-
-.heartbeat-card::after {
-    content: '';
-    position: absolute;
-    top: -60%;
-    left: -80%;
-    width: 60%;
-    height: 220%;
-    background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.18) 50%, transparent 70%);
-    transform: skewX(-15deg);
-    animation: heroShine 6s ease-in-out infinite;
-    pointer-events: none;
-}
-
-.hb-side {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-}
-
-.hb-avatar {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    overflow: hidden;
-    position: relative;
-}
-
-.hb-avatar::before {
-    content: '';
-    position: absolute;
-    inset: -3px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #E8C0C9, #D8CDEA, #98CBEA);
-    z-index: -1;
-    animation: avatarGlow 3s ease-in-out infinite;
-}
-
 @keyframes avatarGlow {
 
     0%,
@@ -2893,82 +3205,6 @@ onMounted(async () => {
         opacity: 1;
         transform: scale(1.05);
     }
-}
-
-.hb-avatar-user {
-    background: linear-gradient(145deg, #EDF6FB, #D8CDEA);
-}
-
-.hb-avatar-ai {
-    background: linear-gradient(145deg, #FDE4E8, #F8D0D6);
-}
-
-.hb-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-
-.hb-name {
-    font-size: 11px;
-    font-weight: 600;
-    color: #6B5B5E;
-    letter-spacing: 0.3px;
-}
-
-/* 心率线 */
-.hb-line-wrap {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 60px;
-}
-
-.hb-line-svg {
-    width: 100%;
-    height: 40px;
-}
-
-.hb-path {
-    stroke-dasharray: 200;
-    stroke-dashoffset: 200;
-    animation: drawLine 2s ease-in-out infinite;
-}
-
-@keyframes drawLine {
-    0% {
-        stroke-dashoffset: 200;
-        opacity: 0.3;
-    }
-
-    50% {
-        stroke-dashoffset: 0;
-        opacity: 1;
-    }
-
-    100% {
-        stroke-dashoffset: -200;
-        opacity: 0.3;
-    }
-}
-
-.hb-heart {
-    position: absolute;
-    top: 55%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 22px;
-    height: 22px;
-    animation: heartbeat 1.4s ease-in-out infinite;
-    filter: drop-shadow(0 2px 6px rgba(232, 192, 201, 0.5));
-}
-
-.hb-heart svg {
-    width: 100%;
-    height: 100%;
 }
 
 @keyframes heartbeat {
@@ -3293,7 +3529,7 @@ onMounted(async () => {
 .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 4px;
+    gap: 3px;
 }
 
 .cal-day {
@@ -3312,13 +3548,14 @@ onMounted(async () => {
 }
 
 .cal-day:hover {
-    background: rgba(232, 192, 201, 0.1);
+    background: rgba(232, 192, 201, 0.12);
 }
 
 .cal-empty {
     pointer-events: none;
 }
 
+/* 今天 */
 .cal-today {
     background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
     color: white;
@@ -3329,29 +3566,44 @@ onMounted(async () => {
     background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
 }
 
+/* 经期 */
 .cal-period {
-    background: rgba(232, 192, 201, 0.2);
+    background: rgba(232, 192, 201, 0.18);
 }
 
-.cal-selected {
-    background: rgba(217, 163, 175, 0.15);
-    border: 1.5px solid #E8C0C9;
+/* 有记录：最明显的视觉变化 */
+.cal-has-event {
+    background: rgba(232, 192, 201, 0.15);
+    font-weight: 700;
+    color: #D9A3AF;
 }
 
-.cal-status-dot {
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-}
-
+/* 有记录的格子：只加底部小线 */
 .cal-has-event::after {
     content: '';
     position: absolute;
-    bottom: 3px;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
     width: 4px;
     height: 4px;
     border-radius: 50%;
-    background: #98CBEA;
+    background: #D9A3AF;
+}
+
+.cal-today.cal-has-event::after {
+    background: rgba(255, 255, 255, 0.8);
+}
+
+/* 状态点：更大更深，放在右上角 */
+.cal-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 /* 日期弹窗 */
@@ -4845,5 +5097,877 @@ onMounted(async () => {
     overflow-x: visible;
     /* 改成 visible 让浮层不被裁剪 */
     padding: 2px 0;
+}
+
+/* 情侣卡片 */
+.couple-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 28px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow:
+        0 16px 48px rgba(217, 163, 175, 0.22),
+        0 6px 16px rgba(217, 163, 175, 0.12);
+    cursor: pointer;
+}
+
+/* 底层背景 */
+.couple-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.couple-bg-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.couple-bg-default {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #FDE4E8 0%, #EDD5EA 40%, #D8CDEA 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.couple-bg-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(40px);
+}
+
+.couple-bg-blob.b1 {
+    width: 180px;
+    height: 180px;
+    background: rgba(255, 200, 210, 0.6);
+    top: -40px;
+    left: -40px;
+}
+
+.couple-bg-blob.b2 {
+    width: 160px;
+    height: 160px;
+    background: rgba(200, 185, 230, 0.5);
+    bottom: -30px;
+    right: -30px;
+}
+
+.couple-bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 28px, rgba(255, 255, 255, 0.08) 28px, rgba(255, 255, 255, 0.08) 29px),
+        repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(255, 255, 255, 0.08) 28px, rgba(255, 255, 255, 0.08) 29px);
+}
+
+/* 前卡磨砂夹层，占下半部分 */
+.couple-front {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 58%;
+    background: rgba(255, 255, 255, 0.52);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-top: 1px solid rgba(255, 255, 255, 0.7);
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 16px 20px 20px;
+}
+
+/* 头像区 */
+.couple-avatars {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.couple-avatar-wrap {
+    position: relative;
+}
+
+.couple-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(217, 163, 175, 0.25);
+    border: 2.5px solid rgba(255, 255, 255, 0.9);
+}
+
+.ca-user {
+    background: linear-gradient(145deg, #EDF6FB, #D8CDEA);
+}
+
+.ca-char {
+    background: linear-gradient(145deg, #FDE4E8, #F8D0D6);
+}
+
+.couple-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.couple-avatar-wrap::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(232, 192, 201, 0.5), rgba(216, 205, 234, 0.4), rgba(152, 203, 234, 0.3));
+    z-index: -1;
+    animation: avatarGlow 3s ease-in-out infinite;
+}
+
+.couple-heart-mid {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: heartbeat 1.6s ease-in-out infinite;
+}
+
+.couple-heart-mid svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* 文案区 */
+.couple-texts {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.couple-text-main {
+    font-size: 15px;
+    font-weight: 700;
+    color: #4A3F41;
+    letter-spacing: 0.5px;
+}
+
+.couple-text-days {
+    font-size: 11px;
+    color: #B8A9AC;
+    letter-spacing: 0.3px;
+}
+
+.couple-days-num {
+    color: #D9A3AF;
+    font-weight: 700;
+}
+
+.couple-text-tagline {
+    font-size: 11px;
+    color: #C8B8BB;
+    font-style: italic;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+/* 编辑弹窗内容 */
+.couple-bg-upload {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+}
+
+.couple-bg-preview {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #FDE4E8, #D8CDEA);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #B8A9AC;
+    flex-shrink: 0;
+}
+
+.couple-bg-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.couple-upload-opts {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.couple-clear-btn {
+    background: none;
+    border: none;
+    font-size: 11px;
+    color: #E8C0C9;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    padding: 0;
+}
+
+/* 情侣卡片 */
+.couple-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 28px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    box-shadow:
+        0 16px 48px rgba(217, 163, 175, 0.22),
+        0 6px 16px rgba(217, 163, 175, 0.12);
+    cursor: pointer;
+}
+
+/* 底层背景 */
+.couple-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.couple-bg-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 默认背景：更浅更透亮 */
+.couple-bg-default {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(145deg, #FFF0F3 0%, #F8EBF5 35%, #EDE8F8 65%, #E8F3FB 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.couple-bg-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(50px);
+}
+
+.couple-bg-blob.b1 {
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 210, 220, 0.45);
+    top: -60px;
+    left: -40px;
+}
+
+.couple-bg-blob.b2 {
+    width: 180px;
+    height: 180px;
+    background: rgba(210, 200, 240, 0.35);
+    bottom: -40px;
+    right: -40px;
+}
+
+.couple-bg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 32px, rgba(255, 255, 255, 0.12) 32px, rgba(255, 255, 255, 0.12) 33px),
+        repeating-linear-gradient(90deg, transparent, transparent 32px, rgba(255, 255, 255, 0.12) 32px, rgba(255, 255, 255, 0.12) 33px);
+}
+
+/* 前卡：真正的玻璃质感，占下 48% */
+.couple-front {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48%;
+    background: rgba(255, 255, 255, 0.28);
+    backdrop-filter: saturate(180%) blur(22px);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    border-top: 1px solid rgba(255, 255, 255, 0.55);
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px 18px;
+}
+
+/* 头像区 */
+.couple-avatars {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.couple-avatar-wrap {
+    position: relative;
+}
+
+.couple-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    overflow: hidden;
+    box-shadow:
+        0 4px 16px rgba(217, 163, 175, 0.2),
+        0 0 0 2.5px rgba(255, 255, 255, 0.85);
+}
+
+.ca-user {
+    background: linear-gradient(145deg, #EDF6FB, #D8CDEA);
+}
+
+.ca-char {
+    background: linear-gradient(145deg, #FDE4E8, #F8D0D6);
+}
+
+.couple-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.couple-avatar-wrap::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(232, 192, 201, 0.45), rgba(216, 205, 234, 0.35), rgba(152, 203, 234, 0.25));
+    z-index: -1;
+    animation: avatarGlow 3s ease-in-out infinite;
+}
+
+/* 中间爱心完全删掉，两个头像直接靠近 */
+.couple-heart-mid {
+    display: none;
+}
+
+/* 文案区 */
+.couple-texts {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    text-align: center;
+}
+
+.couple-text-main {
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(74, 63, 65, 0.9);
+    letter-spacing: 0.8px;
+}
+
+.couple-text-days {
+    font-size: 11px;
+    color: rgba(184, 169, 172, 0.9);
+    letter-spacing: 0.3px;
+}
+
+.couple-days-num {
+    color: #D9A3AF;
+    font-weight: 700;
+}
+
+.couple-text-tagline {
+    font-size: 10px;
+    color: rgba(200, 184, 187, 0.85);
+    font-style: italic;
+    letter-spacing: 0.8px;
+    margin-top: 1px;
+}
+
+/* 编辑弹窗 */
+.couple-bg-upload {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 14px;
+    align-items: flex-start;
+}
+
+.couple-bg-preview {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #FDE4E8, #D8CDEA);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #B8A9AC;
+    flex-shrink: 0;
+}
+
+.couple-bg-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.couple-upload-opts {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.couple-clear-btn {
+    background: none;
+    border: none;
+    font-size: 11px;
+    color: #E8C0C9;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    padding: 0;
+}
+
+.couple-text-input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-family: inherit;
+    text-align: center;
+    width: 100%;
+    color: inherit;
+    padding: 0;
+}
+
+.couple-text-input-main {
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(74, 63, 65, 0.9);
+    letter-spacing: 0.8px;
+}
+
+.couple-text-input-days {
+    font-size: 11px;
+    color: rgba(184, 169, 172, 0.9);
+}
+
+.couple-text-input-tagline {
+    font-size: 10px;
+    font-style: italic;
+    color: rgba(200, 184, 187, 0.85);
+    letter-spacing: 0.8px;
+}
+
+.save-toast {
+    position: absolute;
+    bottom: -40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(232, 192, 201, 0.95);
+    color: white;
+    font-size: 12px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(217, 163, 175, 0.3);
+    animation: toastFadeIn 0.3s ease;
+}
+
+@keyframes toastFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* 日历区域标题行 */
+.calendar-section {
+    margin-top: 16px;
+}
+
+.section-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.schedule-view-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(232, 192, 201, 0.12);
+    border: 1px solid rgba(232, 192, 201, 0.3);
+    border-radius: 14px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: #D9A3AF;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.schedule-view-btn svg {
+    width: 13px;
+    height: 13px;
+    stroke: #D9A3AF;
+}
+
+/* 日程视图弹窗 */
+.schedule-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(74, 63, 65, 0.25);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 200;
+    display: flex;
+    align-items: flex-end;
+    padding: 0 12px 32px;
+}
+
+.schedule-panel {
+    background: rgba(255, 252, 252, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 28px;
+    width: 100%;
+    max-height: 72vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(217, 163, 175, 0.25);
+    border: 1px solid rgba(255, 240, 242, 0.6);
+    animation: slideUp 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+    overflow: hidden;
+}
+
+/* 头部 */
+.schedule-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px 12px;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(217, 163, 175, 0.1);
+}
+
+.schedule-range-tabs {
+    display: flex;
+    gap: 6px;
+    background: #F8F3F4;
+    border-radius: 16px;
+    padding: 3px;
+}
+
+.sr-tab {
+    padding: 6px 14px;
+    border-radius: 13px;
+    border: none;
+    background: none;
+    font-size: 12px;
+    font-weight: 600;
+    color: #B8A9AC;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.sr-tab.active {
+    background: #FFFFFF;
+    color: #D9A3AF;
+    box-shadow: 0 2px 8px rgba(217, 163, 175, 0.12);
+}
+
+.schedule-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(232, 192, 201, 0.15);
+    border-radius: 50%;
+    font-size: 16px;
+    color: #B8A9AC;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 双栏标题 */
+.schedule-cols-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 18px;
+    flex-shrink: 0;
+}
+
+.sch-col-title {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #4A3F41;
+}
+
+.sch-col-title:last-child {
+    justify-content: flex-end;
+}
+
+.sch-col-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    overflow: hidden;
+}
+
+.ca-user-sm {
+    background: linear-gradient(145deg, #EDF6FB, #D8CDEA);
+}
+
+.ca-char-sm {
+    background: linear-gradient(145deg, #FDE4E8, #F8D0D6);
+}
+
+.sch-col-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sch-col-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(217, 163, 175, 0.2);
+    margin: 0 12px;
+    flex-shrink: 0;
+}
+
+/* 内容区 */
+.schedule-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 14px 20px;
+}
+
+.schedule-content::-webkit-scrollbar {
+    display: none;
+}
+
+/* 1天时间轴 */
+.schedule-timeline-wrap {
+    display: flex;
+    gap: 0;
+    min-height: 200px;
+}
+
+.sch-timeline-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px 8px 0;
+}
+
+.sch-col-right {
+    padding: 8px 0 8px 8px;
+    align-items: flex-end;
+}
+
+.sch-center-axis {
+    width: 40px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding-top: 8px;
+}
+
+.sch-axis-line {
+    flex: 1;
+    width: 1.5px;
+    background: linear-gradient(180deg, #E8C0C9, rgba(232, 192, 201, 0.1));
+    border-radius: 1px;
+}
+
+.sch-axis-date {
+    font-size: 9px;
+    color: #D9A3AF;
+    font-weight: 700;
+    writing-mode: vertical-rl;
+    letter-spacing: 1px;
+    padding: 8px 0;
+}
+
+.sch-tl-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sch-tl-right {
+    flex-direction: row-reverse;
+}
+
+.sch-tl-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #E8C0C9;
+    flex-shrink: 0;
+}
+
+.sch-dot-char {
+    background: #D8CDEA;
+}
+
+.sch-tl-card {
+    background: rgba(232, 192, 201, 0.1);
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #4A3F41;
+    line-height: 1.4;
+    flex: 1;
+}
+
+.sch-tl-right .sch-tl-card {
+    background: rgba(216, 205, 234, 0.12);
+    text-align: right;
+}
+
+/* 7天/30天列表 */
+.schedule-list-wrap {
+    display: flex;
+    gap: 0;
+}
+
+.sch-list-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 8px 4px 0;
+}
+
+.sch-list-col:last-child {
+    padding: 4px 0 4px 8px;
+}
+
+.sch-list-divider {
+    width: 1px;
+    background: rgba(217, 163, 175, 0.15);
+    flex-shrink: 0;
+    margin: 4px 0;
+}
+
+.sch-date-group {
+    margin-bottom: 10px;
+}
+
+.sch-date-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #B8A9AC;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    padding-left: 2px;
+}
+
+.sch-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+    padding: 5px 8px;
+    border-radius: 10px;
+    background: rgba(232, 192, 201, 0.08);
+    font-size: 11px;
+    color: #4A3F41;
+    line-height: 1.4;
+    margin-bottom: 3px;
+}
+
+.sch-list-item-char {
+    background: rgba(216, 205, 234, 0.1);
+}
+
+.sch-list-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #E8C0C9;
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+
+.sch-empty {
+    font-size: 11px;
+    color: #D4C8CA;
+    text-align: center;
+    padding: 24px 0;
+}
+
+.cal-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 4px 2px;
+    border-top: 1px solid rgba(217, 163, 175, 0.1);
+    margin-top: 8px;
+}
+
+.cal-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: #F8F3F4;
+    border-radius: 10px;
+    padding: 3px 8px;
+}
+
+.cal-legend-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.cal-legend-emoji {
+    font-size: 11px;
+}
+
+.cal-legend-count {
+    font-size: 10px;
+    color: #B8A9AC;
+    font-weight: 700;
 }
 </style>
