@@ -71,6 +71,7 @@ const router = createRouter({
       name: "settings-storage",
       component: SettingsStorageView,
     },
+    { path: "/wallet", name: "wallet", component: WalletView },
   ],
 });
 

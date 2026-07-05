@@ -15,6 +15,86 @@
 
         <div class="sub-content">
 
+            <!-- 存储统计卡片 -->
+            <div class="section-label-sm" style="margin-top:12px;">存储使用情况</div>
+            <div class="storage-card">
+                <!-- 总量 -->
+                <div class="storage-total">
+                    <span class="storage-used">{{ totalUsed }}</span>
+                    <span class="storage-unit">KB 已使用</span>
+                </div>
+
+                <!-- 圆饼图 -->
+                <div class="pie-wrap">
+                    <svg viewBox="0 0 100 100" class="pie-svg">
+                        <template v-for="(seg, idx) in pieSegments" :key="idx">
+                            <circle cx="50" cy="50" r="38" fill="none" :stroke="seg.color" stroke-width="18"
+                                :stroke-dasharray="`${seg.dash} ${seg.gap}`" :stroke-dashoffset="seg.offset"
+                                style="transition: stroke-dasharray 0.6s ease;" />
+                        </template>
+                        <circle cx="50" cy="50" r="28" fill="rgba(255,251,250,0.9)" />
+                        <svg viewBox="0 0 100 100" class="pie-svg">
+                            <template v-for="(seg, idx) in pieSegments" :key="idx">
+                                <circle cx="50" cy="50" r="38" fill="none" :stroke="seg.color" stroke-width="18"
+                                    :stroke-dasharray="`${seg.dash} ${seg.gap}`" :stroke-dashoffset="seg.offset"
+                                    style="transition: stroke-dasharray 0.6s ease;" />
+                            </template>
+                            <circle cx="50" cy="50" r="28" fill="rgba(255,251,250,0.9)" />
+                            <g class="pie-text-group">
+                                <text x="50" y="52" text-anchor="middle" font-size="10" fill="#4A3F41" font-weight="700"
+                                    dy="-0.3em">总计</text>
+                                <text x="50" y="52" text-anchor="middle" font-size="8" fill="#B8A9AC" dy="0.8em">{{
+                                    totalUsed }}KB</text>
+                            </g>
+                        </svg>
+                    </svg>
+
+                    <!-- 图例 -->
+                    <div class="pie-legend">
+                        <div v-for="item in storageItems" :key="item.key" class="legend-item">
+                            <div class="legend-dot" :style="{ background: item.color }"></div>
+                            <span class="legend-label">{{ item.label }}</span>
+                            <span class="legend-val">{{ item.size }}KB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分段条 -->
+                <div class="storage-bar">
+                    <div v-for="item in storageItems" :key="item.key" class="storage-bar-seg"
+                        :style="{ width: item.percent + '%', background: item.color }" :title="item.label">
+                    </div>
+                </div>
+                <div class="storage-bar-labels">
+                    <template v-for="item in storageItems" :key="item.key">
+                        <span v-if="item.percent > 5" class="bar-label" :style="{ color: item.color }">
+                            {{ item.label }}
+                        </span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- 推荐操作 -->
+            <div class="section-label-sm">推荐操作</div>
+            <div class="settings-group">
+                <div v-if="recommendations.length === 0" class="rec-empty">
+                    存储空间使用正常，无需清理 ✓
+                </div>
+                <div v-for="rec in recommendations" :key="rec.key" class="settings-group-item action-item rec-item"
+                    @click="rec.action">
+                    <div class="rec-icon" :style="{ background: rec.color + '22' }">
+                        <span style="font-size:16px;">{{ rec.emoji }}</span>
+                    </div>
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">{{ rec.title }}</div>
+                        <div class="sgi-desc">{{ rec.desc }}</div>
+                    </div>
+                    <div class="rec-badge" :style="{ background: rec.color + '22', color: rec.color }">
+                        {{ rec.badge }}
+                    </div>
+                </div>
+            </div>
+
             <!-- 数据管理 -->
             <div class="section-label-sm">数据管理</div>
             <div class="settings-group">
@@ -32,7 +112,6 @@
                         <path d="M9 18l6-6-6-6" />
                     </svg>
                 </div>
-
                 <div class="settings-group-item action-item" @click="triggerImport">
                     <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #D8CDEA, #b8a8d8);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
@@ -70,7 +149,6 @@
                         <path d="M9 18l6-6-6-6" />
                     </svg>
                 </div>
-
                 <div class="settings-group-item action-item" @click="forceSync">
                     <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #F5EAD0, #e8d5a8);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
@@ -110,7 +188,6 @@
                 </div>
             </div>
 
-            <!-- 结果提示 -->
             <Transition name="toast-fade">
                 <div v-if="resultMsg" class="result-bar" :class="resultSuccess ? 'success' : 'error'">
                     {{ resultMsg }}
@@ -122,12 +199,117 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
 const importInput = ref(null)
 const resultMsg = ref('')
 const resultSuccess = ref(true)
+
+const storageItems = ref([
+    { key: 'messages', label: '聊天记录', color: '#E8C0C9', size: 0, percent: 0 },
+    { key: 'personas', label: '角色人设', color: '#D8CDEA', size: 0, percent: 0 },
+    { key: 'userProfile', label: '用户人设', color: '#98CBEA', size: 0, percent: 0 },
+    { key: 'memories', label: '记忆', color: '#F5EAD0', size: 0, percent: 0 },
+    { key: 'worldBooks', label: '世界书', color: '#B8D4C8', size: 0, percent: 0 },
+    { key: 'calendar', label: '日历', color: '#F1DADD', size: 0, percent: 0 },
+    { key: 'media', label: '媒体/头像', color: '#C8C8E8', size: 0, percent: 0 },
+    { key: 'other', label: '其他', color: '#D4C8CA', size: 0, percent: 0 },
+])
+
+const totalUsed = computed(() => storageItems.value.reduce((a, b) => a + b.size, 0))
+
+const pieSegments = computed(() => {
+    const total = totalUsed.value || 1
+    const circumference = 2 * Math.PI * 38
+    let offset = 0
+    return storageItems.value.map(item => {
+        const dash = (item.size / total) * circumference
+        const seg = { color: item.color, dash, gap: circumference - dash, offset: circumference - offset }
+        offset += dash
+        return seg
+    })
+})
+
+const recommendations = computed(() => {
+    const recs = []
+    const msgs = storageItems.value.find(i => i.key === 'messages')
+    const mems = storageItems.value.find(i => i.key === 'memories')
+    const media = storageItems.value.find(i => i.key === 'media')
+
+    if (msgs && msgs.size > 500) {
+        recs.push({
+            key: 'clear_messages',
+            emoji: '💬',
+            title: '清理旧聊天记录',
+            desc: `聊天记录占用 ${msgs.size}KB，可清理早期记录`,
+            badge: `${msgs.size}KB`,
+            color: '#E8C0C9',
+            action: () => { }
+        })
+    }
+    if (mems && mems.size > 200) {
+        recs.push({
+            key: 'compress_memory',
+            emoji: '🧠',
+            title: '压缩记忆数据',
+            desc: `记忆占用 ${mems.size}KB，建议触发一次记忆整理`,
+            badge: `${mems.size}KB`,
+            color: '#F5EAD0',
+            action: () => { }
+        })
+    }
+    if (media && media.size > 300) {
+        recs.push({
+            key: 'clear_media',
+            emoji: '🖼️',
+            title: '清理媒体缓存',
+            desc: `媒体文件占用 ${media.size}KB，可清理头像缓存`,
+            badge: `${media.size}KB`,
+            color: '#C8C8E8',
+            action: () => { }
+        })
+    }
+    return recs
+})
+
+function calcSize(str) {
+    return Math.round(new Blob([str]).size / 1024 * 10) / 10
+}
+
+function loadStorageStats() {
+    const keys = Object.keys(localStorage)
+
+    let messages = 0, personas = 0, userProfile = 0,
+        memories = 0, worldBooks = 0, calendar = 0, media = 0, other = 0
+
+    keys.forEach(key => {
+        const val = localStorage.getItem(key) || ''
+        const size = calcSize(val)
+        if (['messages', 'messages_beta'].some(k => key.includes(k))) messages += size
+        else if (['api_config', 'api_configs', 'sub_api', 'custom_personas'].some(k => key.includes(k))) personas += size
+        else if (['user_name', 'user_phone', 'user_bio', 'user_background', 'user_relation', 'user_masks', 'user_identity', 'user_gender', 'user_nickname'].some(k => key.includes(k))) userProfile += size
+        else if (['word_cards', 'memories', 'memory'].some(k => key.includes(k))) memories += size
+        else if (key.includes('world_book')) worldBooks += size
+        else if (['calendar_data', 'period_data', 'together_start_date'].some(k => key.includes(k))) calendar += size
+        else if (['wallpaper', 'avatar', 'font', 'icon'].some(k => key.includes(k))) media += size
+        else other += size
+    })
+
+    storageItems.value[0].size = Math.round(messages)
+    storageItems.value[1].size = Math.round(personas)
+    storageItems.value[2].size = Math.round(userProfile)
+    storageItems.value[3].size = Math.round(memories)
+    storageItems.value[4].size = Math.round(worldBooks)
+    storageItems.value[5].size = Math.round(calendar)
+    storageItems.value[6].size = Math.round(media)
+    storageItems.value[7].size = Math.round(other)
+
+    const total = storageItems.value.reduce((a, b) => a + b.size, 0) || 1
+    storageItems.value.forEach(item => {
+        item.percent = Math.round((item.size / total) * 100)
+    })
+}
 
 function showResult(msg, success = true) {
     resultMsg.value = msg
@@ -139,31 +321,8 @@ async function exportData() {
     try {
         const res = await api('/api/export')
         const serverData = await res.json()
-        const localData = {
-            custom_wallpaper: localStorage.getItem('custom_wallpaper') || '',
-            wallpaper_scope: localStorage.getItem('wallpaper_scope') || 'home',
-            custom_font_url: localStorage.getItem('custom_font_url') || '',
-            custom_font_name: localStorage.getItem('custom_font_name') || '',
-            custom_app_icons: localStorage.getItem('custom_app_icons') || '{}',
-            chat_entry_mode: localStorage.getItem('chat_entry_mode') || 'direct',
-            theme_mode: localStorage.getItem('theme_mode') || 'auto',
-            api_config: localStorage.getItem('api_config') || '{}',
-            api_configs: localStorage.getItem('api_configs') || '[]',
-            sub_api_config: localStorage.getItem('sub_api_config') || '{}',
-            sub_api_configs: localStorage.getItem('sub_api_configs') || '[]',
-            output_prefs: localStorage.getItem('output_prefs') || '{}',
-            word_cards: localStorage.getItem('word_cards') || '[]',
-            together_start_date: localStorage.getItem('together_start_date') || '',
-            home_bubble_left: localStorage.getItem('home_bubble_left') || '',
-            home_bubble_right: localStorage.getItem('home_bubble_right') || '',
-            home_user_avatar: localStorage.getItem('home_user_avatar') || '',
-            pinned_personas: localStorage.getItem('pinned_personas') || '[]',
-            user_name: localStorage.getItem('user_name') || '',
-            user_phone: localStorage.getItem('user_phone') || '',
-            user_masks: localStorage.getItem('user_masks') || '[]',
-            calendar_data: localStorage.getItem('calendar_data') || '{}',
-            period_data: localStorage.getItem('period_data') || '[]',
-        }
+        const localData = {}
+        Object.keys(localStorage).forEach(k => { localData[k] = localStorage.getItem(k) })
         const blob = new Blob([JSON.stringify({ ...serverData, localSettings: localData }, null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -172,9 +331,7 @@ async function exportData() {
         a.click()
         URL.revokeObjectURL(url)
         showResult('导出成功 ✓')
-    } catch (e) {
-        showResult('导出失败: ' + e.message, false)
-    }
+    } catch (e) { showResult('导出失败: ' + e.message, false) }
 }
 
 function triggerImport() { importInput.value?.click() }
@@ -186,9 +343,7 @@ async function importData(event) {
         const text = await file.text()
         const data = JSON.parse(text)
         if (data.localSettings) {
-            Object.entries(data.localSettings).forEach(([key, value]) => {
-                if (value) localStorage.setItem(key, value)
-            })
+            Object.entries(data.localSettings).forEach(([k, v]) => { if (v) localStorage.setItem(k, v) })
         }
         const serverData = { ...data }
         delete serverData.localSettings
@@ -198,35 +353,28 @@ async function importData(event) {
             body: JSON.stringify(serverData)
         })
         showResult('导入成功，刷新页面生效 ✓')
-    } catch (e) {
-        showResult('导入失败: ' + e.message, false)
-    }
+    } catch (e) { showResult('导入失败: ' + e.message, false) }
 }
 
-function syncToCloud() {
-    showResult('数据已在云端（Supabase），无需额外同步 ✓')
-}
+function syncToCloud() { showResult('数据已在云端（Supabase），无需额外同步 ✓') }
 
 async function forceSync() {
-    Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('melt_cache_')) localStorage.removeItem(key)
-    })
+    Object.keys(localStorage).forEach(key => { if (key.startsWith('melt_cache_')) localStorage.removeItem(key) })
     showResult('缓存已清除，即将刷新...')
     setTimeout(() => { location.reload() }, 1500)
 }
 
 async function restoreBuiltinPersonas() {
     try {
-        const builtinIds = ['xiaorou', 'cool', 'assistant']
-        for (const id of builtinIds) {
+        for (const id of ['xiaorou', 'cool', 'assistant']) {
             await api(`/api/personas/builtin/${id}/restore`, { method: 'POST' })
         }
         localStorage.removeItem('hidden_personas')
         showResult('已恢复所有内置人格 ✓')
-    } catch (e) {
-        showResult('恢复失败: ' + e.message, false)
-    }
+    } catch (e) { showResult('恢复失败: ' + e.message, false) }
 }
+
+onMounted(loadStorageStats)
 </script>
 
 <style scoped>
@@ -329,6 +477,115 @@ async function restoreBuiltinPersonas() {
     display: block;
 }
 
+/* 存储卡片 */
+.storage-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-radius: 22px;
+    padding: 18px 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 8px 24px rgba(217, 163, 175, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+}
+
+.storage-total {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-bottom: 16px;
+}
+
+.storage-used {
+    font-size: 28px;
+    font-weight: 800;
+    color: #4A3F41;
+}
+
+.storage-unit {
+    font-size: 13px;
+    color: #B8A9AC;
+}
+
+/* 圆饼图 */
+.pie-wrap {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.pie-svg {
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+}
+
+.pie-text-group {
+    transform: rotate(90deg);
+    transform-origin: 50px 50px;
+}
+
+.pie-legend {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.legend-label {
+    font-size: 11px;
+    color: #6B5B5E;
+    flex: 1;
+}
+
+.legend-val {
+    font-size: 11px;
+    color: #B8A9AC;
+    font-weight: 600;
+}
+
+/* 分段条 */
+.storage-bar {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.storage-bar-seg {
+    height: 100%;
+    transition: width 0.6s ease;
+}
+
+.storage-bar-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.bar-label {
+    font-size: 9px;
+    font-weight: 600;
+}
+
+/* 推荐操作 */
 .settings-group {
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(20px);
@@ -399,6 +656,35 @@ async function restoreBuiltinPersonas() {
     width: 14px;
     height: 14px;
     stroke: #D4C8CA;
+    flex-shrink: 0;
+}
+
+.rec-empty {
+    padding: 16px;
+    font-size: 13px;
+    color: #6BAF7A;
+    text-align: center;
+}
+
+.rec-item {
+    align-items: flex-start;
+}
+
+.rec-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.rec-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
     flex-shrink: 0;
 }
 
