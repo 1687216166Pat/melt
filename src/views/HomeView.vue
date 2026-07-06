@@ -2067,7 +2067,7 @@ onMounted(async () => {
 .home-screen {
     width: 100%;
     height: 100%;
-    padding-top: env(safe-area-inset-top, 44px);
+    /* 去掉 padding-top，让内容直接从屏幕最顶部开始 */
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2083,9 +2083,13 @@ onMounted(async () => {
     height: 28px;
     background: #1a1418;
     border-radius: 20px;
-    margin: 4px auto 14px;
+    /* 用绝对定位贴到最顶部 */
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 4px;
     opacity: 0.85;
-    flex-shrink: 0;
     z-index: 10;
 }
 
@@ -2984,14 +2988,15 @@ onMounted(async () => {
    ========================================================================== */
 .dock-bar-v8 {
     position: absolute;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    /* 直接贴底，不加任何余量 */
+    bottom: 0;
     left: 16px;
     right: 16px;
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
     border-radius: 28px;
-    padding: 8px 6px;
+    padding: 8px 6px 12px;
     display: flex;
     flex-direction: row;
     justify-content: space-around;

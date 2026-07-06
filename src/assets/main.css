@@ -822,3 +822,86 @@ select:focus {
   opacity: 0.5;
   line-height: 1.6;
 }
+
+/* ==========================================================================
+   响应式适配 - 不影响安全区配置
+   ========================================================================== */
+
+/* 超小屏（iPhone SE 1代、安卓小屏） */
+@media (max-width: 375px) {
+  :root {
+    --font-scale: 0.92;
+  }
+
+  .dock-bar-v8 {
+    padding: 6px 4px 10px;
+  }
+
+  .dock-item-v8 {
+    min-width: 48px;
+    padding: 4px 10px;
+  }
+
+  .dock-icon-box svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .page-panel {
+    padding: 4px 12px 100px;
+  }
+}
+
+/* 标准屏（iPhone 12-15 系列、大部分安卓） */
+@media (min-width: 376px) and (max-width: 430px) {
+  :root {
+    --font-scale: 1;
+  }
+}
+
+/* 大屏（iPhone Pro Max、平板、安卓大屏） */
+@media (min-width: 431px) {
+  :root {
+    --font-scale: 1.08;
+  }
+
+  .dock-bar-v8 {
+    max-width: 480px;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+  }
+
+  .page-panel {
+    padding: 4px 20px 100px;
+  }
+
+  .dynamic-island {
+    width: 120px;
+    height: 32px;
+  }
+}
+
+/* 横屏适配 */
+@media (orientation: landscape) {
+  .page-panel {
+    padding: 4px 24px 80px;
+  }
+
+  .dock-bar-v8 {
+    bottom: 8px;
+    padding: 6px 4px 8px;
+  }
+}
+
+/* 安卓特殊适配（无刘海屏） */
+@supports not (padding: env(safe-area-inset-top)) {
+  .home-screen {
+    padding-top: 24px;
+  }
+}
+
+/* 应用字体缩放 */
+body {
+  font-size: calc(14px * var(--font-scale, 1));
+}
