@@ -173,6 +173,9 @@ onUnmounted(() => {
     position: relative;
     overflow: hidden;
     transition: background 2s var(--ease-soft);
+    /* 关键：让背景色延伸到手机最底边 */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-sizing: border-box;
 }
 
 .phone-screen.morning {
@@ -211,6 +214,13 @@ onUnmounted(() => {
     -webkit-overflow-scrolling: touch;
     position: relative;
     z-index: 1;
+    /* 抵消 phone-screen 的 padding-bottom，让内容区不被压缩 */
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
+}
+
+.screen-content.no-padding {
+    padding: 0;
+    margin-bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
 }
 
 .screen-content.no-padding {

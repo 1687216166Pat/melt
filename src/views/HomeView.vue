@@ -855,18 +855,12 @@
                     </div>
 
                     <!-- 4. 分组 + 联系人列表 -->
-                    <div class="echoes-group-tabs" v-if="contactGroups.length > 0">
-                        <div class="eg-tab" :class="{ active: activeGroup === null }" @click="activeGroup = null">全部
-                        </div>
-                        <div class="eg-tab" v-for="g in contactGroups" :key="g.id"
-                            :class="{ active: activeGroup === g.id }" @click="activeGroup = g.id">{{ g.name }}</div>
-                    </div>
-
                     <div class="chat-conv-list" @click="hideContextMenu">
                         <div v-for="(p, idx) in filteredPersonas" :key="p.id" class="conv-item-v8"
                             :class="{ 'conv-pinned': p.pinned }" :style="{ animationDelay: idx * 0.06 + 's' }"
-                            @click="router.push(`/chat/${p.id}`)" @contextmenu.prevent="showContextMenu($event, p)"
-                            @touchstart="handleConvTouchStart($event, p)" @touchend="handleConvTouchEnd">
+                            @click.stop="router.push(`/chat/${p.id}`)" @contextmenu.prevent="showContextMenu($event, p)"
+                            @touchstart="handleConvTouchStart($event, p)" @touchend="handleConvTouchEnd"
+                            @touchmove="handleConvTouchEnd">
 
                             <div class="conv-avatar-v8 conv-avatar-glow">
                                 <img v-if="p.avatarUrl" :src="p.avatarUrl" />
@@ -882,7 +876,6 @@
                                 <div class="conv-preview-v8">{{ p.lastMessage || '还没有对话...' }}</div>
                             </div>
 
-                            <!-- 置顶标识 -->
                             <div v-if="p.pinned" class="conv-pin-badge">置顶</div>
                         </div>
 
@@ -1980,7 +1973,17 @@ function formatLastTime(persona) {
 let touchTimer = null
 
 function handleConvTouchStart(e, persona) {
-    touchTimer = setTimeout(() => { showContextMenu(e.touches[0], persona) }, 500)
+    const touch = e.touches[0]
+    touchTimer = setTimeout(() => {
+        // 阻止后续的 click 事件
+        e.preventDefault()
+        contextMenu.value = {
+            visible: true,
+            persona,
+            x: touch.clientX,
+            y: touch.clientY
+        }
+    }, 500)
 }
 
 function handleConvTouchEnd() {
@@ -3012,16 +3015,16 @@ onMounted(async () => {
    ========================================================================== */
 .dock-bar-v8 {
     position: absolute;
-    bottom: 0;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
     left: 50%;
     transform: translateX(-50%);
-    max-width: 480px;
     width: calc(100% - 32px);
+    max-width: 480px;
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
     border-radius: 28px;
-    padding: 8px 6px 12px;
+    padding: 8px 6px;
     display: flex;
     flex-direction: row;
     justify-content: space-around;
