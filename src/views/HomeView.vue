@@ -1156,7 +1156,6 @@ const showSaveToast = ref(false)
 const showScheduleView = ref(false)
 const scheduleRange = ref(7)
 
-
 // 共栖空间
 const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
 const userName = ref(localStorage.getItem('user_name') || '我')
@@ -1174,21 +1173,6 @@ const showCoupleEdit = ref(false)
 const editCoupleBg = ref('')
 const editTagline = ref('')
 
-function startEditText(field) {
-    editingTextField.value = field
-    if (field === 'main') editingTextValue.value = coupleTextMain.value || `${userName.value || '我'} · ${currentAi.value.note || currentAi.value.name}`
-    if (field === 'days') editingTextValue.value = coupleTextDays.value || `相遇以来的第 ${togetherDays.value} 天`
-    if (field === 'tagline') editingTextValue.value = coupleTagline.value
-}
-
-function saveTextEdit(field) {
-    if (field === 'main') { coupleTextMain.value = editingTextValue.value; localStorage.setItem('couple_text_main', editingTextValue.value) }
-    if (field === 'days') { coupleTextDays.value = editingTextValue.value; localStorage.setItem('couple_text_days', editingTextValue.value) }
-    if (field === 'tagline') { coupleTagline.value = editingTextValue.value; localStorage.setItem('couple_tagline', editingTextValue.value) }
-    editingTextField.value = null
-    editingTextValue.value = ''
-}
-
 // 收藏
 const showBookmarks = ref(false)
 const bookmarks = ref([])
@@ -1203,38 +1187,6 @@ const newEventText = ref('')
 const calViewMode = ref('user')
 const calendarData = ref(JSON.parse(localStorage.getItem('calendar_data') || '{}'))
 const periodData = ref(JSON.parse(localStorage.getItem('period_data') || '[]'))
-
-function getScheduleData(days, role) {
-    const result = []
-    const today = new Date()
-    for (let i = 0; i < days; i++) {
-        const d = new Date(today)
-        d.setDate(today.getDate() + i)
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-        const events = calendarData.value[key]?.[role]?.events || []
-        events.forEach(ev => result.push({ ...ev, date: key, dateObj: d }))
-    }
-    return result
-}
-
-function groupScheduleByDate(items) {
-    const groups = {}
-    items.forEach(item => {
-        const key = item.date
-        if (!groups[key]) {
-            const d = new Date(key)
-            const today = new Date()
-            const diff = Math.round((d - today) / 86400000)
-            let label
-            if (diff === 0) label = '今天'
-            else if (diff === 1) label = '明天'
-            else label = `${d.getMonth() + 1}/${d.getDate()}`
-            groups[key] = { date: key, label, items: [] }
-        }
-        groups[key].items.push(item)
-    })
-    return Object.values(groups)
-}
 
 // 事件编辑
 const editingEventIdx = ref(-1)
@@ -1256,76 +1208,7 @@ const showUserEdit = ref(false)
 const showCharSwitch = ref(false)
 const editUserName = ref('')
 const editUserAvatar = ref('')
-
 const editUserAvatarEmoji = ref('')
-
-function handleCoupleBgUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-        coupleBgImage.value = ev.target.result
-        localStorage.setItem('couple_bg', ev.target.result)
-    }
-    reader.readAsDataURL(file)
-}
-
-function clearCoupleBg() {
-    coupleBgImage.value = ''
-    localStorage.removeItem('couple_bg')
-    editCoupleBg.value = ''
-}
-
-function saveCoupleEdit() {
-    if (editCoupleBg.value.trim()) {
-        coupleBgImage.value = editCoupleBg.value.trim()
-        localStorage.setItem('couple_bg', coupleBgImage.value)
-    }
-    if (editTagline.value.trim()) {
-        coupleTagline.value = editTagline.value.trim()
-        localStorage.setItem('couple_tagline', coupleTagline.value)
-    }
-    showCoupleEdit.value = false
-}
-
-// openUserEdit 在弹窗里打开，点头像也触发
-
-function openUserEdit() {
-    editUserName.value = userName.value
-    // 判断当前是 url 还是 emoji
-    if (userAvatar.value.startsWith('http') || userAvatar.value.startsWith('data:')) {
-        editUserAvatar.value = userAvatar.value
-        editUserAvatarEmoji.value = ''
-    } else {
-        editUserAvatar.value = ''
-        editUserAvatarEmoji.value = userAvatar.value
-    }
-    showUserEdit.value = true
-}
-
-function saveUserEdit() {
-    userName.value = editUserName.value
-    // URL 优先，其次 emoji，其次保持原样
-    if (editUserAvatar.value.trim()) {
-        userAvatar.value = editUserAvatar.value.trim()
-    } else if (editUserAvatarEmoji.value.trim()) {
-        userAvatar.value = editUserAvatarEmoji.value.trim()
-    }
-    localStorage.setItem('user_name', userName.value)
-    localStorage.setItem('home_user_avatar', userAvatar.value)
-    showUserEdit.value = false
-}
-
-function handleUserAvatarUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-        editUserAvatar.value = ev.target.result // base64
-        editUserAvatarEmoji.value = ''
-    }
-    reader.readAsDataURL(file)
-}
 
 // 状态选项
 const statusOptions = [
@@ -1337,12 +1220,21 @@ const statusOptions = [
     { key: 'excited', emoji: '🥳', label: '兴奋', color: '#FCE4E8' },
 ]
 
+// 共语列表
+const chatSearchQuery = ref('')
+const activeGroup = ref(null)
+const contactGroups = ref([])
+const showAddPersonaModal = ref(false)
+const newPersona = reactive({ name: '', avatar: '💬', avatarUrl: '', content: '' })
+const contextMenu = ref({ visible: false, persona: null, x: 0, y: 0 })
+const showMoreApps = ref(false)
+
 // ===== computed =====
 const chatStatDisplay = computed(() => {
     const stats = [
         { v: togetherDays.value, l: `已经聊了${togetherDays.value}天` },
-        { v: '5842', l: '共条消息' },
-        { v: '23', l: '今天聊了' }
+        { v: totalMessages.value ?? '—', l: '共条消息' },
+        { v: streak.value ?? '—', l: '连续天数' }
     ]
     return stats[chatStatMode.value]
 })
@@ -1372,55 +1264,6 @@ const groupedInsights = computed(() => {
     })
     return groups
 })
-
-// ===== 基础交互 =====
-const toggleChatStatLocal = () => { chatStatMode.value = (chatStatMode.value + 1) % 3 }
-
-let isDragging = false, startX = 0
-const handleMouseDown = (e) => { isDragging = true; startX = e.pageX }
-const handleMouseMove = (e) => {
-    if (!isDragging) return
-    if (Math.abs(e.pageX - startX) > 50) {
-        if (e.pageX > startX && currentPage.value > 0) { currentPage.value--; isDragging = false }
-        else if (e.pageX < startX && currentPage.value < 2) { currentPage.value++; isDragging = false }
-    }
-}
-const handleMouseUp = () => { isDragging = false }
-
-// ===== 数据加载 =====
-async function loadHomeData() {
-    try {
-        // 优先用 user 自定义选择的角色
-        const savedCharId = localStorage.getItem('home_char_id')
-
-        let pid
-        if (savedCharId) {
-            pid = savedCharId
-        } else {
-            const res = await api('/api/messages/latest-persona')
-            const d = await res.json()
-            pid = d.personaId || 'xiaorou'
-        }
-
-        const detail = await api(`/api/persona/${pid}`)
-        const ai = await detail.json()
-        Object.assign(currentAi.value, { ...ai, personaId: pid })
-
-        // 读取这个角色的最新消息作为信息条预览
-        try {
-            const msgRes = await api(`/api/messages/${pid}/last`)
-            const lastMsg = await msgRes.json()
-            if (lastMsg) {
-                const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
-                leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
-            } else {
-                const savedLeft = localStorage.getItem('home_bubble_left')
-                if (savedLeft) leftBubbleText.value = savedLeft
-            }
-        } catch { }
-
-    } catch { }
-}
 
 const calMonthStats = computed(() => {
     const counts = {}
@@ -1453,14 +1296,102 @@ const calEventCount = computed(() => {
     return count
 })
 
+const filteredPersonas = computed(() => {
+    let list = [...allPersonas.value]
+    if (chatSearchQuery.value.trim()) {
+        const q = chatSearchQuery.value.trim().toLowerCase()
+        list = list.filter(p =>
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.note || '').toLowerCase().includes(q)
+        )
+    }
+    return list.sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1
+        if (!a.pinned && b.pinned) return 1
+        return 0
+    })
+})
+
+const ctxMenuPos = computed(() => {
+    const x = contextMenu.value.x
+    const y = contextMenu.value.y
+    const menuW = 200, menuH = 240
+    const winW = window.innerWidth, winH = window.innerHeight
+    return {
+        left: (x + menuW > winW ? x - menuW : x) + 'px',
+        top: (y + menuH > winH ? y - menuH : y) + 'px'
+    }
+})
+
+// ===== 基础交互 =====
+const toggleChatStatLocal = () => { chatStatMode.value = (chatStatMode.value + 1) % 3 }
+
+let isDragging = false, startX = 0
+const handleMouseDown = (e) => { isDragging = true; startX = e.pageX }
+const handleMouseMove = (e) => {
+    if (!isDragging) return
+    if (Math.abs(e.pageX - startX) > 50) {
+        if (e.pageX > startX && currentPage.value > 0) { currentPage.value--; isDragging = false }
+        else if (e.pageX < startX && currentPage.value < 2) { currentPage.value++; isDragging = false }
+    }
+}
+const handleMouseUp = () => { isDragging = false }
+
+// ===== 缓存工具函数 =====
+function clearAllSessionCache() {
+    const pid = currentAi.value.personaId
+    sessionStorage.removeItem('home_data_loaded')
+    sessionStorage.removeItem('cached_current_ai')
+    sessionStorage.removeItem('cached_left_bubble')
+    sessionStorage.removeItem('cached_timeline')
+    if (pid) {
+        sessionStorage.removeItem('together_loaded_' + pid)
+        sessionStorage.removeItem('insights_loaded_' + pid)
+        sessionStorage.removeItem('bookmarks_loaded_' + pid)
+    }
+}
+
+// ===== 数据加载 =====
+async function loadHomeData() {
+    if (sessionStorage.getItem('home_data_loaded')) return
+    try {
+        const savedCharId = localStorage.getItem('home_char_id')
+        let pid
+        if (savedCharId) {
+            pid = savedCharId
+        } else {
+            const res = await api('/api/messages/latest-persona')
+            const d = await res.json()
+            pid = d.personaId || 'xiaorou'
+        }
+        const detail = await api(`/api/persona/${pid}`)
+        const ai = await detail.json()
+        Object.assign(currentAi.value, { ...ai, personaId: pid })
+        try {
+            const msgRes = await api(`/api/messages/${pid}/last`)
+            const lastMsg = await msgRes.json()
+            if (lastMsg) {
+                const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+                leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
+            } else {
+                const savedLeft = localStorage.getItem('home_bubble_left')
+                if (savedLeft) leftBubbleText.value = savedLeft
+            }
+        } catch { }
+        sessionStorage.setItem('home_data_loaded', '1')
+        sessionStorage.setItem('cached_current_ai', JSON.stringify(currentAi.value))
+        sessionStorage.setItem('cached_left_bubble', leftBubbleText.value)
+    } catch { }
+}
+
 async function loadAllPersonas() {
+    if (sessionStorage.getItem('personas_loaded') && allPersonas.value.length > 0) return
     try {
         const res = await api('/api/prompts/personas')
         const data = await res.json()
-
         const detailed = await Promise.all(
             data.personas.map(async (p) => {
-                let note = '', avatarUrl = '', avatar = p.avatar || '💬', lastMessage = ''
+                let note = '', avatarUrl = '', avatar = p.avatar || '💬', lastMessage = '', lastMessageTime = null
                 const [detailRes, msgRes] = await Promise.all([
                     api(`/api/persona/${p.id}`).catch(() => null),
                     api(`/api/messages/${p.id}/last`).catch(() => null),
@@ -1480,26 +1411,28 @@ async function loadAllPersonas() {
                             const prefix = last.role === 'ai' ? '' : '我: '
                             const content = last.content.split('|||')[0].replace(/\n/g, ' ')
                             lastMessage = prefix + (content.length > 20 ? content.slice(0, 20) + '...' : content)
-                            // 存时间戳
-                            p.lastMessageTime = last.timestamp || null
+                            lastMessageTime = last.timestamp || null
                         }
                     } catch { }
                 }
-                return { ...p, note, avatarUrl, avatar, lastMessage, lastMessageTime: p.lastMessageTime || null }
+                return { ...p, note, avatarUrl, avatar, lastMessage, lastMessageTime }
             })
         )
-
         const pinnedList = JSON.parse(localStorage.getItem('pinned_personas') || '[]')
         const hiddenList = JSON.parse(localStorage.getItem('hidden_personas') || '[]')
         allPersonas.value = detailed
             .filter(p => !hiddenList.includes(p.id))
             .map(p => ({ ...p, pinned: pinnedList.includes(p.id) }))
+        sessionStorage.setItem('personas_loaded', '1')
+        sessionStorage.setItem('cached_personas', JSON.stringify(allPersonas.value))
     } catch { }
 }
 
 async function loadTogetherData() {
+    const pid = currentAi.value.personaId
+    if (!pid) return
+    if (sessionStorage.getItem('together_loaded_' + pid)) return
     try {
-        const pid = currentAi.value.personaId || 'xiaorou'
         const tlRes = await api(`/api/timeline/${pid}`)
         const tlData = await tlRes.json()
         if (Array.isArray(tlData)) {
@@ -1519,49 +1452,55 @@ async function loadTogetherData() {
             timelineEvents.value = flat.slice(0, 15)
         }
     } catch { }
-
-    // 统计消息总数
     try {
-        const pid = currentAi.value.personaId || 'xiaorou'
-        const res = await api(`/api/messages/${pid}`)
-        const msgs = await res.json()
-        totalMessages.value = Array.isArray(msgs) ? msgs.length : 0
-
-        // 计算连续聊天天数
-        if (Array.isArray(msgs)) {
-            const days = new Set(msgs.map(m => m.timestamp?.slice(0, 10)).filter(Boolean))
-            const sortedDays = [...days].sort().reverse()
-            let s = 0
+        const res = await api(`/api/memories/${pid}/heatmap`)
+        const heatmap = await res.json()
+        if (heatmap) {
+            totalMessages.value = Object.values(heatmap).reduce((a, b) => a + b, 0)
             const today = new Date().toISOString().slice(0, 10)
-            let check = today
-            for (const d of sortedDays) {
-                if (d === check) {
-                    s++
-                    const prev = new Date(check)
-                    prev.setDate(prev.getDate() - 1)
-                    check = prev.toISOString().slice(0, 10)
-                } else break
+            let s = 0, check = today
+            while (heatmap[check]) {
+                s++
+                const prev = new Date(check)
+                prev.setDate(prev.getDate() - 1)
+                check = prev.toISOString().slice(0, 10)
             }
             streak.value = s
         }
     } catch { }
+    sessionStorage.setItem('together_loaded_' + pid, '1')
+    sessionStorage.setItem('cached_timeline', JSON.stringify(timelineEvents.value))
 }
 
 async function loadPersonaInsights() {
+    const pid = currentAi.value.personaId
+    if (!pid) return
+    if (sessionStorage.getItem('insights_loaded_' + pid)) return
     try {
-        const pid = currentAi.value.personaId || 'xiaorou'
         const res = await api(`/api/sediment/${pid}/insights`)
         const data = await res.json()
         personaInsights.value = Array.isArray(data) ? data : []
     } catch { }
+    sessionStorage.setItem('insights_loaded_' + pid, '1')
 }
 
 async function loadBookmarks() {
+    const pid = currentAi.value.personaId
+    if (!pid) return
+    if (sessionStorage.getItem('bookmarks_loaded_' + pid)) return
     try {
-        const pid = currentAi.value.personaId || 'xiaorou'
         const res = await api(`/api/bookmarks/${pid}`)
         const data = await res.json()
         bookmarks.value = Array.isArray(data) ? data : []
+    } catch { }
+    sessionStorage.setItem('bookmarks_loaded_' + pid, '1')
+}
+
+async function loadContactGroups() {
+    try {
+        const res = await api('/api/contact-groups')
+        const data = await res.json()
+        contactGroups.value = Array.isArray(data) ? data : []
     } catch { }
 }
 
@@ -1663,8 +1602,6 @@ function setDayStatus(day, status) {
     if (!calendarData.value[key][r]) calendarData.value[key][r] = { events: [], status: null }
     calendarData.value[key][r].status = calendarData.value[key][r].status === status.key ? null : status.key
     localStorage.setItem('calendar_data', JSON.stringify(calendarData.value))
-
-    // 保存提示
     showSaveToast.value = true
     setTimeout(() => { showSaveToast.value = false }, 1500)
 }
@@ -1678,8 +1615,6 @@ function addEvent() {
     calendarData.value[key][r].events.push({ id: Date.now(), text: newEventText.value.trim() })
     localStorage.setItem('calendar_data', JSON.stringify(calendarData.value))
     newEventText.value = ''
-
-    // 保存提示
     showSaveToast.value = true
     setTimeout(() => { showSaveToast.value = false }, 1500)
 }
@@ -1691,7 +1626,6 @@ function selectDay(day) {
     editingEventIdx.value = -1
     calViewMode.value = 'user'
 }
-
 
 function removeEvent(day, idx) {
     const key = getDayKey(day)
@@ -1718,6 +1652,38 @@ function saveEditEvent(day, idx) {
     editingEventText.value = ''
 }
 
+function getScheduleData(days, role) {
+    const result = []
+    const today = new Date()
+    for (let i = 0; i < days; i++) {
+        const d = new Date(today)
+        d.setDate(today.getDate() + i)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const events = calendarData.value[key]?.[role]?.events || []
+        events.forEach(ev => result.push({ ...ev, date: key, dateObj: d }))
+    }
+    return result
+}
+
+function groupScheduleByDate(items) {
+    const groups = {}
+    items.forEach(item => {
+        const key = item.date
+        if (!groups[key]) {
+            const d = new Date(key)
+            const today = new Date()
+            const diff = Math.round((d - today) / 86400000)
+            let label
+            if (diff === 0) label = '今天'
+            else if (diff === 1) label = '明天'
+            else label = `${d.getMonth() + 1}/${d.getDate()}`
+            groups[key] = { date: key, label, items: [] }
+        }
+        groups[key].items.push(item)
+    })
+    return Object.values(groups)
+}
+
 // ===== 经期 =====
 function isPeriodDay(day) {
     const key = getDayKey(day)
@@ -1732,18 +1698,101 @@ function togglePeriod(day) {
     localStorage.setItem('period_data', JSON.stringify(periodData.value))
 }
 
+// ===== 情侣卡片 =====
+function startEditText(field) {
+    editingTextField.value = field
+    if (field === 'main') editingTextValue.value = coupleTextMain.value || `${userName.value || '我'} · ${currentAi.value.note || currentAi.value.name}`
+    if (field === 'days') editingTextValue.value = coupleTextDays.value || `相遇以来的第 ${togetherDays.value} 天`
+    if (field === 'tagline') editingTextValue.value = coupleTagline.value
+}
+
+function saveTextEdit(field) {
+    if (field === 'main') { coupleTextMain.value = editingTextValue.value; localStorage.setItem('couple_text_main', editingTextValue.value) }
+    if (field === 'days') { coupleTextDays.value = editingTextValue.value; localStorage.setItem('couple_text_days', editingTextValue.value) }
+    if (field === 'tagline') { coupleTagline.value = editingTextValue.value; localStorage.setItem('couple_tagline', editingTextValue.value) }
+    editingTextField.value = null
+    editingTextValue.value = ''
+}
+
+function handleCoupleBgUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+        coupleBgImage.value = ev.target.result
+        localStorage.setItem('couple_bg', ev.target.result)
+    }
+    reader.readAsDataURL(file)
+}
+
+function clearCoupleBg() {
+    coupleBgImage.value = ''
+    localStorage.removeItem('couple_bg')
+    editCoupleBg.value = ''
+}
+
+function saveCoupleEdit() {
+    if (editCoupleBg.value.trim()) {
+        coupleBgImage.value = editCoupleBg.value.trim()
+        localStorage.setItem('couple_bg', coupleBgImage.value)
+    }
+    if (editTagline.value.trim()) {
+        coupleTagline.value = editTagline.value.trim()
+        localStorage.setItem('couple_tagline', coupleTagline.value)
+    }
+    showCoupleEdit.value = false
+}
+
+function openCoupleEdit() {
+    editCoupleBg.value = coupleBgImage.value
+    editTagline.value = coupleTagline.value
+    showCoupleEdit.value = true
+}
+
 // ===== user/char 编辑 =====
+function openUserEdit() {
+    editUserName.value = userName.value
+    if (userAvatar.value.startsWith('http') || userAvatar.value.startsWith('data:')) {
+        editUserAvatar.value = userAvatar.value
+        editUserAvatarEmoji.value = ''
+    } else {
+        editUserAvatar.value = ''
+        editUserAvatarEmoji.value = userAvatar.value
+    }
+    showUserEdit.value = true
+}
+
+function saveUserEdit() {
+    userName.value = editUserName.value
+    if (editUserAvatar.value.trim()) {
+        userAvatar.value = editUserAvatar.value.trim()
+    } else if (editUserAvatarEmoji.value.trim()) {
+        userAvatar.value = editUserAvatarEmoji.value.trim()
+    }
+    localStorage.setItem('user_name', userName.value)
+    localStorage.setItem('home_user_avatar', userAvatar.value)
+    showUserEdit.value = false
+}
+
+function handleUserAvatarUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+        editUserAvatar.value = ev.target.result
+        editUserAvatarEmoji.value = ''
+    }
+    reader.readAsDataURL(file)
+}
+
 async function switchChar(persona) {
     Object.assign(currentAi.value, persona)
     localStorage.setItem('home_char_id', persona.id)
     showCharSwitch.value = false
-
-    // 重新加载这个 char 的数据
+    clearAllSessionCache()
     await loadTogetherData()
     await loadPersonaInsights()
     await loadBookmarks()
-
-    // 更新信息条最新消息
     try {
         const msgRes = await api(`/api/messages/${persona.id}/last`)
         const lastMsg = await msgRes.json()
@@ -1752,7 +1801,12 @@ async function switchChar(persona) {
             leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
         }
     } catch { }
+    sessionStorage.setItem('home_data_loaded', '1')
+    sessionStorage.setItem('cached_current_ai', JSON.stringify(currentAi.value))
+    sessionStorage.setItem('cached_left_bubble', leftBubbleText.value)
+    sessionStorage.setItem('cached_timeline', JSON.stringify(timelineEvents.value))
 }
+
 
 // ===== AI 画像 =====
 function formatInsightDate(dateStr) {
@@ -1787,7 +1841,8 @@ async function deleteInsight(id) {
 async function addInsight() {
     if (!newInsightText.value.trim()) return
     try {
-        const pid = currentAi.value.personaId || 'xiaorou'
+        const pid = currentAi.value.personaId
+        if (!pid) return
         await api(`/api/sediment/${pid}/insights`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1803,7 +1858,8 @@ async function addInsight() {
 async function addTimelineEvent() {
     if (!newTimelineText.value.trim()) return
     try {
-        const pid = currentAi.value.personaId || 'xiaorou'
+        const pid = currentAi.value.personaId
+        if (!pid) return
         await api(`/api/timeline/${pid}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1816,6 +1872,7 @@ async function addTimelineEvent() {
         newTimelineText.value = ''
         newTimelinePeriod.value = ''
         showTimelineAdd.value = false
+        sessionStorage.removeItem('cached_timeline')
         await loadTogetherData()
     } catch { }
 }
@@ -1841,7 +1898,119 @@ async function deleteTimelineEvent(id) {
     try {
         await api(`/api/timeline/event/${id}`, { method: 'DELETE' })
         timelineEvents.value = timelineEvents.value.filter(e => e.id !== id)
+        sessionStorage.setItem('cached_timeline', JSON.stringify(timelineEvents.value))
     } catch { }
+}
+
+// ===== 共语列表 =====
+async function togglePin(id) {
+    const persona = allPersonas.value.find(p => p.id === id)
+    if (!persona) return
+    persona.pinned = !persona.pinned
+    const pinned = allPersonas.value.filter(p => p.pinned).map(p => p.id)
+    localStorage.setItem('pinned_personas', JSON.stringify(pinned))
+    sessionStorage.setItem('cached_personas', JSON.stringify(allPersonas.value))
+}
+
+function handleNewPersonaAvatarUpload(event) {
+    const file = event.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (e) => { newPersona.avatarUrl = e.target.result }
+    reader.readAsDataURL(file)
+}
+
+function showContextMenu(e, persona) {
+    e.preventDefault()
+    contextMenu.value = { visible: true, persona, x: e.clientX, y: e.clientY }
+}
+
+function hideContextMenu() {
+    contextMenu.value.visible = false
+}
+
+async function deletePersona(id) {
+    try {
+        await api(`/api/personas/custom/${id}`, { method: 'DELETE' })
+        allPersonas.value = allPersonas.value.filter(p => p.id !== id)
+        sessionStorage.setItem('cached_personas', JSON.stringify(allPersonas.value))
+    } catch { }
+    hideContextMenu()
+}
+
+async function resetConversation(id) {
+    try {
+        await api(`/api/messages/${id}`, { method: 'DELETE' })
+    } catch { }
+    hideContextMenu()
+}
+
+async function deleteConversation(id) {
+    try {
+        await api(`/api/messages/${id}`, { method: 'DELETE' })
+        const persona = allPersonas.value.find(p => p.id === id)
+        if (persona) {
+            persona.lastMessage = '还没有对话...'
+            sessionStorage.setItem('cached_personas', JSON.stringify(allPersonas.value))
+        }
+    } catch { }
+    hideContextMenu()
+}
+
+function pinFromMenu(id) {
+    togglePin(id)
+    hideContextMenu()
+}
+
+function formatLastTime(persona) {
+    if (!persona.lastMessageTime) return ''
+    const now = new Date()
+    const t = new Date(persona.lastMessageTime)
+    const diff = now - t
+    const mins = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+    if (mins < 1) return '刚刚'
+    if (mins < 60) return `${mins}分钟前`
+    if (hours < 24) return `${hours}小时前`
+    if (days < 7) return `${days}天前`
+    return `${t.getMonth() + 1}/${t.getDate()}`
+}
+
+let touchTimer = null
+
+function handleConvTouchStart(e, persona) {
+    touchTimer = setTimeout(() => { showContextMenu(e.touches[0], persona) }, 500)
+}
+
+function handleConvTouchEnd() {
+    if (touchTimer) { clearTimeout(touchTimer); touchTimer = null }
+}
+
+async function createPersona() {
+    if (!newPersona.name || !newPersona.content) return
+    try {
+        await api('/api/personas/custom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: newPersona.name,
+                avatar: newPersona.avatar,
+                avatarUrl: newPersona.avatarUrl,
+                content: newPersona.content
+            })
+        })
+        showAddPersonaModal.value = false
+        Object.assign(newPersona, { name: '', avatar: '💬', avatarUrl: '', content: '' })
+        // 新建角色后清除 personas 缓存，强制重新加载
+        sessionStorage.removeItem('personas_loaded')
+        sessionStorage.removeItem('cached_personas')
+        await loadAllPersonas()
+    } catch { }
+}
+
+function getUnread(personaId) {
+    return 0
 }
 
 // ===== 滚动聚焦 =====
@@ -1880,185 +2049,44 @@ function setupScrollFocus() {
     })
 }
 
-const chatSearchQuery = ref('')
-const activeGroup = ref(null)
-const contactGroups = ref([])
-const showAddPersonaModal = ref(false)
-const newPersona = reactive({
-    name: '',
-    avatar: '💬',
-    avatarUrl: '',
-    content: ''
-})
-const contextMenu = ref({ visible: false, persona: null, x: 0, y: 0 })
-const showMoreApps = ref(false)
-
-
-async function togglePin(id) {
-    const persona = allPersonas.value.find(p => p.id === id)
-    if (!persona) return
-    persona.pinned = !persona.pinned
-    const pinned = allPersonas.value.filter(p => p.pinned).map(p => p.id)
-    localStorage.setItem('pinned_personas', JSON.stringify(pinned))
-}
-
-function handleNewPersonaAvatarUpload(event) {
-    const file = event.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (e) => { newPersona.avatarUrl = e.target.result }
-    reader.readAsDataURL(file)
-}
-function showContextMenu(e, persona) {
-    e.preventDefault()
-    contextMenu.value = { visible: true, persona, x: e.clientX, y: e.clientY }
-}
-
-function hideContextMenu() {
-    contextMenu.value.visible = false
-}
-
-async function deletePersona(id) {
-    try {
-        await api(`/api/personas/custom/${id}`, { method: 'DELETE' })
-        allPersonas.value = allPersonas.value.filter(p => p.id !== id)
-    } catch { }
-    hideContextMenu()
-}
-
-async function resetConversation(id) {
-    try {
-        await api(`/api/messages/${id}`, { method: 'DELETE' })
-    } catch { }
-    hideContextMenu()
-}
-
-async function deleteConversation(id) {
-    try {
-        await api(`/api/messages/${id}`, { method: 'DELETE' })
-        const persona = allPersonas.value.find(p => p.id === id)
-        if (persona) persona.lastMessage = '还没有对话...'
-    } catch { }
-    hideContextMenu()
-}
-
-function pinFromMenu(id) {
-    togglePin(id)
-    hideContextMenu()
-}
-
-function formatLastTime(persona) {
-    if (!persona.lastMessageTime) return ''
-    const now = new Date()
-    const t = new Date(persona.lastMessageTime)
-    const diff = now - t
-    const mins = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
-    if (mins < 1) return '刚刚'
-    if (mins < 60) return `${mins}分钟前`
-    if (hours < 24) return `${hours}小时前`
-    if (days < 7) return `${days}天前`
-    return `${t.getMonth() + 1}/${t.getDate()}`
-}
-let touchTimer = null
-
-function handleConvTouchStart(e, persona) {
-    touchTimer = setTimeout(() => {
-        showContextMenu(e.touches[0], persona)
-    }, 500)
-}
-
-function handleConvTouchEnd() {
-    if (touchTimer) { clearTimeout(touchTimer); touchTimer = null }
-}
-
-const ctxMenuPos = computed(() => {
-    const x = contextMenu.value.x
-    const y = contextMenu.value.y
-    const menuW = 200
-    const menuH = 240
-    const winW = window.innerWidth
-    const winH = window.innerHeight
-    return {
-        left: (x + menuW > winW ? x - menuW : x) + 'px',
-        top: (y + menuH > winH ? y - menuH : y) + 'px'
-    }
-})
-
-async function createPersona() {
-    if (!newPersona.name || !newPersona.content) return
-    try {
-        await api('/api/personas/custom', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: newPersona.name,
-                avatar: newPersona.avatar,
-                avatarUrl: newPersona.avatarUrl,
-                content: newPersona.content
-            })
-        })
-        showAddPersonaModal.value = false
-        Object.assign(newPersona, { name: '', avatar: '💬', avatarUrl: '', content: '' })
-        await loadAllPersonas()
-    } catch { }
-}
-
-
-async function loadContactGroups() {
-    try {
-        const res = await api('/api/contact-groups')
-        const data = await res.json()
-        contactGroups.value = Array.isArray(data) ? data : []
-    } catch { }
-}
-
-
-const filteredPersonas = computed(() => {
-    let list = [...allPersonas.value]
-    if (chatSearchQuery.value.trim()) {
-        const q = chatSearchQuery.value.trim().toLowerCase()
-        list = list.filter(p =>
-            (p.name || '').toLowerCase().includes(q) ||
-            (p.note || '').toLowerCase().includes(q)
-        )
-    }
-    return list.sort((a, b) => {
-        if (a.pinned && !b.pinned) return -1
-        if (!a.pinned && b.pinned) return 1
-        return 0
-    })
-})
-
-function getUnread(personaId) {
-    const lastRead = localStorage.getItem(`last_read_${personaId}`)
-    if (!lastRead) return 0
-    // 用 localStorage 模拟，后续换真实接口
-    return 0
-}
-
 // ===== onMounted =====
 onMounted(async () => {
     loadCards()
     calculateDays()
+
+    const icons = localStorage.getItem('custom_app_icons')
+    if (icons) customIcons.value = JSON.parse(icons)
+
+    const savedWallpaper = localStorage.getItem('custom_wallpaper')
+    if (savedWallpaper) {
+        const el = document.querySelector('.home-screen')
+        if (el) el.style.backgroundImage = `url(${savedWallpaper})`
+    }
+
+    const cachedAi = sessionStorage.getItem('cached_current_ai')
+    if (cachedAi) Object.assign(currentAi.value, JSON.parse(cachedAi))
+
+    const cachedLeft = sessionStorage.getItem('cached_left_bubble')
+    if (cachedLeft) leftBubbleText.value = cachedLeft
+
+    const cachedPersonas = sessionStorage.getItem('cached_personas')
+    if (cachedPersonas) allPersonas.value = JSON.parse(cachedPersonas)
+
+    const cachedTimeline = sessionStorage.getItem('cached_timeline')
+    if (cachedTimeline) timelineEvents.value = JSON.parse(cachedTimeline)
+
     await loadHomeData()
     await loadAllPersonas()
     await loadTogetherData()
     await loadPersonaInsights()
     await loadBookmarks()
     await loadContactGroups()
-    const icons = localStorage.getItem('custom_app_icons')
-    if (icons) customIcons.value = JSON.parse(icons)
-
-    const savedWallpaper = localStorage.getItem('custom_wallpaper')
-    if (savedWallpaper) {
-        document.querySelector('.home-screen').style.backgroundImage = `url(${savedWallpaper})`
-    }
 
     setTimeout(setupScrollFocus, 300)
 })
+
 </script>
+
 
 <style scoped>
 /* ==========================================================================
@@ -2083,13 +2111,9 @@ onMounted(async () => {
     height: 28px;
     background: #1a1418;
     border-radius: 20px;
-    /* 用绝对定位贴到最顶部 */
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-top: 4px;
+    margin: 4px auto 14px;
     opacity: 0.85;
+    flex-shrink: 0;
     z-index: 10;
 }
 
@@ -2165,7 +2189,7 @@ onMounted(async () => {
     height: 100%;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 4px 16px 100px;
+    padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 100px);
     box-sizing: border-box;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -2988,10 +3012,11 @@ onMounted(async () => {
    ========================================================================== */
 .dock-bar-v8 {
     position: absolute;
-    /* 直接贴底，不加任何余量 */
     bottom: 0;
-    left: 16px;
-    right: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 480px;
+    width: calc(100% - 32px);
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);

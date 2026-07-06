@@ -27,6 +27,7 @@ function smartSplit(content) {
 
 export const useChatStore = defineStore("chat", () => {
   const messages = ref([]);
+  let currentLoadedPersona = null;
   const allMessages = ref([]);
   const hasMore = ref(false);
   const pageSize = 10;
@@ -69,6 +70,19 @@ export const useChatStore = defineStore("chat", () => {
 
   async function loadPersonaMessages(personaId) {
     if (!personaId) return;
+
+    // 先检查内存缓存，同一个 personaId 本次 session 已加载过就不重复请求
+    if (allMessages.value.length > 0 && currentLoadedPersona === personaId) {
+      if (allMessages.value.length > pageSize) {
+        messages.value = allMessages.value.slice(-pageSize);
+        hasMore.value = true;
+      } else {
+        messages.value = allMessages.value;
+        hasMore.value = false;
+      }
+      return;
+    }
+
     try {
       const res = await api(`/api/messages/${personaId}`);
       const data = await res.json();
@@ -76,7 +90,6 @@ export const useChatStore = defineStore("chat", () => {
       const processed = [];
       data.forEach((m) => {
         if (m.role === "ai") {
-          // 💡 仅使用 ||| 拆分，且把消息里的所有 \n 换成空格
           const bubbles = m.content
             .split("|||")
             .map((s) => s.replace(/\n/g, " ").trim())
@@ -99,7 +112,6 @@ export const useChatStore = defineStore("chat", () => {
             });
           }
         } else {
-          // 用户消息直接存入
           processed.push({
             id: m.id,
             role: m.role,
@@ -109,8 +121,9 @@ export const useChatStore = defineStore("chat", () => {
         }
       });
 
+      currentLoadedPersona = personaId;
       allMessages.value = processed;
-      // 分页显示最新消息
+
       if (processed.length > pageSize) {
         messages.value = processed.slice(-pageSize);
         hasMore.value = true;
