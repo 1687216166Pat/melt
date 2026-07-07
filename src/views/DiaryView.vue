@@ -1,7 +1,7 @@
 <template>
     <div class="diary-page">
         <div class="diary-header">
-            <button class="back-btn" @click="$router.push('/')">‹</button>
+            <button class="back-btn" @click="goBack">‹</button>
             <h2>手记</h2>
             <button class="add-btn" @click="showWrite = true">+</button>
         </div>
@@ -61,6 +61,7 @@ import GlassCard from '@/components/ui/GlassCard.vue'
 import SoftButton from '@/components/ui/SoftButton.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
 import BlurModal from '@/components/ui/BlurModal.vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const currentTab = ref('ai')
 const entries = ref([])
@@ -69,6 +70,9 @@ const showWrite = ref(false)
 const showEdit = ref(false)
 const editPageId = ref('')
 const editContent = ref('')
+const route = useRoute()
+const router = useRouter()
+
 
 const newDiary = reactive({
     title: '',
@@ -117,6 +121,16 @@ async function writeDiary() {
     newDiary.title = ''
     newDiary.content = ''
     await loadEntries()
+}
+
+function goBack() {
+    const from = route.query.from
+    if (from === 'habitat') {
+        sessionStorage.setItem('home_return_page', '0')
+        router.push('/')
+    } else {
+        router.push('/')
+    }
 }
 
 function startEdit(entry) {

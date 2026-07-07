@@ -11,7 +11,8 @@
 
         <!-- V8 三页平移主容器 -->
         <div class="pages-wrapper" id="pagesWrapper" @mousedown="handleMouseDown" @mousemove="handleMouseMove"
-            @mouseup="handleMouseUp" @mouseleave="handleMouseUp">
+            @mouseup="handleMouseUp" @mouseleave="handleMouseUp"
+            @click.capture="(e) => { if (moved) { e.stopPropagation(); moved = false } }">
             <div class="pages-inner" :style="{ transform: `translateX(-${currentPage * 33.333}%)` }">
 
                 <!-- 【第一页：共栖空间】 -->
@@ -28,7 +29,6 @@
                             <span class="together-title">共栖</span>
                             <span class="together-subtitle">Habitat</span>
                         </div>
-                        <!-- 共栖独立天数，点击弹窗设置 -->
                         <div class="together-days-badge" @click="showHabitatDaysEdit = true">
                             {{ habitatDays }} 天
                         </div>
@@ -69,7 +69,8 @@
                             <div class="couple-texts">
                                 <div class="couple-text-main" @click.stop="startEditText('main')"
                                     v-if="!editingTextField || editingTextField !== 'main'">
-                                    {{ coupleTextMain || `${userName || '我'} · ${currentAi.note || currentAi.name}` }}
+                                    {{ coupleTextMain || `${userName || '我'} · ${currentAi.note || currentAi.name}`
+                                    }}
                                 </div>
                                 <input v-else class="couple-text-input couple-text-input-main"
                                     v-model="editingTextValue" @blur="saveTextEdit('main')"
@@ -101,7 +102,8 @@
                         </div>
                         <div class="relation-card rc-msg">
                             <span class="rc-label">消息总数</span>
-                            <div class="rc-value">{{ habitatTotalMessages !== null ? habitatTotalMessages : '—' }}</div>
+                            <div class="rc-value">{{ habitatTotalMessages !== null ? habitatTotalMessages : '—' }}
+                            </div>
                             <span class="rc-unit">条对话</span>
                         </div>
                         <div class="relation-card rc-streak">
@@ -269,7 +271,7 @@
 
                     <!-- 备忘录入口 -->
                     <div class="section-label" style="margin-top:16px;">✦ 备忘录</div>
-                    <div class="memo-entry" @click="router.push('/diary')">
+                    <div class="memo-entry" @click="router.push('/diary?from=habitat')">
                         <div class="memo-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                                 stroke-linecap="round">
@@ -292,7 +294,10 @@
                     <!-- 所有弹窗 -->
                     <BlurModal :visible="showHabitatDaysEdit" @close="showHabitatDaysEdit = false">
                         <h3>设置共栖纪念日</h3>
-                        <DreamInput label="开始日期" type="date" v-model="habitatStartDateInput" />
+                        <div class="modal-date-row">
+                            <label class="modal-date-label">开始日期</label>
+                            <input type="date" v-model="habitatStartDateInput" class="modal-date-input" />
+                        </div>
                         <div class="modal-actions">
                             <SoftButton variant="secondary" @click="showHabitatDaysEdit = false">取消</SoftButton>
                             <SoftButton variant="primary" @click="saveHabitatDaysDate">保存</SoftButton>
@@ -430,103 +435,104 @@
                     </BlurModal>
 
                     <!-- 日程视图弹窗 -->
-                    <div v-if="showScheduleView" class="schedule-overlay" @click.self="showScheduleView = false">
-                        <div class="schedule-panel">
-                            <div class="schedule-header">
-                                <div class="schedule-range-tabs">
-                                    <button class="sr-tab" :class="{ active: scheduleRange === 1 }"
-                                        @click="scheduleRange = 1">今天</button>
-                                    <button class="sr-tab" :class="{ active: scheduleRange === 7 }"
-                                        @click="scheduleRange = 7">7天</button>
-                                    <button class="sr-tab" :class="{ active: scheduleRange === 30 }"
-                                        @click="scheduleRange = 30">30天</button>
-                                </div>
-                                <button class="schedule-close" @click="showScheduleView = false">×</button>
-                            </div>
-                            <div class="schedule-cols-header">
-                                <div class="sch-col-title">
-                                    <div class="sch-col-avatar ca-user-sm">
-                                        <img v-if="userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data'))"
-                                            :src="userAvatar" />
-                                        <span v-else>{{ userAvatar || '🌙' }}</span>
+                    <Teleport to="body">
+                        <div v-if="showScheduleView" class="schedule-overlay" @click.self="showScheduleView = false">
+                            <div class="schedule-panel">
+                                <div class="schedule-header">
+                                    <div class="schedule-range-tabs">
+                                        <button class="sr-tab" :class="{ active: scheduleRange === 1 }"
+                                            @click="scheduleRange = 1">今天</button>
+                                        <button class="sr-tab" :class="{ active: scheduleRange === 7 }"
+                                            @click="scheduleRange = 7">7天</button>
+                                        <button class="sr-tab" :class="{ active: scheduleRange === 30 }"
+                                            @click="scheduleRange = 30">30天</button>
                                     </div>
-                                    <span>{{ userName || '我' }}</span>
+                                    <button class="schedule-close" @click="showScheduleView = false">×</button>
                                 </div>
-                                <div class="sch-col-divider"></div>
-                                <div class="sch-col-title">
-                                    <div class="sch-col-avatar ca-char-sm">
-                                        <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
-                                        <span v-else>{{ currentAi.avatar || '💬' }}</span>
+                                <div class="schedule-cols-header">
+                                    <div class="sch-col-title">
+                                        <div class="sch-col-avatar ca-user-sm">
+                                            <img v-if="userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data'))"
+                                                :src="userAvatar" />
+                                            <span v-else>{{ userAvatar || '🌙' }}</span>
+                                        </div>
+                                        <span>{{ userName || '我' }}</span>
                                     </div>
-                                    <span>{{ currentAi.note || currentAi.name }}</span>
+                                    <div class="sch-col-divider"></div>
+                                    <div class="sch-col-title">
+                                        <div class="sch-col-avatar ca-char-sm">
+                                            <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
+                                            <span v-else>{{ currentAi.avatar || '💬' }}</span>
+                                        </div>
+                                        <span>{{ currentAi.note || currentAi.name }}</span>
+                                    </div>
                                 </div>
-                            </div>
-                            <div class="schedule-content">
-                                <template v-if="scheduleRange === 1">
-                                    <div class="schedule-timeline-wrap">
-                                        <div class="sch-timeline-col">
-                                            <template v-if="getScheduleData(1, 'user').length > 0">
-                                                <div v-for="(item, idx) in getScheduleData(1, 'user')" :key="idx"
-                                                    class="sch-tl-item">
-                                                    <div class="sch-tl-dot"></div>
-                                                    <div class="sch-tl-card">{{ item.text }}</div>
-                                                </div>
-                                            </template>
-                                            <div v-else class="sch-empty">今天暂无日程</div>
-                                        </div>
-                                        <div class="sch-center-axis">
-                                            <div class="sch-axis-line"></div>
-                                            <div class="sch-axis-date">今天</div>
-                                        </div>
-                                        <div class="sch-timeline-col sch-col-right">
-                                            <template v-if="getScheduleData(1, 'char').length > 0">
-                                                <div v-for="(item, idx) in getScheduleData(1, 'char')" :key="idx"
-                                                    class="sch-tl-item sch-tl-right">
-                                                    <div class="sch-tl-card">{{ item.text }}</div>
-                                                    <div class="sch-tl-dot sch-dot-char"></div>
-                                                </div>
-                                            </template>
-                                            <div v-else class="sch-empty">今天暂无日程</div>
-                                        </div>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div class="schedule-list-wrap">
-                                        <div class="sch-list-col">
-                                            <template v-if="getScheduleData(scheduleRange, 'user').length > 0">
-                                                <div v-for="group in groupScheduleByDate(getScheduleData(scheduleRange, 'user'))"
-                                                    :key="group.date" class="sch-date-group">
-                                                    <div class="sch-date-label">{{ group.label }}</div>
-                                                    <div v-for="(item, idx) in group.items" :key="idx"
-                                                        class="sch-list-item">
-                                                        <div class="sch-list-dot"></div>
-                                                        <span>{{ item.text }}</span>
+                                <div class="schedule-content">
+                                    <template v-if="scheduleRange === 1">
+                                        <div class="schedule-timeline-wrap">
+                                            <div class="sch-timeline-col">
+                                                <template v-if="getScheduleData(1, 'user').length > 0">
+                                                    <div v-for="(item, idx) in getScheduleData(1, 'user')" :key="idx"
+                                                        class="sch-tl-item">
+                                                        <div class="sch-tl-dot"></div>
+                                                        <div class="sch-tl-card">{{ item.text }}</div>
                                                     </div>
-                                                </div>
-                                            </template>
-                                            <div v-else class="sch-empty">暂无日程</div>
-                                        </div>
-                                        <div class="sch-list-divider"></div>
-                                        <div class="sch-list-col">
-                                            <template v-if="getScheduleData(scheduleRange, 'char').length > 0">
-                                                <div v-for="group in groupScheduleByDate(getScheduleData(scheduleRange, 'char'))"
-                                                    :key="group.date" class="sch-date-group">
-                                                    <div class="sch-date-label">{{ group.label }}</div>
-                                                    <div v-for="(item, idx) in group.items" :key="idx"
-                                                        class="sch-list-item sch-list-item-char">
-                                                        <div class="sch-list-dot sch-dot-char"></div>
-                                                        <span>{{ item.text }}</span>
+                                                </template>
+                                                <div v-else class="sch-empty">今天暂无日程</div>
+                                            </div>
+                                            <div class="sch-center-axis">
+                                                <div class="sch-axis-line"></div>
+                                                <div class="sch-axis-date">今天</div>
+                                            </div>
+                                            <div class="sch-timeline-col sch-col-right">
+                                                <template v-if="getScheduleData(1, 'char').length > 0">
+                                                    <div v-for="(item, idx) in getScheduleData(1, 'char')" :key="idx"
+                                                        class="sch-tl-item sch-tl-right">
+                                                        <div class="sch-tl-card">{{ item.text }}</div>
+                                                        <div class="sch-tl-dot sch-dot-char"></div>
                                                     </div>
-                                                </div>
-                                            </template>
-                                            <div v-else class="sch-empty">暂无日程</div>
+                                                </template>
+                                                <div v-else class="sch-empty">今天暂无日程</div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </template>
+                                    </template>
+                                    <template v-else>
+                                        <div class="schedule-list-wrap">
+                                            <div class="sch-list-col">
+                                                <template v-if="getScheduleData(scheduleRange, 'user').length > 0">
+                                                    <div v-for="group in groupScheduleByDate(getScheduleData(scheduleRange, 'user'))"
+                                                        :key="group.date" class="sch-date-group">
+                                                        <div class="sch-date-label">{{ group.label }}</div>
+                                                        <div v-for="(item, idx) in group.items" :key="idx"
+                                                            class="sch-list-item">
+                                                            <div class="sch-list-dot"></div>
+                                                            <span>{{ item.text }}</span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <div v-else class="sch-empty">暂无日程</div>
+                                            </div>
+                                            <div class="sch-list-divider"></div>
+                                            <div class="sch-list-col">
+                                                <template v-if="getScheduleData(scheduleRange, 'char').length > 0">
+                                                    <div v-for="group in groupScheduleByDate(getScheduleData(scheduleRange, 'char'))"
+                                                        :key="group.date" class="sch-date-group">
+                                                        <div class="sch-date-label">{{ group.label }}</div>
+                                                        <div v-for="(item, idx) in group.items" :key="idx"
+                                                            class="sch-list-item sch-list-item-char">
+                                                            <div class="sch-list-dot sch-dot-char"></div>
+                                                            <span>{{ item.text }}</span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                                <div v-else class="sch-empty">暂无日程</div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                         </div>
-                    </div>
-
+                    </Teleport>
                 </div>
 
                 <!-- 【第二页：小窝主页】 -->
@@ -723,16 +729,17 @@
                                         </svg>
                                         <span>心愿单</span>
                                     </div>
-                                    <!-- 记忆 -->
                                     <div class="sec-item more-app-sec"
-                                        @click="$router.push('/memory'); showMoreApps = false">
+                                        @click="$router.push(`/persona-detail/${currentAi.personaId}`); showMoreApps = false">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                             stroke-linecap="round">
-                                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                                            <path d="M3 9h18M9 21V9" />
+                                            <rect x="2" y="4" width="20" height="16" rx="2" />
+                                            <path d="M8 10h8M8 14h4" />
+                                            <circle cx="6" cy="10" r="1.5" fill="currentColor" />
                                         </svg>
-                                        <span>记忆</span>
+                                        <span>名片</span>
                                     </div>
+
                                     <!-- 番茄钟 -->
                                     <div class="sec-item more-app-sec"
                                         @click="$router.push('/pomodoro'); showMoreApps = false">
@@ -856,7 +863,8 @@
                     <div class="chat-conv-list" @click="hideContextMenu">
                         <div v-for="(p, idx) in filteredPersonas" :key="p.id" class="conv-item-v8"
                             :class="{ 'conv-pinned': p.pinned }" :style="{ animationDelay: idx * 0.06 + 's' }"
-                            @click.stop="router.push(`/chat/${p.id}`)" @contextmenu.prevent="showContextMenu($event, p)"
+                            @click.stop="router.push(`/chat/${p.id}?from=echoes`)"
+                            @contextmenu.prevent="showContextMenu($event, p)"
                             @touchstart="handleConvTouchStart($event, p)" @touchend="handleConvTouchEnd"
                             @touchmove="handleConvTouchEnd">
 
@@ -1022,72 +1030,76 @@
         </BlurModal>
 
         <!-- 日期弹窗：必须是 home-screen 的直接子元素，避免被 overflow:hidden 裁掉 -->
-        <div v-if="selectedDay && showDayPanel" class="day-panel-overlay" @click.self="showDayPanel = false">
-            <div class="day-panel">
-                <div class="day-panel-header">
-                    <span class="day-panel-date">{{ calYear }}年{{ calMonth + 1 }}月{{ selectedDay }}日</span>
-                    <button class="day-panel-close" @click="showDayPanel = false">×</button>
-                </div>
-
-                <!-- 视角切换 -->
-                <div class="dp-view-tabs">
-                    <div class="dp-tab" :class="{ active: calViewMode === 'user' }" @click="calViewMode = 'user'">
-                        <div class="dp-tab-avatar">
-                            <img v-if="userAvatar && userAvatar.startsWith('http')" :src="userAvatar" />
-                            <span v-else>{{ userAvatar || '🌙' }}</span>
-                        </div>
-                        <span>{{ userName || '我' }}</span>
+        <Teleport to="body">
+            <div v-if="selectedDay && showDayPanel" class="day-panel-overlay" @click.self="showDayPanel = false">
+                <div class="day-panel">
+                    <div class="day-panel-header">
+                        <span class="day-panel-date">{{ calYear }}年{{ calMonth + 1 }}月{{ selectedDay }}日</span>
+                        <button class="day-panel-close" @click="showDayPanel = false">×</button>
                     </div>
-                    <div class="dp-tab" :class="{ active: calViewMode === 'char' }" @click="calViewMode = 'char'">
-                        <div class="dp-tab-avatar">
-                            <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
-                            <span v-else>{{ currentAi.avatar || '💬' }}</span>
-                        </div>
-                        <span>{{ currentAi.note || currentAi.name }}</span>
-                    </div>
-                </div>
 
-                <!-- 状态选择 -->
-                <div class="day-status-row">
-                    <span class="dp-label">状态（可不填）</span>
-                    <div class="status-options">
-                        <div v-for="s in statusOptions" :key="s.key" class="status-opt"
-                            :class="{ active: getDayStatusKey(selectedDay) === s.key }"
-                            @click="setDayStatus(selectedDay, s)">
-                            <span>{{ s.emoji }}</span>
+                    <!-- 视角切换 -->
+                    <div class="dp-view-tabs">
+                        <div class="dp-tab" :class="{ active: calViewMode === 'user' }" @click="calViewMode = 'user'">
+                            <div class="dp-tab-avatar">
+                                <img v-if="userAvatar && userAvatar.startsWith('http')" :src="userAvatar" />
+                                <span v-else>{{ userAvatar || '🌙' }}</span>
+                            </div>
+                            <span>{{ userName || '我' }}</span>
                         </div>
-                        <div v-if="calViewMode === 'user'" class="status-opt"
-                            :class="{ active: isPeriodDay(selectedDay) }" @click="togglePeriod(selectedDay)">
-                            <span>🌸</span>
+                        <div class="dp-tab" :class="{ active: calViewMode === 'char' }" @click="calViewMode = 'char'">
+                            <div class="dp-tab-avatar">
+                                <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
+                                <span v-else>{{ currentAi.avatar || '💬' }}</span>
+                            </div>
+                            <span>{{ currentAi.note || currentAi.name }}</span>
                         </div>
                     </div>
-                </div>
 
-                <!-- 日程列表 -->
-                <div class="dp-events">
-                    <template v-if="getDayEvents(selectedDay).length > 0">
-                        <div v-for="(ev, i) in getDayEvents(selectedDay)" :key="ev.id || i" class="dp-event-item">
-                            <div class="dp-event-dot"></div>
-                            <input v-if="editingEventIdx === i" v-model="editingEventText"
-                                class="dp-input dp-edit-input" @blur="saveEditEvent(selectedDay, i)"
-                                @keyup.enter="saveEditEvent(selectedDay, i)" />
-                            <span v-else class="dp-event-text" @click="startEditEvent(i, ev.text)">{{ ev.text }}</span>
-                            <button class="dp-event-del" @click="removeEvent(selectedDay, i)">×</button>
+                    <!-- 状态选择 -->
+                    <div class="day-status-row">
+                        <span class="dp-label">状态（可不填）</span>
+                        <div class="status-options">
+                            <div v-for="s in statusOptions" :key="s.key" class="status-opt"
+                                :class="{ active: getDayStatusKey(selectedDay) === s.key }"
+                                @click="setDayStatus(selectedDay, s)">
+                                <span>{{ s.emoji }}</span>
+                            </div>
+                            <div v-if="calViewMode === 'user'" class="status-opt"
+                                :class="{ active: isPeriodDay(selectedDay) }" @click="togglePeriod(selectedDay)">
+                                <span>🌸</span>
+                            </div>
                         </div>
-                    </template>
-                    <div v-else class="dp-empty">暂无日程，可不填</div>
+                    </div>
+
+                    <!-- 日程列表 -->
+                    <div class="dp-events">
+                        <template v-if="getDayEvents(selectedDay).length > 0">
+                            <div v-for="(ev, i) in getDayEvents(selectedDay)" :key="ev.id || i" class="dp-event-item">
+                                <div class="dp-event-dot"></div>
+                                <input v-if="editingEventIdx === i" v-model="editingEventText"
+                                    class="dp-input dp-edit-input" @blur="saveEditEvent(selectedDay, i)"
+                                    @keyup.enter="saveEditEvent(selectedDay, i)" />
+                                <span v-else class="dp-event-text" @click="startEditEvent(i, ev.text)">{{ ev.text
+                                    }}</span>
+                                <button class="dp-event-del" @click="removeEvent(selectedDay, i)">×</button>
+                            </div>
+                        </template>
+                        <div v-else class="dp-empty">暂无日程，可不填</div>
+                    </div>
+
+                    <!-- 添加日程 -->
+                    <div class="dp-add-row">
+                        <input v-model="newEventText" class="dp-input" placeholder="添加日程（可选）..."
+                            @keyup.enter="addEvent" />
+                        <button class="dp-add-btn" @click="addEvent">+</button>
+                    </div>
+
+                    <div v-if="showSaveToast" class="save-toast">已保存 ✓</div>
                 </div>
-
-                <!-- 添加日程 -->
-                <div class="dp-add-row">
-                    <input v-model="newEventText" class="dp-input" placeholder="添加日程（可选）..." @keyup.enter="addEvent" />
-                    <button class="dp-add-btn" @click="addEvent">+</button>
-                </div>
-
-                <div v-if="showSaveToast" class="save-toast">已保存 ✓</div>
-
             </div>
-        </div>
+        </Teleport>
+
 
         <BlurModal :visible="showAddPersonaModal" @close="showAddPersonaModal = false">
             <h3>添加新的角色</h3>
@@ -1157,7 +1169,7 @@
 
 <script setup>
 import { ref, computed, onMounted, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { api } from '@/utils/api'
 import BlurModal from '@/components/ui/BlurModal.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
@@ -1165,6 +1177,7 @@ import SoftButton from '@/components/ui/SoftButton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 // ===== 全部状态声明 =====
 const currentPage = ref(1)
@@ -1307,9 +1320,9 @@ const showMoreApps = ref(false)
 // ===== computed =====
 const chatStatDisplay = computed(() => {
     const stats = [
-        { v: togetherDays.value, l: `已经聊了${togetherDays.value}天` },
-        { v: totalMessages.value ?? '—', l: '共条消息' },
-        { v: streak.value ?? '—', l: '连续天数' }
+        { v: togetherDays.value, l: `聊了${togetherDays.value}天` },
+        { v: totalMessages.value ?? '—', l: '条消息' },
+        { v: streak.value ?? '—', l: '连续聊天天' }
     ]
     return stats[chatStatMode.value]
 })
@@ -1406,15 +1419,23 @@ const ctxMenuPos = computed(() => {
 // ===== 基础交互 =====
 const toggleChatStatLocal = () => { chatStatMode.value = (chatStatMode.value + 1) % 3 }
 
-let isDragging = false, startX = 0
-const handleMouseDown = (e) => { isDragging = true; startX = e.pageX }
+let isDragging = false, startX = 0, moved = false
+
+const handleMouseDown = (e) => {
+    isDragging = true
+    startX = e.pageX
+    moved = false
+}
+
 const handleMouseMove = (e) => {
     if (!isDragging) return
     if (Math.abs(e.pageX - startX) > 50) {
+        moved = true
         if (e.pageX > startX && currentPage.value > 0) { currentPage.value--; isDragging = false }
         else if (e.pageX < startX && currentPage.value < 2) { currentPage.value++; isDragging = false }
     }
 }
+
 const handleMouseUp = () => { isDragging = false }
 
 // ===== 缓存工具函数 =====
@@ -1547,6 +1568,9 @@ async function loadTogetherData() {
                 check = prev.toISOString().slice(0, 10)
             }
             streak.value = s
+            // 存缓存放在这里，在 try 里面
+            sessionStorage.setItem('cached_total_messages', String(totalMessages.value))
+            sessionStorage.setItem('cached_streak', String(streak.value))
         }
     } catch { }
     sessionStorage.setItem('together_loaded_' + pid, '1')
@@ -1724,6 +1748,7 @@ function addEvent() {
 }
 
 function selectDay(day) {
+    console.log('selectDay called', day)
     selectedDay.value = day
     showDayPanel.value = true
     newEventText.value = ''
@@ -1861,9 +1886,9 @@ function calculateHabitatDays() {
 }
 
 function saveHabitatDaysDate() {
-    if (!habitatStartDateInput.value) return
-    localStorage.setItem('habitat_start_date', habitatStartDateInput.value)
-    habitatStartDate.value = habitatStartDateInput.value
+    const dateToSave = habitatStartDateInput.value || new Date().toISOString().slice(0, 10)
+    localStorage.setItem('habitat_start_date', dateToSave)
+    habitatStartDate.value = dateToSave
     calculateHabitatDays()
     showHabitatDaysEdit.value = false
 }
@@ -2251,6 +2276,12 @@ onMounted(async () => {
     calculateDays()
     calculateHabitatDays()
 
+    const returnPage = sessionStorage.getItem('home_return_page')
+    if (returnPage !== null) {
+        currentPage.value = parseInt(returnPage)
+        sessionStorage.removeItem('home_return_page')
+    }
+
     const icons = localStorage.getItem('custom_app_icons')
     if (icons) customIcons.value = JSON.parse(icons)
 
@@ -2274,6 +2305,15 @@ onMounted(async () => {
 
     const cachedInsights = sessionStorage.getItem('cached_insights')
     if (cachedInsights) personaInsights.value = JSON.parse(cachedInsights)
+
+    const cachedTotal = sessionStorage.getItem('cached_total_messages')
+    const cachedStreak = sessionStorage.getItem('cached_streak')
+    if (cachedTotal) totalMessages.value = parseInt(cachedTotal)
+    if (cachedStreak) streak.value = parseInt(cachedStreak)
+
+    if (habitatStartDate.value) {
+        habitatStartDateInput.value = habitatStartDate.value
+    }
 
     await loadHomeData()
     await loadAllPersonas()
@@ -3379,6 +3419,19 @@ onMounted(async () => {
     justify-content: space-between;
     margin-bottom: 20px;
     padding: 4px 0;
+    position: relative;
+    isolation: isolate;
+}
+
+.relation-slider {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    scroll-snap-type: x mandatory;
+    margin-bottom: 4px;
+    position: relative;
+    z-index: 0;
 }
 
 .together-title-wrap {
@@ -3409,13 +3462,15 @@ onMounted(async () => {
 }
 
 .together-days-badge {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     background: linear-gradient(135deg, #FEF0F3, #FCE4E8);
     border-radius: 20px;
     padding: 6px 14px;
     font-size: 12px;
     font-weight: 700;
     color: #D9A3AF;
-    cursor: pointer;
     box-shadow: 0 4px 12px rgba(217, 163, 175, 0.12);
 }
 
@@ -6553,5 +6608,31 @@ onMounted(async () => {
 
 .cat-custom-input-full::placeholder {
     color: #D4C8CA;
+}
+
+.modal-date-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.modal-date-label {
+    font-size: 12px;
+    color: #B8A9AC;
+}
+
+.modal-date-input {
+    width: 100%;
+    height: 42px;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    border-radius: 12px;
+    padding: 0 14px;
+    font-size: 14px;
+    color: #4A3F41;
+    background: rgba(255, 255, 255, 0.6);
+    outline: none;
+    font-family: inherit;
+    box-sizing: border-box;
 }
 </style>

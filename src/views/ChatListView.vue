@@ -33,7 +33,8 @@
             <!-- 列表 -->
             <div v-else class="cl-list">
                 <div v-for="(persona, idx) in sortedPersonas" :key="persona.id" class="cl-item"
-                    :style="{ animationDelay: idx * 0.05 + 's' }" @click="$router.push(`/chat/${persona.id}`)">
+                    :style="{ animationDelay: idx * 0.05 + 's' }"
+                    @click.stop="router.push(`/chat/${persona.id}?from=echoes`)">
 
                     <!-- 头像 -->
                     <div class="cl-avatar">

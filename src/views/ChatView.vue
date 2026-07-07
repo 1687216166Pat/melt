@@ -64,7 +64,7 @@ import { setCache } from '@/utils/cache'
 const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
-const { send, onMessage, removeHandler } = useWebSocket()
+const { send, onMessage, removeHandler, isConnected } = useWebSocket()
 const messagesContainer = ref(null)
 const isTyping = ref(false)
 const debugInfo = ref(null)
@@ -99,12 +99,17 @@ async function clearChat() {
 }
 
 function goBack() {
-    if (window.history.length > 1) {
+    const from = route.query.from
+    if (from === 'echoes') {
+        sessionStorage.setItem('home_return_page', '2')
+        router.push('/')
+    } else if (window.history.length > 1) {
         router.back()
     } else {
         router.push('/')
     }
 }
+
 
 const personaId = computed(() => route.params.personaId)
 const personaName = ref('AI 助手')
@@ -260,13 +265,24 @@ onMounted(async () => {
     removeHandler(handleIncoming)
     onMessage(handleIncoming)
     loadPersonaName()
+    chatStore.clearMessages()
     await chatStore.loadPersonaMessages(personaId.value)
     scrollToBottom()
-})
 
-onUnmounted(() => {
-    document.querySelector('.screen-content').style.overflow = 'auto'
-    removeHandler(handleIncoming)
+    // 重连时补拉新消息
+    let mounted = false
+    const unwatch = watch(isConnected, async (val, oldVal) => {
+        if (!mounted) { mounted = true; return } // 跳过首次触发
+        if (val && !oldVal) {
+            chatStore.clearMessages()
+            await chatStore.loadPersonaMessages(personaId.value)
+            scrollToBottom()
+        }
+    })
+
+    onUnmounted(() => {
+        unwatch()
+    })
 })
 
 watch(() => chatStore.messages.length, scrollToBottom)

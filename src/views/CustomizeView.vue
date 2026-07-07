@@ -329,6 +329,7 @@ function handleWallpaperUpload(event) {
             canvas.height = h
             canvas.getContext('2d').drawImage(img, 0, 0, w, h)
             wallpaperUrl.value = canvas.toDataURL('image/jpeg', 0.7)
+            applyWallpaper() // 上传后自动应用
         }
         img.src = e.target.result
     }
@@ -338,8 +339,10 @@ function handleWallpaperUpload(event) {
 function applyWallpaper() {
     wallpaper.value = wallpaperUrl.value
     localStorage.setItem('custom_wallpaper', wallpaperUrl.value)
+    localStorage.setItem('wallpaper_scope', wallpaperScope.value)
     setTimeout(() => {
-        const screen = document.querySelector('.phone-screen')
+        // 同时处理两种可能的类名
+        const screen = document.querySelector('.phone-screen') || document.querySelector('.home-screen')
         if (screen) {
             screen.style.backgroundImage = `url(${wallpaperUrl.value})`
             screen.style.backgroundSize = 'cover'

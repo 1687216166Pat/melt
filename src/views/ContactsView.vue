@@ -145,6 +145,31 @@ async function deletePersona(id) {
     }
 }
 
+function handleWallpaperUpload(event) {
+    const file = event.target.files[0]
+    if (!file) return
+    const img = new Image()
+    const reader = new FileReader()
+    reader.onload = (e) => {
+        img.onload = () => {
+            const canvas = document.createElement('canvas')
+            const maxSize = 800
+            let w = img.width, h = img.height
+            if (w > maxSize || h > maxSize) {
+                if (w > h) { h = h * maxSize / w; w = maxSize }
+                else { w = w * maxSize / h; h = maxSize }
+            }
+            canvas.width = w
+            canvas.height = h
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+            wallpaperUrl.value = canvas.toDataURL('image/jpeg', 0.7)
+            applyWallpaper() // 自动应用
+        }
+        img.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+}
+
 async function handleFileImport(event) {
     const file = event.target.files[0]
     if (!file) return
