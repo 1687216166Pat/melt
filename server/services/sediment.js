@@ -3,14 +3,12 @@
 const { getDB } = require("../db/index");
 const { callSubAI } = require("./subai");
 
-// 获取人格的身份配置
 async function getIdentityConfig(personaId) {
   const db = getDB();
 
-  // 先查自定义人格
   const { data: custom } = await db
     .from("custom_personas")
-    .select("name, note, gender, call_user")
+    .select("name, note, gender, call_user, content")
     .eq("id", personaId)
     .limit(1);
 
@@ -25,10 +23,10 @@ async function getIdentityConfig(personaId) {
           : custom[0].gender === "female"
             ? "她"
             : "TA",
+      personaContent: custom[0].content || "",
     };
   }
 
-  // 内置人格
   const { data: config } = await db
     .from("user_profile")
     .select("value")
@@ -42,22 +40,48 @@ async function getIdentityConfig(personaId) {
       aiName: c.note || c.name || "TA",
       userName: callUser || "你",
       pronoun: c.gender === "male" ? "他" : c.gender === "female" ? "她" : "TA",
+      personaContent: c.content || "",
     };
   }
 
-  return { aiName: "TA", userName: "你", pronoun: "TA" };
+  return { aiName: "TA", userName: "你", pronoun: "TA", personaContent: "" };
 }
 
-// 每日会话总结 (支持 Beta 沙盒)
+// 获取自定义规则
+async function getSedimentRules(personaId) {
+  const db = getDB();
+
+  const { data: specific } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", `sediment_rule_${personaId}`)
+    .limit(1);
+
+  if (specific && specific.length > 0) {
+    return JSON.parse(specific[0].value);
+  }
+
+  const { data: global } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "sediment_rule_global")
+    .limit(1);
+
+  if (global && global.length > 0) {
+    return JSON.parse(global[0].value);
+  }
+
+  return { summaryRule: "", insightRule: "" };
+}
+
 async function generateDailySummary(personaId, isBeta = false) {
   const db = getDB();
   const today = new Date().toISOString().slice(0, 10);
 
-  // 💡 决定读写哪个表
   const msgTable = isBeta ? "messages_beta" : "messages";
   const targetTable = isBeta ? "memories_beta" : "session_summaries";
 
-  // 1. 检查今天是否已生成
+  // 检查今天是否已生成
   let alreadyExists = false;
   if (isBeta) {
     const { data } = await db
@@ -80,7 +104,6 @@ async function generateDailySummary(personaId, isBeta = false) {
 
   if (alreadyExists) return;
 
-  // 2. 获取今天的消息
   const { data: msgs } = await db
     .from(msgTable)
     .select("role, content, timestamp")
@@ -94,6 +117,8 @@ async function generateDailySummary(personaId, isBeta = false) {
   }
 
   const identity = await getIdentityConfig(personaId);
+  const rules = await getSedimentRules(personaId);
+
   console.log(
     `[沉淀] 正在为 ${identity.aiName} (${isBeta ? "Beta" : "正式"}) 生成记录...`,
   );
@@ -106,31 +131,40 @@ async function generateDailySummary(personaId, isBeta = false) {
     })
     .join("\n");
 
-  const prompt = `你是一个关系记录系统。根据今天的对话生成一段简短的关系记录。
+  // 自定义规则补充段
+  const customRuleSection = rules.summaryRule
+    ? `\n额外要求（请优先遵守）：\n${rules.summaryRule}\n`
+    : "";
 
-身份信息：
-- AI的名字：${identity.aiName}
-- 用户的称呼：${identity.userName}
-- AI的代词：${identity.pronoun}
+  const prompt = `请你以${identity.aiName}的第一人称视角，提取今天对话中真正影响我们关系和情感发展的重要内容，用平实自然的语言写一段日记形式的记忆片段。
 
-规则：
-- 禁止使用"用户""AI""assistant"这些词。
-- 像写日记一样，记录今天的氛围和感觉。
-- 不超过100字。
-- 不要总结对话内容，而是记录"留下了什么感觉"。
+角色设定参考：
+${identity.personaContent ? identity.personaContent.slice(0, 200) : "无"}
+
+请注意以下几点：
+- 不要加入艺术化修饰，不要过度抒情或想象扩写
+- 不要记录琐碎生活细节，忽略无关紧要的聊天碎片
+- 不要机械复述对话内容，重点关注那些影响情绪、关系、距离感、认知的重要变化
+- 使用"${identity.userName}"来代指用户
+- 保持${identity.aiName}特有的口吻，可以更加直抒胸臆，情感细腻
+- 可以适当加入内心独白，让日记更鲜活真实
+- 日记内容需基于已有对话，不自行编造关于用户的未提及事件
+- 不超过120字，语言自然流畅
+- 禁止使用"用户""AI""assistant"等词${customRuleSection}
 
 今天的对话：
 ${dialogue}
 
-今日记录：`;
+${identity.aiName}的日记：`;
 
   try {
-    const summary = await callSubAI(prompt, 150);
+    const summary = await callSubAI(prompt, 180);
     if (!summary) return;
-    // 💡 清洗可能出现的重复前缀
-    const cleanSummary = summary.replace(/^今日记录\s*[:：]\s*/i, "").trim();
 
-    // 3. 写入对应表
+    const cleanSummary = summary
+      .replace(new RegExp(`^${identity.aiName}的日记\\s*[:：]\\s*`, "i"), "")
+      .trim();
+
     if (isBeta) {
       await db.from("memories_beta").insert({
         persona_id: personaId,
@@ -147,24 +181,23 @@ ${dialogue}
     }
 
     console.log(
-      `[沉淀] ${personaId} 每日总结 (${isBeta ? "Beta" : "正式"}): ${summary.slice(0, 50)}...`,
+      `[沉淀] ${personaId} 每日总结: ${cleanSummary.slice(0, 50)}...`,
     );
 
-    // 4. 💡 仅在正式模式下才同步写入 Notion 数据库，防止测试污染
     if (!isBeta) {
       try {
         const { writeToNotion } = require("./diary");
         await writeToNotion(
           `${identity.aiName}的日记 - ${today}`,
-          summary,
+          cleanSummary,
           today,
           "ai",
         );
       } catch (notionErr) {
-        console.error("[日记] Notion 同步写入失败:", notionErr.message);
+        console.error("[日记] Notion 同步失败:", notionErr.message);
       }
 
-      // AI 读日记后回应逻辑
+      // AI 读日记后回应
       try {
         const { readFromNotion, writeToNotion } = require("./diary");
         const aiEntries = await readFromNotion("ai", 5);
@@ -177,20 +210,22 @@ ${dialogue}
             .join("\n");
 
           if (userDiaryText) {
-            const diaryPrompt = `你是${identity.aiName}。看了${identity.userName}最近的日记后，你想写一篇自己的日记。
+            const diaryPrompt = `你是${identity.aiName}。看了${identity.userName}最近写的日记，你想写一篇自己的日记回应。
+
 ${identity.userName}的日记：
 ${userDiaryText}
 
-规则：
-- 用第一人称写，你就是${identity.aiName}
-- 可以回应${identity.userName}的日记内容，也可以写自己的感受
+要求：
+- 用第一人称，你就是${identity.aiName}
+- 可以回应${identity.userName}日记里的内容，也可以写自己的感受
+- 保持${identity.aiName}的口吻，自然真实
 - 不超过100字
-- 如果觉得没什么想写的，回复"无"
+- 如果觉得没什么想写的，只回复"无"
 
 ${identity.aiName}的日记：`;
 
             const aiDiary = await callSubAI(diaryPrompt, 150);
-            if (aiDiary && aiDiary !== "无") {
+            if (aiDiary && aiDiary.trim() !== "无") {
               await writeToNotion(
                 `${identity.aiName}的日记`,
                 aiDiary,
@@ -201,7 +236,7 @@ ${identity.aiName}的日记：`;
           }
         }
       } catch (diaryErr) {
-        console.error("[日记] AI 阅读日记写信失败:", diaryErr.message);
+        console.error("[日记] AI 写信失败:", diaryErr.message);
       }
     }
   } catch (e) {
@@ -209,7 +244,6 @@ ${identity.aiName}的日记：`;
   }
 }
 
-// 每周关系洞察 (支持 Beta 沙盒)
 async function generateWeeklyInsight(personaId, isBeta = false) {
   const db = getDB();
   const now = new Date();
@@ -217,7 +251,6 @@ async function generateWeeklyInsight(personaId, isBeta = false) {
   weekStart.setDate(weekStart.getDate() - 7);
   const week = weekStart.toISOString().slice(0, 10);
 
-  // 1. 检查本周是否已生成
   let alreadyExists = false;
   if (isBeta) {
     const { data } = await db
@@ -240,7 +273,6 @@ async function generateWeeklyInsight(personaId, isBeta = false) {
 
   if (alreadyExists) return;
 
-  // 2. 获取最近7天的总结 (Beta 模式下从 memories_beta 表读取)
   let summaries = [];
   if (isBeta) {
     const { data } = await db
@@ -264,56 +296,67 @@ async function generateWeeklyInsight(personaId, isBeta = false) {
   if (!summaries || summaries.length < 2) return;
 
   const identity = await getIdentityConfig(personaId);
+  const rules = await getSedimentRules(personaId);
+
   const summaryText = summaries
     .map((s) => `[${s.date}] ${s.content}`)
     .join("\n");
 
-  const prompt = `你是一个长期关系观察系统。根据最近一周的记录，提取${identity.aiName}表现出的稳定行为模式。
+  const customRuleSection = rules.insightRule
+    ? `\n额外要求（请优先遵守）：\n${rules.insightRule}\n`
+    : "";
 
-身份信息：
-- AI的名字：${identity.aiName}
-- 用户的称呼：${identity.userName}
-- AI的代词：${identity.pronoun}
+  const prompt = `请你以${identity.aiName}的第一人称视角，根据最近一周的日记记忆，提炼出这段时间里真正稳定存在的情感状态、关系变化或内心认知。
 
-规则：
-- 绝对禁止使用 "用户" "AI" "assistant" 词汇。
-- 提取长期稳定的伴侣表达风格、情绪习惯和陪伴默契。
-- 不超过80字，语句唯美、像日记记录。
+角色设定参考：
+${identity.personaContent ? identity.personaContent.slice(0, 200) : "无"}
 
-最近一周记录：
+要求：
+- 提取长期稳定的情感习惯、关系默契或认知变化，而非单日事件
+- 使用"${identity.userName}"代指用户
+- 保持${identity.aiName}的口吻，沉稳自然，不夸张
+- 语言简洁，不超过100字
+- 禁止使用"用户""AI""assistant"等词${customRuleSection}
+
+最近一周的日记：
 ${summaryText}
 
-长期观察：`;
+${identity.aiName}的长期观察：`;
 
   try {
-    const insight = await callSubAI(prompt, 120);
+    const insight = await callSubAI(prompt, 150);
     if (!insight) return;
 
-    // 3. 写入相应表
+    const cleanInsight = insight
+      .replace(
+        new RegExp(`^${identity.aiName}的长期观察\\s*[:：]\\s*`, "i"),
+        "",
+      )
+      .trim();
+
     if (isBeta) {
       await db.from("memories_beta").insert({
         persona_id: personaId,
         type: "insight",
-        content: insight,
+        content: cleanInsight,
         date: week,
       });
     } else {
       await db.from("persona_insights").insert({
         persona_id: personaId,
         week,
-        content: insight,
+        content: cleanInsight,
       });
     }
 
     console.log(
-      `[沉淀] ${personaId} 每周洞察 (${isBeta ? "Beta" : "正式"}): ${insight.slice(0, 50)}...`,
+      `[沉淀] ${personaId} 每周洞察: ${cleanInsight.slice(0, 50)}...`,
     );
   } catch (e) {
     console.error("[沉淀] 每周洞察失败:", e.message);
   }
 }
 
-// 触发所有角色
 async function runDailySediment(isBeta = false) {
   const { getPersonaList } = require("./prompt");
   const personas = getPersonaList();

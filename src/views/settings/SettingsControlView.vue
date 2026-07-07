@@ -48,7 +48,6 @@
                     <textarea class="sgi-textarea" v-model="userPrompt" :placeholder="templateText" rows="8"></textarea>
                 </div>
             </div>
-
             <div class="btn-row">
                 <button class="action-btn primary" @click="save">保存偏好</button>
             </div>
@@ -57,93 +56,147 @@
                 <div v-if="showSaved" class="save-toast">已保存 ✓</div>
             </Transition>
 
-            <!-- 主题模式 -->
-            <div class="section-label-sm">显示</div>
+            <!-- 生成规则 -->
+            <div class="section-label-sm">生成规则</div>
+
             <div class="settings-group">
                 <div class="settings-group-item">
-                    <div class="sgi-label">主题模式</div>
+                    <div class="sgi-label">应用对象</div>
                     <div class="sgi-right">
-                        <span class="sgi-value">{{ themeLabels[themeMode] }}</span>
+                        <span class="sgi-value">{{ currentRulePersonaLabel }}</span>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                             stroke-linecap="round" class="sgi-arrow">
                             <path d="M9 18l6-6-6-6" />
                         </svg>
                     </div>
-                    <select class="sgi-select-hidden" v-model="themeMode" @change="saveTheme">
-                        <option value="auto">自动</option>
-                        <option value="light">亮色</option>
-                        <option value="dark">暗色</option>
+                    <select class="sgi-select-hidden" v-model="currentRulePersona" @change="onRulePersonaChange">
+                        <option value="global">全局通用</option>
+                        <option v-for="p in personas" :key="p.id" :value="p.id">
+                            {{ p.note || p.name }}
+                        </option>
                     </select>
                 </div>
-                <div class="settings-group-item">
+                <div v-if="currentRulePersona !== 'global'" class="settings-group-item">
                     <div class="sgi-label-wrap">
-                        <div class="sgi-label">聊天入口方式</div>
-                        <div class="sgi-desc">点击信息条时的跳转方式</div>
+                        <div class="sgi-label">使用全局规则</div>
+                        <div class="sgi-desc">关闭后可为该角色单独设置</div>
                     </div>
-                    <div class="sgi-right">
-                        <span class="sgi-value">{{ chatEntryMode === 'list' ? '列表' : '直接进入' }}</span>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" class="sgi-arrow">
-                            <path d="M9 18l6-6-6-6" />
-                        </svg>
-                    </div>
-                    <select class="sgi-select-hidden" v-model="chatEntryMode" @change="saveChatEntry">
-                        <option value="direct">直接进入</option>
-                        <option value="list">列表</option>
-                    </select>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="currentRuleUseGlobal" @change="onUseGlobalChange" />
+                        <span class="slider-sm"></span>
+                    </label>
                 </div>
             </div>
 
-            <!-- 自定义字体 -->
-            <div class="section-label-sm">字体</div>
-            <div class="settings-group">
-                <div class="settings-group-item">
-                    <div class="sgi-label">字体名称</div>
-                    <input class="sgi-input" v-model="customFontName" placeholder="字体名称" />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">字体 URL</div>
-                    <input class="sgi-input" v-model="customFontUrl" placeholder="https://..." />
-                </div>
-            </div>
-            <div class="btn-row">
-                <button class="action-btn ghost" @click="applyFont">应用字体</button>
-                <button class="action-btn ghost" @click="clearFont">恢复默认</button>
-            </div>
-
-            <!-- 自定义 CSS -->
-            <div class="section-label-sm">自定义 CSS</div>
-            <div class="settings-group">
+            <div v-if="currentRulePersona === 'global' || !currentRuleUseGlobal" class="settings-group">
                 <div class="settings-group-item col-item">
-                    <div class="sgi-label">注入 CSS</div>
-                    <textarea class="sgi-textarea" v-model="customCSS" placeholder="/* 在这里输入自定义 CSS */"
-                        rows="6"></textarea>
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">每日总结规则</div>
+                        <div class="sgi-desc">影响每日日记的生成风格</div>
+                    </div>
+                    <textarea class="sgi-textarea" v-model="currentSummaryRule"
+                        placeholder="例：语气更加内敛克制，不直接表达情感，多用环境细节暗示内心..." rows="4"></textarea>
+                </div>
+                <div class="settings-group-item col-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">长期洞察规则</div>
+                        <div class="sgi-desc">影响每周关系观察的生成风格</div>
+                    </div>
+                    <textarea class="sgi-textarea" v-model="currentInsightRule" placeholder="例：重点关注情绪距离的变化，而非具体事件..."
+                        rows="4"></textarea>
                 </div>
             </div>
-            <div class="btn-row">
-                <button class="action-btn primary" @click="applyCSS">应用</button>
-                <button class="action-btn ghost" @click="clearCSS">清除</button>
+
+            <div v-if="currentRulePersona === 'global' || !currentRuleUseGlobal" class="btn-row">
+                <button class="action-btn primary" @click="saveRule">保存规则</button>
+                <button class="action-btn ghost" @click="clearRule">清除</button>
             </div>
+
+            <Transition name="toast-fade">
+                <div v-if="showRuleSaved" class="save-toast">规则已保存 ✓</div>
+            </Transition>
 
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
 const outputPrefs = reactive({ actionDesc: false, splitSentence: false })
 const userPrompt = ref('')
 const templateText = ref('描述你希望 AI 以什么方式陪伴你...')
 const showSaved = ref(false)
-const themeMode = ref(localStorage.getItem('theme_mode') || 'auto')
-const chatEntryMode = ref(localStorage.getItem('chat_entry_mode') || 'direct')
-const customFontName = ref(localStorage.getItem('custom_font_name') || '')
-const customFontUrl = ref(localStorage.getItem('custom_font_url') || '')
-const customCSS = ref(localStorage.getItem('custom_css') || '')
+const showRuleSaved = ref(false)
 
-const themeLabels = { auto: '自动', light: '亮色', dark: '暗色' }
+// 生成规则
+const personas = ref([])
+const currentRulePersona = ref('global')
+const currentRuleUseGlobal = ref(true)
+const currentSummaryRule = ref('')
+const currentInsightRule = ref('')
+
+const currentRulePersonaLabel = computed(() => {
+    if (currentRulePersona.value === 'global') return '全局通用'
+    const p = personas.value.find(p => p.id === currentRulePersona.value)
+    return p ? (p.note || p.name) : '全局通用'
+})
+
+async function loadPersonas() {
+    try {
+        const res = await api('/api/prompts/personas')
+        const data = await res.json()
+        personas.value = data.personas || []
+    } catch { }
+}
+
+async function onRulePersonaChange() {
+    await loadRuleForCurrent()
+}
+
+async function onUseGlobalChange() {
+    if (currentRuleUseGlobal.value) {
+        await api(`/api/sediment-rules/${currentRulePersona.value}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ useGlobal: true, summaryRule: '', insightRule: '' })
+        })
+        await loadRuleForCurrent()
+    }
+}
+
+async function loadRuleForCurrent() {
+    try {
+        const res = await api(`/api/sediment-rules/${currentRulePersona.value}`)
+        const data = await res.json()
+        currentSummaryRule.value = data.summaryRule || ''
+        currentInsightRule.value = data.insightRule || ''
+        if (currentRulePersona.value !== 'global') {
+            currentRuleUseGlobal.value = data.useGlobal !== false && !data.isSpecific
+        }
+    } catch { }
+}
+
+async function saveRule() {
+    await api(`/api/sediment-rules/${currentRulePersona.value}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            summaryRule: currentSummaryRule.value,
+            insightRule: currentInsightRule.value,
+            useGlobal: false
+        })
+    })
+    showRuleSaved.value = true
+    setTimeout(() => { showRuleSaved.value = false }, 1500)
+}
+
+async function clearRule() {
+    currentSummaryRule.value = ''
+    currentInsightRule.value = ''
+    await saveRule()
+}
 
 function buildPrefText() {
     let text = userPrompt.value || ''
@@ -167,68 +220,6 @@ async function save() {
     setTimeout(() => { showSaved.value = false }, 1500)
 }
 
-function saveTheme() {
-    localStorage.setItem('theme_mode', themeMode.value)
-    window.dispatchEvent(new CustomEvent('theme-change', { detail: themeMode.value }))
-}
-
-function saveChatEntry() {
-    localStorage.setItem('chat_entry_mode', chatEntryMode.value)
-}
-
-function applyFont() {
-    if (!customFontName.value || !customFontUrl.value) return
-    localStorage.setItem('custom_font_name', customFontName.value)
-    localStorage.setItem('custom_font_url', customFontUrl.value)
-    const existing = document.getElementById('custom-font-style')
-    if (existing) existing.remove()
-    const style = document.createElement('style')
-    style.id = 'custom-font-style'
-    style.textContent = `
-        @font-face {
-            font-family: '${customFontName.value}';
-            src: url('${customFontUrl.value}') format('woff2'), url('${customFontUrl.value}');
-            font-display: swap;
-        }
-        html, body, #app, * {
-            font-family: '${customFontName.value}', -apple-system, BlinkMacSystemFont, sans-serif !important;
-        }
-    `
-    document.head.appendChild(style)
-    showSaved.value = true
-    setTimeout(() => { showSaved.value = false }, 1500)
-}
-
-function clearFont() {
-    localStorage.removeItem('custom_font_name')
-    localStorage.removeItem('custom_font_url')
-    customFontName.value = ''
-    customFontUrl.value = ''
-    const existing = document.getElementById('custom-font-style')
-    if (existing) existing.remove()
-}
-
-function applyCSS() {
-    localStorage.setItem('custom_css', customCSS.value)
-    const existing = document.getElementById('custom-user-css')
-    if (existing) existing.remove()
-    if (customCSS.value.trim()) {
-        const style = document.createElement('style')
-        style.id = 'custom-user-css'
-        style.textContent = customCSS.value
-        document.head.appendChild(style)
-    }
-    showSaved.value = true
-    setTimeout(() => { showSaved.value = false }, 1500)
-}
-
-function clearCSS() {
-    customCSS.value = ''
-    localStorage.removeItem('custom_css')
-    const existing = document.getElementById('custom-user-css')
-    if (existing) existing.remove()
-}
-
 onMounted(async () => {
     const savedPrefs = localStorage.getItem('output_prefs')
     if (savedPrefs) Object.assign(outputPrefs, JSON.parse(savedPrefs))
@@ -240,6 +231,9 @@ onMounted(async () => {
         userPrompt.value = idx > -1 ? content.slice(0, idx) : content
         templateText.value = data.template || templateText.value
     } catch { }
+
+    await loadPersonas()
+    await loadRuleForCurrent()
 })
 </script>
 
@@ -419,21 +413,6 @@ onMounted(async () => {
     stroke: #D4C8CA;
 }
 
-.sgi-input {
-    flex: 1;
-    border: none;
-    background: transparent;
-    outline: none;
-    font-size: 14px;
-    color: #4A3F41;
-    text-align: right;
-    font-family: inherit;
-}
-
-.sgi-input::placeholder {
-    color: #D4C8CA;
-}
-
 .sgi-select-hidden {
     position: absolute;
     opacity: 0;
@@ -458,6 +437,7 @@ onMounted(async () => {
     outline: none;
     line-height: 1.5;
     box-shadow: 0 4px 12px rgba(217, 163, 175, 0.06);
+    box-sizing: border-box;
 }
 
 .sgi-textarea::placeholder {

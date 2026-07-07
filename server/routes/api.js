@@ -1526,4 +1526,73 @@ router.get("/contact-groups", async (req, res) => {
   res.json(data || []);
 });
 
+// 获取生成规则
+router.get("/sediment-rules/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const personaId = req.params.personaId;
+
+  // 先查角色专属规则
+  const { data: specific } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", `sediment_rule_${personaId}`)
+    .limit(1);
+
+  if (specific && specific.length > 0) {
+    return res.json(JSON.parse(specific[0].value));
+  }
+
+  // 没有则返回全局规则
+  const { data: global } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "sediment_rule_global")
+    .limit(1);
+
+  if (global && global.length > 0) {
+    return res.json(JSON.parse(global[0].value));
+  }
+
+  res.json({ summaryRule: "", insightRule: "", useGlobal: true });
+});
+
+// 保存生成规则
+router.post("/sediment-rules/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const personaId = req.params.personaId;
+  const { summaryRule, insightRule, useGlobal } = req.body;
+
+  if (personaId === "global") {
+    await db.from("user_profile").upsert(
+      {
+        key: "sediment_rule_global",
+        value: JSON.stringify({ summaryRule, insightRule }),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+  } else {
+    if (useGlobal) {
+      // 删除角色专属规则，回退到全局
+      await db
+        .from("user_profile")
+        .delete()
+        .eq("key", `sediment_rule_${personaId}`);
+    } else {
+      await db.from("user_profile").upsert(
+        {
+          key: `sediment_rule_${personaId}`,
+          value: JSON.stringify({ summaryRule, insightRule }),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" },
+      );
+    }
+  }
+
+  res.json({ success: true });
+});
+
 module.exports = router;

@@ -1,36 +1,53 @@
 <template>
     <div class="worldbook-page">
-        <div class="worldbook-header">
+        <!-- 顶部 -->
+        <div class="wb-header">
             <button class="back-btn" @click="$router.push('/')">‹</button>
-            <h2>世界书</h2>
-            <div class="header-actions">
-                <button class="header-btn" @click="toggleSelectMode" :class="{ active: selectMode }">✓</button>
-                <button class="header-btn" @click="showAdd = true">+</button>
+            <div class="wb-header-title">
+                <span class="wb-title">世界书</span>
+                <span class="wb-subtitle">World Book</span>
+            </div>
+            <div class="wb-header-actions">
+                <button class="wb-icon-btn" :class="{ active: selectMode }" @click="toggleSelectMode">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                </button>
+                <button class="wb-icon-btn" @click="showAdd = true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
+                </button>
             </div>
         </div>
 
         <!-- 注入位置说明 -->
-        <div class="guide-section" v-if="showGuide">
-            <GlassCard size="sm" class="guide-card">
-                <p class="guide-title" @click="showGuide = false">注入位置说明 ▾</p>
-                <div class="guide-list">
-                    <p><strong>最高覆盖</strong> — 绝对核心，强规则、安全限制、禁止事项</p>
-                    <p><strong>角色前</strong> — 世界观、背景设定、环境规则</p>
-                    <p><strong>角色后</strong> — 补充设定、关系状态、临时人格偏移</p>
-                    <p><strong>用户输入前</strong> — 权重低，像"参考资料"，适合关键词触发</p>
-                    <p><strong>尾部临时层</strong> — 最低优先级，当前状态、一次性提醒</p>
-                </div>
-            </GlassCard>
+        <div class="guide-toggle" @click="showGuide = !showGuide">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" />
+            </svg>
+            <span>注入位置说明</span>
+            <svg class="guide-chevron" :class="{ open: showGuide }" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M6 9l6 6 6-6" />
+            </svg>
         </div>
-        <div class="guide-toggle" v-else @click="showGuide = true">
-            <span>注入位置说明 ▸</span>
+        <div v-if="showGuide" class="guide-panel">
+            <div v-for="g in guideItems" :key="g.label" class="guide-item">
+                <div class="guide-dot" :style="{ background: g.color }"></div>
+                <div>
+                    <span class="guide-label">{{ g.label }}</span>
+                    <span class="guide-desc">{{ g.desc }}</span>
+                </div>
+            </div>
         </div>
 
         <!-- 分类筛选 -->
         <div v-if="existingCategories.length > 0" class="category-filter">
-            <button class="filter-btn" :class="{ active: filterCategory === '' }"
+            <button class="filter-chip" :class="{ active: filterCategory === '' }"
                 @click="filterCategory = ''">全部</button>
-            <button v-for="cat in existingCategories" :key="cat" class="filter-btn"
+            <button v-for="cat in existingCategories" :key="cat" class="filter-chip"
                 :class="{ active: filterCategory === cat }" @click="filterCategory = cat">
                 {{ cat }}
             </button>
@@ -38,41 +55,54 @@
 
         <!-- 批量操作栏 -->
         <div v-if="selectMode && selectedBooks.length > 0" class="batch-bar">
-            <SoftButton variant="glass" size="sm" @click="selectAll">全选</SoftButton>
-            <SoftButton variant="primary" size="sm" @click="showBindModal = true">绑定</SoftButton>
-            <SoftButton variant="glass" size="sm" @click="showCategoryModal = true">分类</SoftButton>
+            <button class="batch-btn" @click="selectAll">{{ selectedBooks.length === filteredBooks.length ? '取消全选' :
+                '全选' }}</button>
+            <button class="batch-btn batch-btn-primary" @click="showBindModal = true">绑定</button>
+            <button class="batch-btn" @click="showCategoryModal = true">分类</button>
             <span class="batch-count">已选 {{ selectedBooks.length }}</span>
         </div>
 
-        <div class="worldbook-list">
-            <GlassCard v-for="book in filteredBooks" :key="book.id" size="md" class="book-card"
+        <!-- 列表 -->
+        <div class="wb-list">
+            <div v-for="book in filteredBooks" :key="book.id" class="wb-card"
                 @click="selectMode ? toggleSelect(book.id) : editBook(book)">
-                <div class="book-row">
-                    <div v-if="selectMode" class="book-checkbox" :class="{ checked: selectedBooks.includes(book.id) }">
-                        <span v-if="selectedBooks.includes(book.id)">✓</span>
+                <div class="wb-card-left">
+                    <div v-if="selectMode" class="wb-checkbox" :class="{ checked: selectedBooks.includes(book.id) }">
+                        <svg v-if="selectedBooks.includes(book.id)" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <path d="M20 6L9 17l-5-5" />
+                        </svg>
                     </div>
-                    <label class="book-toggle" @click.stop>
+                    <label class="wb-toggle" @click.stop>
                         <input type="checkbox" :checked="book.enabled !== false"
                             @change="toggleBook(book.id, $event.target.checked)" />
-                        <span class="toggle-dot-sm"></span>
+                        <span class="wb-toggle-track">
+                            <span class="wb-toggle-thumb"></span>
+                        </span>
                     </label>
-                    <div class="book-info">
-                        <p class="book-title">{{ book.title }}</p>
-                        <div class="book-meta">
-                            <GlassTag :variant="positionColor(book.position)" size="sm">{{ positionLabel(book.position)
-                                }}</GlassTag>
-                            <GlassTag v-if="book.keyword_enabled" variant="warm" size="sm">关键词</GlassTag>
-                            <GlassTag v-if="book.category" variant="default" size="sm">{{ book.category }}</GlassTag>
-                            <GlassTag v-if="book.enabled === false" variant="default" size="sm">已关闭</GlassTag>
-                        </div>
-                    </div>
-                    <button class="delete-btn" @click.stop="deleteBook(book.id)">×</button>
                 </div>
-            </GlassCard>
+                <div class="wb-card-body">
+                    <div class="wb-card-title-row">
+                        <span class="wb-card-title">{{ book.title }}</span>
+                        <button class="wb-delete-btn" @click.stop="deleteBook(book.id)">×</button>
+                    </div>
+                    <div class="wb-tags">
+                        <span class="wb-tag" :class="'wb-tag-' + positionColor(book.position)">
+                            {{ positionLabel(book.position) }}
+                        </span>
+                        <span v-if="book.keyword_enabled" class="wb-tag wb-tag-warm">关键词</span>
+                        <span v-if="book.category" class="wb-tag wb-tag-default">{{ book.category }}</span>
+                        <span v-if="book.enabled === false" class="wb-tag wb-tag-off">已关闭</span>
+                    </div>
+                </div>
+            </div>
 
-            <div v-if="filteredBooks.length === 0" class="empty-area">
-                <p class="empty-icon">📖</p>
-                <p class="empty-text">还没有世界书</p>
+            <div v-if="filteredBooks.length === 0" class="wb-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#D4C8CA" stroke-width="1.2" stroke-linecap="round">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                <p>还没有世界书</p>
             </div>
         </div>
 
@@ -93,20 +123,35 @@
             <div class="form-row">
                 <label class="form-label">关键词触发</label>
                 <div class="keyword-row">
-                    <label class="toggle-mini">
+                    <label class="wb-toggle">
                         <input type="checkbox" v-model="bookForm.keyword_enabled" />
-                        <span class="toggle-dot"></span>
+                        <span class="wb-toggle-track">
+                            <span class="wb-toggle-thumb"></span>
+                        </span>
                     </label>
                     <DreamInput v-if="bookForm.keyword_enabled" v-model="bookForm.keywords" placeholder="关键词，用逗号分隔" />
                 </div>
             </div>
             <DreamInput label="内容" type="textarea" v-model="bookForm.content" :rows="8"
                 placeholder="世界观设定、背景信息、规则..." />
+
+            <!-- 导入区域 -->
             <div class="import-area">
-                <SoftButton variant="ghost" size="sm" @click="fileInput?.click()">从文件导入</SoftButton>
-                <input ref="fileInput" type="file" accept=".txt,.md,.json,.doc,.docx" style="display:none"
+                <button class="import-btn" @click="fileInput?.click()" :disabled="importing">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    {{ importing ? '导入中...' : '从文件导入' }}
+                </button>
+                <span class="import-hint">支持 txt · md · json · docx</span>
+                <input ref="fileInput" type="file" accept=".txt,.md,.json,.docx" style="display:none"
                     @change="handleFileImport" />
             </div>
+            <div v-if="importError" class="import-error">{{ importError }}</div>
+
             <div class="modal-actions">
                 <SoftButton variant="secondary" @click="closeModal">取消</SoftButton>
                 <SoftButton variant="primary" @click="saveBook">保存</SoftButton>
@@ -117,17 +162,20 @@
         <BlurModal :visible="showBindModal" @close="showBindModal = false">
             <h3>绑定世界书</h3>
             <div class="bind-option" :class="{ active: bindType === 'global' }" @click="bindType = 'global'">
-                <p>全局绑定</p>
+                <p class="bind-title">全局绑定</p>
                 <span class="bind-desc">所有角色都会加载</span>
             </div>
             <div class="bind-option" :class="{ active: bindType === 'specific' }" @click="bindType = 'specific'">
-                <p>绑定特定角色</p>
+                <p class="bind-title">绑定特定角色</p>
                 <span class="bind-desc">只有选中的角色会加载</span>
             </div>
             <div v-if="bindType === 'specific'" class="persona-select">
                 <div v-for="p in personas" :key="p.id" class="persona-check" @click="toggleBindPersona(p.id)">
-                    <div class="check-box" :class="{ checked: bindPersonas.includes(p.id) }">
-                        <span v-if="bindPersonas.includes(p.id)">✓</span>
+                    <div class="wb-checkbox" :class="{ checked: bindPersonas.includes(p.id) }">
+                        <svg v-if="bindPersonas.includes(p.id)" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round">
+                            <path d="M20 6L9 17l-5-5" />
+                        </svg>
                     </div>
                     <span>{{ p.name }}</span>
                 </div>
@@ -142,11 +190,11 @@
         <BlurModal :visible="showCategoryModal" @close="showCategoryModal = false">
             <h3>设置分类</h3>
             <DreamInput v-model="newCategory" placeholder="输入分类名称" />
-            <div v-if="existingCategories.length > 0" class="category-list">
-                <p class="list-label">已有分类：</p>
-                <div v-for="cat in existingCategories" :key="cat" class="category-item" @click="newCategory = cat">
+            <div v-if="existingCategories.length > 0" class="category-chips">
+                <button v-for="cat in existingCategories" :key="cat" class="filter-chip"
+                    :class="{ active: newCategory === cat }" @click="newCategory = cat">
                     {{ cat }}
-                </div>
+                </button>
             </div>
             <div class="modal-actions">
                 <SoftButton variant="secondary" @click="showCategoryModal = false">取消</SoftButton>
@@ -159,8 +207,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '@/utils/api'
-import GlassCard from '@/components/ui/GlassCard.vue'
-import GlassTag from '@/components/ui/GlassTag.vue'
 import SoftButton from '@/components/ui/SoftButton.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
 import BlurModal from '@/components/ui/BlurModal.vue'
@@ -179,6 +225,16 @@ const fileInput = ref(null)
 const showCategoryModal = ref(false)
 const newCategory = ref('')
 const filterCategory = ref('')
+const importing = ref(false)
+const importError = ref('')
+
+const guideItems = [
+    { label: '最高覆盖', desc: '绝对核心，强规则、安全限制、禁止事项', color: '#E8C0C9' },
+    { label: '角色前', desc: '世界观、背景设定、环境规则', color: '#D8CDEA' },
+    { label: '角色后', desc: '补充设定、关系状态、临时人格偏移', color: '#F5EAD0' },
+    { label: '用户输入前', desc: '权重低，像"参考资料"，适合关键词触发', color: '#D8EDF7' },
+    { label: '尾部临时层', desc: '最低优先级，当前状态、一次性提醒', color: '#E8E8E8' },
+]
 
 const existingCategories = computed(() => {
     const cats = new Set(books.value.map(b => b.category).filter(Boolean))
@@ -189,33 +245,6 @@ const filteredBooks = computed(() => {
     if (!filterCategory.value) return books.value
     return books.value.filter(b => b.category === filterCategory.value)
 })
-
-async function toggleBook(id, enabled) {
-    await api(`/api/worldbooks/${id}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-    })
-    const book = books.value.find(b => b.id === id)
-    if (book) book.enabled = enabled
-}
-
-async function applyCategory() {
-    if (!newCategory.value.trim()) return
-    await api('/api/worldbooks/categorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            bookIds: selectedBooks.value,
-            category: newCategory.value.trim()
-        })
-    })
-    showCategoryModal.value = false
-    newCategory.value = ''
-    selectMode.value = false
-    selectedBooks.value = []
-    await loadBooks()
-}
 
 const bookForm = reactive({
     title: '',
@@ -231,7 +260,7 @@ function positionLabel(pos) {
 }
 
 function positionColor(pos) {
-    const map = { override: 'pink', before_char: 'purple', after_char: 'warm', before_user: 'default', tail: 'soft' }
+    const map = { override: 'pink', before_char: 'purple', after_char: 'warm', before_user: 'blue', tail: 'default' }
     return map[pos] || 'default'
 }
 
@@ -292,6 +321,7 @@ function closeModal() {
     bookForm.position = 'before_char'
     bookForm.keywords = ''
     bookForm.keyword_enabled = false
+    importError.value = ''
 }
 
 function toggleSelectMode() {
@@ -306,10 +336,10 @@ function toggleSelect(id) {
 }
 
 function selectAll() {
-    if (selectedBooks.value.length === books.value.length) {
+    if (selectedBooks.value.length === filteredBooks.value.length) {
         selectedBooks.value = []
     } else {
-        selectedBooks.value = books.value.map(b => b.id)
+        selectedBooks.value = filteredBooks.value.map(b => b.id)
     }
 }
 
@@ -317,6 +347,16 @@ function toggleBindPersona(id) {
     const idx = bindPersonas.value.indexOf(id)
     if (idx > -1) bindPersonas.value.splice(idx, 1)
     else bindPersonas.value.push(id)
+}
+
+async function toggleBook(id, enabled) {
+    await api(`/api/worldbooks/${id}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+    })
+    const book = books.value.find(b => b.id === id)
+    if (book) book.enabled = enabled
 }
 
 async function applyBind() {
@@ -335,14 +375,116 @@ async function applyBind() {
     await loadBooks()
 }
 
+async function applyCategory() {
+    if (!newCategory.value.trim()) return
+    await api('/api/worldbooks/categorize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            bookIds: selectedBooks.value,
+            category: newCategory.value.trim()
+        })
+    })
+    showCategoryModal.value = false
+    newCategory.value = ''
+    selectMode.value = false
+    selectedBooks.value = []
+    await loadBooks()
+}
+
+// ===== 文件导入（兼容 GBK 编码 + docx）=====
 async function handleFileImport(event) {
     const file = event.target.files[0]
     if (!file) return
+
+    importing.value = true
+    importError.value = ''
+
+    // 重置 input，允许重复选同一个文件
+    event.target.value = ''
+
     try {
-        const text = await file.text()
-        if (!bookForm.title) bookForm.title = file.name.replace(/\.[^.]+$/, '')
+        const ext = file.name.split('.').pop().toLowerCase()
+
+        if (ext === 'docx') {
+            await importDocx(file)
+        } else if (ext === 'json') {
+            await importJson(file)
+        } else {
+            // txt / md：先尝试 UTF-8，失败则用 GBK
+            await importText(file)
+        }
+
+        if (!bookForm.title) {
+            bookForm.title = file.name.replace(/\.[^.]+$/, '')
+        }
+    } catch (e) {
+        importError.value = `导入失败：${e.message}`
+    } finally {
+        importing.value = false
+    }
+}
+
+async function importText(file) {
+    // 先用 UTF-8 读
+    const utfText = await readAsText(file, 'UTF-8')
+
+    // 检测乱码：UTF-8 正常的中文不会出现大量替换字符
+    const hasGarbled = (utfText.match(/\uFFFD/g) || []).length > 5
+
+    if (hasGarbled) {
+        // 回退到 GBK
+        try {
+            const gbkText = await readAsText(file, 'GBK')
+            bookForm.content = gbkText
+        } catch {
+            // GBK 也失败就用 UTF-8 结果
+            bookForm.content = utfText
+        }
+    } else {
+        bookForm.content = utfText
+    }
+}
+
+function readAsText(file, encoding) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = () => reject(new Error(`读取文件失败（${encoding}）`))
+        reader.readAsText(file, encoding)
+    })
+}
+
+async function importDocx(file) {
+    // 动态加载 mammoth，不影响首屏体积
+    const mammoth = await import('mammoth')
+    const arrayBuffer = await file.arrayBuffer()
+    const result = await mammoth.extractRawText({ arrayBuffer })
+    if (result.messages?.length) {
+        console.warn('mammoth warnings:', result.messages)
+    }
+    bookForm.content = result.value.trim()
+}
+
+async function importJson(file) {
+    const text = await readAsText(file, 'UTF-8')
+    try {
+        const obj = JSON.parse(text)
+        // 如果是数组或对象，格式化后导入；如果有 content 字段直接用
+        if (typeof obj === 'object' && obj !== null) {
+            if (typeof obj.content === 'string') {
+                bookForm.content = obj.content
+                if (obj.title && !bookForm.title) bookForm.title = obj.title
+            } else {
+                bookForm.content = JSON.stringify(obj, null, 2)
+            }
+        } else {
+            bookForm.content = text
+        }
+    } catch {
+        // 不是合法 JSON，当纯文本处理
         bookForm.content = text
-    } catch { }
+    }
 }
 
 onMounted(() => {
@@ -360,7 +502,8 @@ onMounted(() => {
     overflow-x: hidden;
 }
 
-.worldbook-header {
+/* 头部 */
+.wb-header {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -378,71 +521,148 @@ onMounted(() => {
     opacity: 0.75;
 }
 
-.worldbook-header h2 {
+.wb-header-title {
     flex: 1;
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--color-text);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
 }
 
-.header-actions {
+.wb-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: #4A3F41;
+    letter-spacing: 0.3px;
+}
+
+.wb-subtitle {
+    font-size: 11px;
+    color: #B8A9AC;
+    font-weight: 400;
+    letter-spacing: 1.5px;
+}
+
+.wb-header-actions {
     display: flex;
     gap: 8px;
 }
 
-.header-btn {
+.wb-icon-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
-    font-size: 18px;
-    color: var(--color-primary);
+    border-radius: 10px;
     cursor: pointer;
-    opacity: 0.6;
-    padding: 4px 8px;
-    border-radius: 8px;
+    color: #B8A9AC;
     transition: all 0.2s;
 }
 
-.header-btn.active {
-    opacity: 1;
-    background: rgba(212, 137, 158, 0.1);
+.wb-icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.wb-icon-btn.active {
+    background: rgba(217, 163, 175, 0.15);
+    color: #D9A3AF;
 }
 
 /* 说明区 */
-.guide-section {
-    padding: 10px 0;
-}
-
-.guide-card {
-    padding: 12px 14px !important;
-}
-
-.guide-title {
-    font-size: 11px;
-    color: var(--color-primary);
-    cursor: pointer;
-    margin-bottom: 8px;
-}
-
-.guide-list p {
-    font-size: 11px;
-    color: var(--color-text-light);
-    line-height: 1.8;
-}
-
-.guide-list strong {
-    color: var(--color-text);
-    font-weight: 500;
-}
-
 .guide-toggle {
-    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0;
     cursor: pointer;
+    color: #B8A9AC;
+    font-size: 12px;
+    flex-shrink: 0;
 }
 
-.guide-toggle span {
+.guide-toggle svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.guide-chevron {
+    margin-left: auto;
+    transition: transform 0.2s;
+}
+
+.guide-chevron.open {
+    transform: rotate(180deg);
+}
+
+.guide-panel {
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 16px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    flex-shrink: 0;
+}
+
+.guide-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 6px 0;
+}
+
+.guide-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.guide-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #4A3F41;
+    margin-right: 6px;
+}
+
+.guide-desc {
     font-size: 11px;
-    color: var(--color-primary);
-    opacity: 0.6;
+    color: #B8A9AC;
+}
+
+/* 分类筛选 */
+.category-filter {
+    display: flex;
+    gap: 6px;
+    padding: 8px 0;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.category-filter::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-chip {
+    padding: 5px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
+    background: none;
+    font-size: 11px;
+    color: #B8A9AC;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.filter-chip.active {
+    background: rgba(217, 163, 175, 0.15);
+    color: #D9A3AF;
+    border-color: rgba(217, 163, 175, 0.4);
 }
 
 /* 批量操作栏 */
@@ -451,77 +671,225 @@ onMounted(() => {
     align-items: center;
     gap: 8px;
     padding: 10px 0;
+    flex-shrink: 0;
+}
+
+.batch-btn {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    color: #6B5B5E;
+    cursor: pointer;
+}
+
+.batch-btn-primary {
+    background: rgba(217, 163, 175, 0.15);
+    border-color: rgba(217, 163, 175, 0.4);
+    color: #D9A3AF;
 }
 
 .batch-count {
     font-size: 11px;
-    color: var(--color-text-light);
+    color: #B8A9AC;
     margin-left: auto;
 }
 
 /* 列表 */
-.worldbook-list {
+.wb-list {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 0;
+    padding: 8px 0;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
 }
 
-.book-card {
-    margin-bottom: 10px;
-    cursor: pointer;
-}
-
-.book-row {
+.wb-card {
     display: flex;
     align-items: center;
     gap: 12px;
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 18px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.book-checkbox {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    border: 1.5px solid var(--color-border);
+.wb-card:active {
+    transform: scale(0.98);
+}
+
+.wb-card-left {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    color: white;
+    gap: 10px;
     flex-shrink: 0;
-    transition: all 0.2s;
 }
 
-.book-checkbox.checked {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
-}
-
-.book-info {
+.wb-card-body {
     flex: 1;
+    min-width: 0;
 }
 
-.book-title {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-text);
+.wb-card-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 6px;
 }
 
-.book-meta {
+.wb-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #4A3F41;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.wb-delete-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: #B8A9AC;
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 0 4px;
+    flex-shrink: 0;
+}
+
+/* 标签 */
+.wb-tags {
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
 }
 
-.delete-btn {
-    background: none;
-    border: none;
-    font-size: 18px;
-    color: var(--color-text-light);
+.wb-tag {
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.wb-tag-pink {
+    background: rgba(232, 192, 201, 0.25);
+    color: #D9A3AF;
+}
+
+.wb-tag-purple {
+    background: rgba(216, 205, 234, 0.35);
+    color: #9B89B4;
+}
+
+.wb-tag-warm {
+    background: rgba(245, 234, 208, 0.5);
+    color: #B8965A;
+}
+
+.wb-tag-blue {
+    background: rgba(216, 237, 247, 0.5);
+    color: #6BAED6;
+}
+
+.wb-tag-default {
+    background: rgba(180, 170, 172, 0.15);
+    color: #8A7A7D;
+}
+
+.wb-tag-off {
+    background: rgba(180, 170, 172, 0.1);
+    color: #B8A9AC;
+}
+
+/* 开关 */
+.wb-toggle {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    flex-shrink: 0;
     cursor: pointer;
-    opacity: 0.4;
-    padding: 4px;
+}
+
+.wb-toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.wb-toggle-track {
+    position: absolute;
+    inset: 0;
+    background: rgba(180, 170, 172, 0.25);
+    border-radius: 20px;
+    transition: background 0.25s;
+}
+
+.wb-toggle input:checked~.wb-toggle-track {
+    background: #D9A3AF;
+}
+
+.wb-toggle-thumb {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 50%;
+    top: 3px;
+    left: 3px;
+    transition: transform 0.25s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.wb-toggle input:checked~.wb-toggle-track .wb-toggle-thumb {
+    transform: translateX(14px);
+}
+
+/* 勾选框 */
+.wb-checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 1.5px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+}
+
+.wb-checkbox svg {
+    width: 13px;
+    height: 13px;
+}
+
+.wb-checkbox.checked {
+    background: #D9A3AF;
+    border-color: #D9A3AF;
+    color: white;
+}
+
+/* 空状态 */
+.wb-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: #D4C8CA;
+}
+
+.wb-empty svg {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 12px;
+}
+
+.wb-empty p {
+    font-size: 13px;
+    color: #B8A9AC;
 }
 
 /* 弹窗内 */
@@ -532,7 +900,7 @@ onMounted(() => {
 .form-label {
     display: block;
     font-size: 11px;
-    color: var(--color-text-light);
+    color: #B8A9AC;
     margin-bottom: 6px;
 }
 
@@ -556,67 +924,58 @@ onMounted(() => {
     gap: 10px;
 }
 
-.toggle-mini {
-    position: relative;
-    width: 36px;
-    height: 20px;
-    flex-shrink: 0;
-}
-
-.toggle-mini input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.toggle-dot {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--color-bg-secondary);
-    border-radius: 20px;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-.toggle-dot:before {
-    content: "";
-    position: absolute;
-    height: 14px;
-    width: 14px;
-    left: 3px;
-    bottom: 3px;
-    background: white;
-    border-radius: 50%;
-    transition: 0.3s;
-}
-
-.toggle-mini input:checked+.toggle-dot {
-    background: var(--color-primary);
-}
-
-.toggle-mini input:checked+.toggle-dot:before {
-    transform: translateX(16px);
-}
-
 .import-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--color-border);
 }
 
-.modal-actions {
+.import-btn {
     display: flex;
-    gap: 10px;
-    margin-top: 16px;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    color: #6B5B5E;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.import-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.import-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.import-hint {
+    font-size: 11px;
+    color: #B8A9AC;
+}
+
+.import-error {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #E8A0A0;
+    padding: 8px 12px;
+    background: rgba(232, 160, 160, 0.08);
+    border-radius: 8px;
 }
 
 /* 绑定弹窗 */
 .bind-option {
     padding: 14px;
-    border-radius: 12px;
+    border-radius: 14px;
     border: 1px solid var(--color-border);
     margin-bottom: 8px;
     cursor: pointer;
@@ -626,18 +985,20 @@ onMounted(() => {
 
 .bind-option.active {
     opacity: 1;
-    border-color: var(--color-primary);
-    background: rgba(212, 137, 158, 0.04);
+    border-color: rgba(217, 163, 175, 0.5);
+    background: rgba(217, 163, 175, 0.06);
 }
 
-.bind-option p {
+.bind-title {
     font-size: 14px;
+    font-weight: 500;
     color: var(--color-text);
+    margin-bottom: 2px;
 }
 
 .bind-desc {
     font-size: 11px;
-    color: var(--color-text-light);
+    color: #B8A9AC;
 }
 
 .persona-select {
@@ -652,126 +1013,24 @@ onMounted(() => {
     cursor: pointer;
     font-size: 14px;
     color: var(--color-text);
+    border-bottom: 1px solid var(--color-border);
 }
 
-.check-box {
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
-    border: 1.5px solid var(--color-border);
+.persona-check:last-child {
+    border-bottom: none;
+}
+
+/* 分类弹窗 */
+.category-chips {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    color: white;
-}
-
-.check-box.checked {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
-}
-
-/* 空状态 */
-.empty-area {
-    text-align: center;
-    padding: 48px 20px;
-}
-
-.empty-icon {
-    font-size: 28px;
-    margin-bottom: 10px;
-}
-
-.empty-text {
-    font-size: 13px;
-    color: var(--color-text-light);
-    opacity: 0.5;
-}
-
-.book-toggle {
-    position: relative;
-    width: 32px;
-    height: 18px;
-    flex-shrink: 0;
-}
-
-.book-toggle input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.toggle-dot-sm {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--color-bg-secondary);
-    border-radius: 18px;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-.toggle-dot-sm:before {
-    content: "";
-    position: absolute;
-    height: 14px;
-    width: 14px;
-    left: 2px;
-    bottom: 2px;
-    background: white;
-    border-radius: 50%;
-    transition: 0.3s;
-}
-
-.book-toggle input:checked+.toggle-dot-sm {
-    background: var(--color-primary);
-}
-
-.book-toggle input:checked+.toggle-dot-sm:before {
-    transform: translateX(14px);
-}
-
-.category-filter {
-    display: flex;
+    flex-wrap: wrap;
     gap: 6px;
-    padding: 8px 0;
-    overflow-x: auto;
-    flex-shrink: 0;
-}
-
-.filter-btn {
-    padding: 5px 12px;
-    border-radius: 14px;
-    border: 1px solid var(--color-border);
-    background: none;
-    font-size: 11px;
-    color: var(--color-text-light);
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.filter-btn.active {
-    background: var(--color-card);
-    color: var(--color-text);
-    border-color: var(--color-primary);
-}
-
-.category-list {
     margin-top: 10px;
 }
 
-.category-item {
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    color: var(--color-text);
-    cursor: pointer;
-    margin-bottom: 4px;
-}
-
-.category-item:active {
-    background: rgba(212, 137, 158, 0.06);
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
 }
 </style>
