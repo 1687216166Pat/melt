@@ -958,53 +958,60 @@
             <span :class="{ active: currentPage === 2 }"></span>
         </div>
 
-        <!-- 底部 Dock：100% 水平对齐与安全区适配 -->
-        <!-- 底部悬浮 Dock -->
+        <!-- 底部 Dock -->
         <div class="dock-bar-v8">
             <div class="dock-item-v8" :class="{ active: currentPage === 0 }" @click="currentPage = 0">
                 <div class="dock-icon-box">
-                    <svg v-if="currentPage === 0" viewBox="0 0 24 24" fill="none" stroke="#D9A3AF" stroke-width="1.8"
-                        stroke-linecap="round">
-                        <path d="M12 21c-4.5-4-9-7.5-9-12a9 9 0 0 1 18 0c0 4.5-4.5 8-9 12z"
-                            fill="rgba(217,163,175,0.15)" />
-                        <circle cx="12" cy="9" r="2.5" />
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="#B8A9AC" stroke-width="1.8"
-                        stroke-linecap="round">
-                        <path d="M12 21c-4.5-4-9-7.5-9-12a9 9 0 0 1 18 0c0 4.5-4.5 8-9 12z" />
-                        <circle cx="12" cy="9" r="2.5" />
-                    </svg>
+                    <img v-if="customIcons.dock_habitat" :src="customIcons.dock_habitat" class="dock-custom-icon" />
+                    <template v-else>
+                        <svg v-if="currentPage === 0" viewBox="0 0 24 24" fill="none" stroke="#D9A3AF"
+                            stroke-width="1.8" stroke-linecap="round">
+                            <path d="M12 21c-4.5-4-9-7.5-9-12a9 9 0 0 1 18 0c0 4.5-4.5 8-9 12z"
+                                fill="rgba(217,163,175,0.15)" />
+                            <circle cx="12" cy="9" r="2.5" />
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="#B8A9AC" stroke-width="1.8"
+                            stroke-linecap="round">
+                            <path d="M12 21c-4.5-4-9-7.5-9-12a9 9 0 0 1 18 0c0 4.5-4.5 8-9 12z" />
+                            <circle cx="12" cy="9" r="2.5" />
+                        </svg>
+                    </template>
                 </div>
                 <span>共栖</span>
             </div>
             <div class="dock-item-v8" :class="{ active: currentPage === 1 }" @click="currentPage = 1">
                 <div class="dock-icon-box">
-                    <svg v-if="currentPage === 1" viewBox="0 0 24 24" fill="#D9A3AF">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" fill="white" />
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="#B8A9AC" stroke-width="1.8"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                        <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
+                    <img v-if="customIcons.dock_home" :src="customIcons.dock_home" class="dock-custom-icon" />
+                    <template v-else>
+                        <svg v-if="currentPage === 1" viewBox="0 0 24 24" fill="#D9A3AF">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                            <polyline points="9 22 9 12 15 12 15 22" fill="white" />
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="#B8A9AC" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                            <polyline points="9 22 9 12 15 12 15 22" />
+                        </svg>
+                    </template>
                 </div>
                 <span>小窝</span>
             </div>
-            <div class="dock-item-v8" :class="{ active: currentPage === 2 }" @click="currentPage = 2">
+            <div class="dock-item-v8" :class="{ active: currentPage === 2 }" @click="goToEchoes">
                 <div class="dock-icon-box">
-                    <svg v-if="currentPage === 2" viewBox="0 0 24 24" fill="#D9A3AF">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="#B8A9AC" stroke-width="1.8"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
+                    <img v-if="customIcons.dock_echoes" :src="customIcons.dock_echoes" class="dock-custom-icon" />
+                    <template v-else>
+                        <svg v-if="currentPage === 2" viewBox="0 0 24 24" fill="#D9A3AF">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="#B8A9AC" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                    </template>
                 </div>
                 <span>共语</span>
             </div>
         </div>
-
 
         <!-- 复原：所有弹窗组件 -->
         <BlurModal :visible="showDaysEdit" @close="showDaysEdit = false">
@@ -1676,6 +1683,16 @@ function removeCard(idx) {
 function openChat() { router.push(`/chat/${currentAi.value.personaId || 'xiaorou'}`) }
 function openCompanionSpace() { router.push('/about') }
 function openPhone() { alert('正在呼叫...') }
+
+function goToEchoes() {
+    const mode = localStorage.getItem('chat_entry_mode') || 'direct'
+    if (mode === 'direct') {
+        const pid = currentAi.value.personaId || 'xiaorou'
+        router.push(`/chat/${pid}?from=echoes`)
+    } else {
+        currentPage.value = 2
+    }
+}
 
 // ===== 日历 =====
 function prevMonth() {
@@ -3310,6 +3327,13 @@ onMounted(async () => {
 .dock-item-v8.active span {
     color: #D9A3AF;
     font-weight: 600;
+}
+
+.dock-custom-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    object-fit: cover;
 }
 
 /* ==========================================================================

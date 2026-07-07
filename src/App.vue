@@ -1,7 +1,7 @@
 <template>
     <SplashScreen v-if="showSplash" @done="onSplashDone" />
     <transition name="main-enter">
-        <div v-show="!showSplash" class="phone-screen" :class="[effectivePeriod, envClass]" :style="envStyle">
+        <div v-show="!showSplash" class="phone-screen" :class="[period, envClass]" :style="envStyle">
             <div class="bg-decor">
                 <div class="decor-circle c1"></div>
                 <div class="decor-circle c2"></div>
@@ -17,7 +17,6 @@
         </div>
     </transition>
 </template>
-
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
@@ -44,15 +43,10 @@ const showSplash = ref(true)
 const { connect, requestNotificationPermission, registerPushSubscription } = useWebSocket()
 const { period, startClock, stopClock } = useTime()
 const { startReporting, stopReporting } = useDeviceStatus()
-const themeOverride = ref(localStorage.getItem('theme_mode') || 'auto')
 
 function onSplashDone() {
     showSplash.value = false
 }
-
-window.addEventListener('theme-change', (e) => {
-    themeOverride.value = e.detail
-})
 
 const envData = ref({
     warmth: 0.3,
@@ -74,12 +68,6 @@ const envStyle = computed(() => {
         '--decor-opacity': 0.2 + d.warmth * 0.2,
         '--decor-scale': 0.9 + d.warmth * 0.2,
     }
-})
-
-const effectivePeriod = computed(() => {
-    if (themeOverride.value === 'light') return 'forenoon'
-    if (themeOverride.value === 'dark') return 'midnight'
-    return period.value
 })
 
 async function loadEnvironment() {
@@ -163,7 +151,6 @@ onUnmounted(() => {
 })
 </script>
 
-
 <style scoped>
 .phone-screen {
     width: 100%;
@@ -173,7 +160,6 @@ onUnmounted(() => {
     position: relative;
     overflow: hidden;
     transition: background 2s var(--ease-soft);
-    /* 关键：让背景色延伸到手机最底边 */
     padding-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
 }
@@ -198,14 +184,6 @@ onUnmounted(() => {
     background: linear-gradient(180deg, #f8e8e0 0%, #fdf6f8 40%);
 }
 
-.phone-screen.night {
-    background: linear-gradient(180deg, #221e28 0%, #1e1a22 40%, #1a1620 100%);
-}
-
-.phone-screen.midnight {
-    background: linear-gradient(180deg, #1a1520 0%, #16121a 40%, #120e16 100%);
-}
-
 .screen-content {
     flex: 1;
     overflow-y: auto;
@@ -214,7 +192,6 @@ onUnmounted(() => {
     -webkit-overflow-scrolling: touch;
     position: relative;
     z-index: 1;
-    /* 抵消 phone-screen 的 padding-bottom，让内容区不被压缩 */
     margin-bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
 }
 
@@ -223,11 +200,6 @@ onUnmounted(() => {
     margin-bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
 }
 
-.screen-content.no-padding {
-    padding: 0;
-}
-
-/* 背景装饰 */
 .bg-decor {
     position: absolute;
     top: 0;
@@ -275,7 +247,6 @@ onUnmounted(() => {
     animation: softFloat calc(14s / var(--env-float-speed, 1)) ease-in-out infinite 4s;
 }
 
-/* 环境低语 */
 .env-whisper {
     position: absolute;
     top: calc(env(safe-area-inset-top, 44px) + 12px);
@@ -328,45 +299,5 @@ onUnmounted(() => {
 .main-enter-enter-from {
     opacity: 0;
     transform: scale(1.02) translateY(-4px);
-}
-
-.scheme-list {
-    margin-bottom: 12px;
-}
-
-.scheme-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 10px;
-    border-radius: 8px;
-    margin-bottom: 4px;
-    cursor: pointer;
-}
-
-.scheme-item.active {
-    background: rgba(212, 137, 158, 0.06);
-}
-
-.scheme-name {
-    font-size: 13px;
-    color: var(--color-text);
-}
-
-.scheme-delete {
-    background: none;
-    border: none;
-    font-size: 16px;
-    color: var(--color-text-light);
-    opacity: 0.4;
-    cursor: pointer;
-}
-
-.section-sub {
-    font-size: 11px;
-    color: var(--color-text-light);
-    opacity: 0.5;
-    margin-bottom: 10px;
-    font-style: italic;
 }
 </style>
