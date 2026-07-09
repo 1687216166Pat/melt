@@ -1,3 +1,4 @@
+// server/services/memory.js
 const { getDB } = require("../db/index");
 const { callSubAI } = require("./subai");
 
@@ -12,29 +13,24 @@ function getCounter(personaId) {
 }
 
 // ========== 触发判断 ==========
-
-// 基础触发：80-120条消息
 function shouldTriggerBasic(personaId) {
   const counter = getCounter(personaId);
   counter.sinceLastSummary++;
   counter.total++;
-  return counter.sinceLastSummary >= 100; // 100条触发
+  return counter.sinceLastSummary >= 100;
 }
 
-// 事件触发：高情绪、深夜长聊、重要变化
 function shouldTriggerEvent(userMessage, personaId) {
   const now = new Date(
     new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }),
   );
   const hour = now.getHours();
-
-  // 深夜长聊（23点-4点且已经聊了20条以上）
   const counter = getCounter(personaId);
+
   if ((hour >= 23 || hour <= 4) && counter.sinceLastSummary >= 20) {
     return "deep_night_chat";
   }
 
-  // 高情绪波动
   const highEmotionWords = [
     "崩溃",
     "好想哭",
@@ -50,7 +46,6 @@ function shouldTriggerEvent(userMessage, personaId) {
     return "high_emotion";
   }
 
-  // 重要关系变化
   const relationWords = [
     "我们在一起吧",
     "你是我的",
@@ -65,9 +60,13 @@ function shouldTriggerEvent(userMessage, personaId) {
   return null;
 }
 
-// ========== 短期总结层 ==========
-
-async function triggerShortTermSummary(personaId, reason) {
+// ========== 短期总结层（修复：传入 userMessage 和 aiReply）==========
+async function triggerShortTermSummary(
+  personaId,
+  reason,
+  userMessage = "",
+  aiReply = "",
+) {
   const db = getDB();
   const counter = getCounter(personaId);
   const { getIdentityConfig } = require("./sediment");
@@ -89,11 +88,12 @@ async function triggerShortTermSummary(personaId, reason) {
       return `${name}: ${m.content}`;
     })
     .join("\n");
+
   const cleanAiReply = aiReply.replace(/\|\|\|/g, " ");
+  const pronoun = identity.pronoun || "TA";
 
   const prompt = `你是一个时间线记录系统。判断以下对话是否包含"值得留下痕迹"的瞬间。
 
-${toneGuide}
 注意：用"${pronoun}"来称呼这个角色，不要用"AI"或"它"
 
 只有以下类型才值得记录：
@@ -149,13 +149,11 @@ async function initCounters() {
   }
 }
 
-// ========== 每日沉淀层（零点触发） ==========
-
+// ========== 每日沉淀层 ==========
 async function dailyConsolidate(personaId) {
   const db = getDB();
   const today = new Date().toISOString().slice(0, 10);
 
-  // 获取今天的近期记忆
   const { data: todayMems } = await db
     .from("memories_recent")
     .select("content")
@@ -166,7 +164,6 @@ async function dailyConsolidate(personaId) {
 
   const todayContent = todayMems.map((m) => m.content).join("\n");
 
-  // 判断是否值得沉淀
   const judgePrompt = `判断以下今日记忆是否值得长期保留。
 如果只是普通闲聊、没有新信息、没有情绪变化、没有关系进展，回复"跳过"。
 如果有值得记住的，提取1-3条最核心的印象（每条不超过15字）。
@@ -177,33 +174,11 @@ ${todayContent}
 判断：`;
 
   try {
-    const response = await fetch(
-      `${process.env.AI_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Bearer ${process.env.AI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
-          messages: [{ role: "user", content: judgePrompt }],
-          max_tokens: 80,
-          temperature: 0.1,
-        }),
-      },
-    );
-
-    const data = await response.json();
-    if (!data.choices || !data.choices[0]) return;
-
-    const result = data.choices[0].message.content.trim();
-    if (result === "跳过" || result.includes("跳过")) {
+    const result = await callSubAI(judgePrompt, 80);
+    if (!result || result === "跳过" || result.includes("跳过")) {
       console.log(`[记忆] ${personaId} 今日无需沉淀`);
       return;
     }
-
-    // 增量更新长期档案
     await incrementalUpdate(personaId, result);
     console.log(`[记忆] ${personaId} 每日沉淀: ${result}`);
   } catch (e) {
@@ -211,8 +186,7 @@ ${todayContent}
   }
 }
 
-// ========== 长期档案层（增量更新） ==========
-
+// ========== 长期档案层 ==========
 async function incrementalUpdate(personaId, newImpression) {
   const db = getDB();
   const profileKey = `memory_profile_${personaId}`;
@@ -230,7 +204,7 @@ async function incrementalUpdate(personaId, newImpression) {
 
 规则：
 - 不要重新总结全部，只做增量修改
-- 如果新印象和已有印象重复，更新权重/时间（如"经常熬夜"→"一直在熬夜，最近更频繁"）
+- 如果新印象和已有印象重复，更新权重/时间
 - 如果是全新信息，追加到合适的类别
 - 如果某条旧印象已经过时或被否定，删除它
 - 保持总量不超过200字
@@ -245,27 +219,8 @@ ${newImpression}
 更新后的长期印象：`;
 
   try {
-    const response = await fetch(
-      `${process.env.AI_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Bearer ${process.env.AI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: process.env.AI_MEMORY_MODEL || process.env.AI_MODEL,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 250,
-          temperature: 0.1,
-        }),
-      },
-    );
-
-    const data = await response.json();
-    if (!data.choices || !data.choices[0]) return;
-
-    const newProfile = data.choices[0].message.content.trim();
+    const result = await callSubAI(prompt, 250);
+    if (!result) return;
 
     const { data: existing } = await db
       .from("user_profile")
@@ -276,43 +231,189 @@ ${newImpression}
     if (existing && existing.length > 0) {
       await db
         .from("user_profile")
-        .update({ value: newProfile, updated_at: new Date().toISOString() })
+        .update({ value: result, updated_at: new Date().toISOString() })
         .eq("key", profileKey);
     } else {
-      await db
-        .from("user_profile")
-        .insert({ key: profileKey, value: newProfile });
+      await db.from("user_profile").insert({ key: profileKey, value: result });
     }
   } catch (e) {
     console.error("[记忆] 增量更新失败:", e.message);
   }
 }
 
-// ========== 每条消息的处理入口 ==========
+// ========== 消息压缩（新增）==========
+async function compressOldMessages(personaId, isBeta = false) {
+  const db = getDB();
+  const tableName = isBeta ? "messages_beta" : "messages";
+  const THRESHOLD = 40;
+  const KEEP_RECENT = 20;
 
-async function processMemory(personaId, userMessage, aiReply) {
-  // 检查事件触发
+  const { data: messages } = await db
+    .from(tableName)
+    .select("id, role, content, timestamp")
+    .eq("persona_id", personaId)
+    .order("id", { ascending: true });
+
+  if (!messages || messages.length <= THRESHOLD) return null;
+
+  const toCompress = messages.slice(0, messages.length - KEEP_RECENT);
+  if (toCompress.length < 10) return null;
+
+  const total = toCompress.length;
+  const recentStart = Math.floor(total * 0.6);
+  const midStart = Math.floor(total * 0.3);
+
+  const earlyMsgs = toCompress.slice(0, midStart);
+  const midMsgs = toCompress.slice(midStart, recentStart);
+  const recentMsgs = toCompress.slice(recentStart);
+
+  const formatMsgs = (msgs) =>
+    msgs
+      .map(
+        (m) =>
+          `${m.role === "user" ? "用户" : "AI"}: ${m.content.slice(0, 100)}`,
+      )
+      .join("\n");
+
+  const layerText = `【早期对话】\n${formatMsgs(earlyMsgs)}\n\n【中期对话】\n${formatMsgs(midMsgs)}\n\n【近期对话】\n${formatMsgs(recentMsgs)}`;
+
+  const prompt = `请将以下分层对话历史压缩成摘要。
+
+${layerText}
+
+输出要求：
+- 用第三人称（用户/AI）
+- 按以下格式：
+【近期】（100-150字）详细记录最近的对话
+【中期】（50-80字）概括较早的对话
+【早期】（20-40字）极简记录最早的对话
+
+关键规则：
+1. 必须保留所有日程、日期、约定
+2. 必须保留具体数字、人名、承诺
+3. 禁止用"讨论了""聊到了"这种空话`;
+
+  try {
+    const summary = await callSubAI(prompt, 400);
+    if (!summary) return null;
+
+    // 存摘要到 session_summaries
+    const summaryKey = `msg_compress_${personaId}${isBeta ? "_beta" : ""}`;
+    await db.from("user_profile").upsert(
+      {
+        key: summaryKey,
+        value: summary,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+
+    console.log(`[压缩] ${personaId} 压缩了 ${toCompress.length} 条消息`);
+    return summary;
+  } catch (e) {
+    console.error("[压缩] 消息压缩失败:", e.message);
+    return null;
+  }
+}
+
+async function getCompressedSummary(personaId, isBeta = false) {
+  const db = getDB();
+  const summaryKey = `msg_compress_${personaId}${isBeta ? "_beta" : ""}`;
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", summaryKey)
+    .limit(1);
+  return data && data.length > 0 ? data[0].value : null;
+}
+
+// ========== 遗忘曲线（新增）==========
+async function forgetCurveCleanup(personaId) {
+  const db = getDB();
+  const now = new Date();
+  const day7 = new Date(now - 7 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const day14 = new Date(now - 14 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+
+  const { data: allMems } = await db
+    .from("memories_recent")
+    .select("id, source_session, created_at")
+    .eq("persona_id", personaId)
+    .order("source_session", { ascending: true });
+
+  if (!allMems || allMems.length === 0) return;
+
+  const toDelete = [];
+
+  allMems.forEach((mem, idx) => {
+    const date = mem.source_session;
+    if (!date) return;
+
+    if (date >= day7) {
+      // 7天内全保留
+      return;
+    } else if (date >= day14) {
+      // 7-14天保留一半
+      if (idx % 2 === 1) toDelete.push(mem.id);
+    } else if (date >= day30) {
+      // 14-30天保留四分之一
+      if (idx % 4 !== 0) toDelete.push(mem.id);
+    } else {
+      // 30天以上只留首尾各2条
+      const oldMems = allMems.filter((m) => m.source_session < day30);
+      const keep = new Set([
+        ...oldMems.slice(0, 2).map((m) => m.id),
+        ...oldMems.slice(-2).map((m) => m.id),
+      ]);
+      if (!keep.has(mem.id)) toDelete.push(mem.id);
+    }
+  });
+
+  if (toDelete.length > 0) {
+    await db.from("memories_recent").delete().in("id", toDelete);
+    console.log(`[遗忘曲线] ${personaId} 清理了 ${toDelete.length} 条旧记忆`);
+  }
+}
+
+// ========== 每条消息的处理入口（修复：传入 aiReply）==========
+async function processMemory(personaId, userMessage, aiReply, isBeta = false) {
+  const config = await getMemoryConfig();
+
+  // 模块未启用直接跳过
+  if (!config.memoryEnabled) return;
+
   const eventReason = shouldTriggerEvent(userMessage, personaId);
-  if (eventReason) {
-    triggerShortTermSummary(personaId, eventReason);
+  if (eventReason && config.timelineAutoRecord) {
+    triggerShortTermSummary(personaId, eventReason, userMessage, aiReply);
     return;
   }
 
-  // 检查基础触发
-  if (shouldTriggerBasic(personaId)) {
-    triggerShortTermSummary(personaId, "basic");
-    return;
-  }
-
-  // 即时提取（每8条提取一次轻量记忆）
   const counter = getCounter(personaId);
-  if (counter.total % 8 === 0) {
+  counter.sinceLastSummary++;
+  counter.total++;
+
+  // 短期总结间隔（用配置值替代硬编码100）
+  const summaryEvery = config.summaryEvery || 100;
+  if (summaryEvery > 0 && counter.sinceLastSummary >= summaryEvery) {
+    triggerShortTermSummary(personaId, "basic", userMessage, aiReply);
+    counter.sinceLastSummary = 0;
+    return;
+  }
+
+  // 即时提取间隔（用配置值替代硬编码8）
+  const quickEvery = config.quickExtractEvery || 20;
+  if (quickEvery > 0 && counter.total % quickEvery === 0) {
     await extractQuickMemory(personaId, userMessage, aiReply);
   }
 }
 
 // ========== 轻量即时提取 ==========
-
 async function extractQuickMemory(personaId, userMessage, aiReply) {
   const today = new Date().toISOString().slice(0, 10);
   const { getIdentityConfig } = require("./sediment");
@@ -330,16 +431,14 @@ async function extractQuickMemory(personaId, userMessage, aiReply) {
 3. 不要记录对话过程，要记录"关系沉淀"。
 4. 格式：1-2条，每条10字以内，不带编号。
 
-示例：
-${identity.aiName}在等${identity.userName}回家
-${identity.userName}今天心情很好
+用户: ${userMessage}
+AI: ${cleanAiReply}
 
 留下了：`;
 
   try {
     const result = await callSubAI(prompt, 60);
-    if (result === "无" || result.length < 2) return;
-
+    if (!result || result === "无" || result.length < 2) return;
     await saveDailyMemory(personaId, result, today);
     console.log(`[记忆] ${personaId} 即时提取: ${result}`);
   } catch (e) {
@@ -348,7 +447,6 @@ ${identity.userName}今天心情很好
 }
 
 // ========== 存储 ==========
-
 async function saveDailyMemory(personaId, content, date, isBeta = false) {
   const db = getDB();
   const tableName = isBeta ? "memories_beta" : "memories_recent";
@@ -361,7 +459,6 @@ async function saveDailyMemory(personaId, content, date, isBeta = false) {
     .limit(1);
 
   if (existing && existing.length > 0) {
-    // 合并去重逻辑保持不变
     const oldItems = existing[0].content
       .split("\n")
       .map((s) => s.trim())
@@ -386,13 +483,11 @@ async function saveDailyMemory(personaId, content, date, isBeta = false) {
   }
 }
 
-// ========== 记忆召回 ==========
-
+// ========== 记忆召回（加入压缩摘要）==========
 async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
   const db = getDB();
   let context = "";
 
-  // 💡 根据 isBeta 决定读取的 Key
   const profileKey = isBeta
     ? `memory_profile_beta_${personaId}`
     : `memory_profile_${personaId}`;
@@ -406,10 +501,16 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
     .limit(1);
 
   if (profileRow && profileRow.length > 0 && profileRow[0].value) {
-    context += `\n[长期印象] ${profileRow[0].value}\n`;
+    context += `\n[长期印象]\n${profileRow[0].value}\n`;
   }
 
-  // 2. 最近 7 天记忆 (Beta 模式从 memories_beta 读)
+  // 2. 压缩摘要（如果有）
+  const compressed = await getCompressedSummary(personaId, isBeta);
+  if (compressed) {
+    context += `\n[早期对话摘要]\n${compressed}\n`;
+  }
+
+  // 3. 最近 7 天记忆
   const { data: recentDays } = await db
     .from(recentTable)
     .select("content, source_session")
@@ -417,7 +518,6 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
     .order("created_at", { ascending: false })
     .limit(7);
 
-  // ... 剩余组装逻辑保持不变 ...
   if (recentDays && recentDays.length > 0) {
     context += "[近期印象]\n";
     for (const m of recentDays) {
@@ -425,7 +525,7 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
     }
   }
 
-  // 3. 行为模式 (Beta 模式下通常不需要模式干扰，可以跳过或加判断)
+  // 4. 行为模式
   if (!isBeta) {
     const { data: patterns } = await db
       .from("memory_patterns")
@@ -443,7 +543,6 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
 }
 
 // ========== 行为模式检测 ==========
-
 async function detectPatterns(personaId, userMessage) {
   const db = getDB();
   const now = new Date(
@@ -510,10 +609,8 @@ async function upsertPattern(db, personaId, type, description) {
 }
 
 // ========== 基础查询 ==========
-
 async function getSessionMemory(personaId, limit = 10, isBeta = false) {
   const db = getDB();
-  // 💡 根据 isBeta 决定读哪个表
   const tableName = isBeta ? "messages_beta" : "messages";
   const { data } = await db
     .from(tableName)
@@ -526,7 +623,6 @@ async function getSessionMemory(personaId, limit = 10, isBeta = false) {
 
 async function getRecentMemories(personaId, limit = 50, isBeta = false) {
   const db = getDB();
-  // 💡 根据 isBeta 切换读取的表
   const tableName = isBeta ? "memories_beta" : "memories_recent";
   const { data } = await db
     .from(tableName)
@@ -544,7 +640,6 @@ async function deleteRecentMemory(id) {
 
 async function getMemoryProfile(personaId, isBeta = false) {
   const db = getDB();
-  // 💡 根据 isBeta 切换读取的 Key
   const profileKey = isBeta
     ? `memory_profile_beta_${personaId}`
     : `memory_profile_${personaId}`;
@@ -578,7 +673,26 @@ async function setMemoryProfile(personaId, content, isBeta = false) {
   }
 }
 
-// ========== 兼容旧接口 ==========
+async function getMemoryConfig() {
+  const db = getDB();
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "memory_manage_config")
+    .limit(1);
+  if (data && data.length > 0) return JSON.parse(data[0].value);
+  return {
+    memoryEnabled: true,
+    quickExtractEvery: 20,
+    summaryEvery: 100,
+    compressThreshold: 40,
+    timelineAutoRecord: true,
+    dailyConsolidate: true,
+    weeklyInsight: true,
+    forgetCurve: true,
+    samplerEnabled: true,
+  };
+}
 
 async function consolidateMemories(personaId) {
   await dailyConsolidate(personaId);
@@ -599,4 +713,7 @@ module.exports = {
   triggerShortTermSummary,
   getCounter,
   initCounters,
+  compressOldMessages,
+  getCompressedSummary,
+  forgetCurveCleanup,
 };

@@ -11,45 +11,22 @@ import SettingsControlView from "../views/settings/SettingsControlView.vue";
 import SettingsGeneralView from "../views/settings/SettingsGeneralView.vue";
 import SettingsNotifView from "../views/settings/SettingsNotifView.vue";
 import SettingsStorageView from "../views/settings/SettingsStorageView.vue";
+import SettingsMemoryView from "../views/settings/SettingsMemoryView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    {
-      path: "/",
-      name: "home",
-      component: HomeView,
-    },
-    {
-      path: "/chat/:personaId",
-      name: "chat",
-      component: ChatView,
-    },
-    {
-      path: "/about",
-      name: "about",
-      component: AboutView,
-    },
-    {
-      path: "/settings",
-      name: "settings",
-      component: SettingsView,
-    },
-    {
-      path: "/memory",
-      name: "memory",
-      component: MemoryView,
-    },
+    { path: "/", name: "home", component: HomeView },
+    { path: "/chat/:personaId", name: "chat", component: ChatView },
+    { path: "/about", name: "about", component: AboutView },
+    { path: "/settings", name: "settings", component: SettingsView },
+    { path: "/memory", name: "memory", component: MemoryView },
     {
       path: "/persona-detail/:personaId",
       name: "persona-detail",
       component: PersonaDetailView,
     },
-    {
-      path: "/worldbook",
-      name: "worldbook",
-      component: WorldBookView,
-    },
+    { path: "/worldbook", name: "worldbook", component: WorldBookView },
     { path: "/settings/api", name: "settings-api", component: SettingsApiView },
     {
       path: "/settings/control",
@@ -71,7 +48,11 @@ const router = createRouter({
       name: "settings-storage",
       component: SettingsStorageView,
     },
-    { path: "/wallet", name: "wallet", component: WalletView },
+    {
+      path: "/settings/memory-manage",
+      name: "settings-memory-manage",
+      component: SettingsMemoryView,
+    },
   ],
 });
 

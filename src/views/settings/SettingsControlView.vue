@@ -38,6 +38,16 @@
                         <span class="slider-sm"></span>
                     </label>
                 </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">回复触发方式</div>
+                        <div class="sgi-desc">关闭后需手动点击发送触发 AI 回复</div>
+                    </div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="outputPrefs.autoReply" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- 用户偏好 -->
@@ -55,6 +65,48 @@
             <Transition name="toast-fade">
                 <div v-if="showSaved" class="save-toast">已保存 ✓</div>
             </Transition>
+
+            <!-- 表情包管理 -->
+            <div class="section-label-sm">表情包</div>
+            <div class="settings-group">
+                <div class="settings-group-item col-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">添加表情包</div>
+                        <div class="sgi-desc">支持图片文件、URL、GIF 等所有格式</div>
+                    </div>
+                    <div class="emoji-add-row">
+                        <input class="sgi-input-full" v-model="newEmojiUrl" placeholder="输入图片 URL..." />
+                        <button class="action-btn-sm primary" @click="addEmojiByUrl">添加</button>
+                    </div>
+                    <div class="emoji-add-row">
+                        <label class="upload-label">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                stroke-linecap="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                            上传文件
+                            <input type="file" accept="image/*,video/gif,.gif,.webp,.apng" style="display:none" multiple
+                                @change="handleEmojiUpload" />
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 表情包列表 -->
+            <div v-if="emojiList.length > 0" class="emoji-grid">
+                <div v-for="(emoji, idx) in emojiList" :key="idx" class="emoji-item">
+                    <img :src="emoji.url" :alt="emoji.name" />
+                    <input class="emoji-name-input" v-model="emoji.name" placeholder="名称" @change="saveEmojiList" />
+                    <button class="emoji-del-btn" @click="removeEmoji(idx)">×</button>
+                </div>
+            </div>
+            <div v-else class="emoji-empty">还没有表情包，添加一些吧 ✿</div>
+
+            <div v-if="emojiList.length > 0" class="btn-row">
+                <button class="action-btn ghost" @click="clearAllEmoji">清空全部</button>
+            </div>
 
             <!-- 生成规则 -->
             <div class="section-label-sm">生成规则</div>
@@ -129,6 +181,53 @@ const userPrompt = ref('')
 const templateText = ref('描述你希望 AI 以什么方式陪伴你...')
 const showSaved = ref(false)
 const showRuleSaved = ref(false)
+
+// 表情包
+const emojiList = ref([])
+const newEmojiUrl = ref('')
+
+function loadEmojiList() {
+    const saved = localStorage.getItem('user_emoji_list')
+    if (saved) emojiList.value = JSON.parse(saved)
+}
+
+function saveEmojiList() {
+    localStorage.setItem('user_emoji_list', JSON.stringify(emojiList.value))
+}
+
+function addEmojiByUrl() {
+    if (!newEmojiUrl.value.trim()) return
+    emojiList.value.push({ url: newEmojiUrl.value.trim(), name: '' })
+    newEmojiUrl.value = ''
+    saveEmojiList()
+}
+
+function handleEmojiUpload(event) {
+    const files = Array.from(event.target.files)
+    files.forEach(file => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            emojiList.value.push({
+                url: e.target.result,
+                name: file.name.replace(/\.[^.]+$/, '')
+            })
+            saveEmojiList()
+        }
+        reader.readAsDataURL(file)
+    })
+    event.target.value = ''
+}
+
+function removeEmoji(idx) {
+    emojiList.value.splice(idx, 1)
+    saveEmojiList()
+}
+
+function clearAllEmoji() {
+    if (!confirm('确定清空所有表情包？')) return
+    emojiList.value = []
+    saveEmojiList()
+}
 
 // 生成规则
 const personas = ref([])
@@ -232,12 +331,14 @@ onMounted(async () => {
         templateText.value = data.template || templateText.value
     } catch { }
 
+    loadEmojiList()
     await loadPersonas()
     await loadRuleForCurrent()
 })
 </script>
 
 <style scoped>
+/* 原有样式全部保留，只加新的 */
 .sub-page {
     width: 100%;
     height: 100%;
@@ -444,6 +545,22 @@ onMounted(async () => {
     color: #D4C8CA;
 }
 
+.sgi-input-full {
+    flex: 1;
+    border: 1px solid rgba(255, 240, 242, 0.5);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #4A3F41;
+    outline: none;
+    font-family: inherit;
+}
+
+.sgi-input-full::placeholder {
+    color: #D4C8CA;
+}
+
 .toggle-sm {
     position: relative;
     width: 44px;
@@ -535,6 +652,23 @@ onMounted(async () => {
     transform: scale(0.97);
 }
 
+.action-btn-sm {
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    flex-shrink: 0;
+}
+
+.action-btn-sm.primary {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    color: white;
+}
+
 .save-toast {
     text-align: center;
     color: #D9A3AF;
@@ -553,5 +687,99 @@ onMounted(async () => {
 .toast-fade-enter-from,
 .toast-fade-leave-to {
     opacity: 0;
+}
+
+/* 表情包相关 */
+.emoji-add-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.upload-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(217, 163, 175, 0.3);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    color: #6B5B5E;
+    cursor: pointer;
+}
+
+.upload-label svg {
+    width: 14px;
+    height: 14px;
+}
+
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.emoji-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.45);
+    border-radius: 16px;
+    padding: 10px 8px;
+    position: relative;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+}
+
+.emoji-item img {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+
+.emoji-name-input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-size: 11px;
+    color: #6B5B5E;
+    text-align: center;
+    outline: none;
+    font-family: inherit;
+}
+
+.emoji-name-input::placeholder {
+    color: #D4C8CA;
+}
+
+.emoji-del-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(217, 163, 175, 0.3);
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.emoji-empty {
+    text-align: center;
+    font-size: 12px;
+    color: #B8A9AC;
+    padding: 16px 0;
+    margin-bottom: 10px;
 }
 </style>

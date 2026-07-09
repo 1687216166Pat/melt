@@ -1,4 +1,4 @@
-const lastUserMessages = {}; // 强力防重全局缓存
+const lastUserMessages = {};
 
 const { getDB } = require("../db/index");
 const { pushNotification } = require("./push");
@@ -14,15 +14,15 @@ const {
   getSessionMemory,
   detectPatterns,
   getCounter,
+  compressOldMessages,
 } = require("./memory");
-
 const {
   updateDimensionsFromChat,
   buildRelationshipContext,
   evaluateRelationship,
 } = require("./relationship");
-
 const { checkTimelineEvent } = require("./timeline");
+const { pulseOnUserMessage } = require("./proactive");
 
 function getTimeContext() {
   const now = new Date(
@@ -91,11 +91,9 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   const db = getDB();
   const pid = personaId || "xiaorou";
   const nowISO = new Date().toISOString();
-
-  // 💡 动态表名：Beta 模式写入 messages_beta，正式模式写入 messages
   const tableName = isBeta ? "messages_beta" : "messages";
 
-  // 1. 防重逻辑：仅在正式模式下启用，Beta 模式不限流，方便疯狂测试
+  // 1. 防重
   if (!isBeta) {
     const userMsgKey = `${pid}_${userMessage}`;
     const nowTimestamp = Date.now();
@@ -107,14 +105,12 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
       return;
     }
     lastUserMessages[userMsgKey] = nowTimestamp;
-
-    // 限制防重缓存大小
     if (Object.keys(lastUserMessages).length > 100) {
       delete lastUserMessages[Object.keys(lastUserMessages)[0]];
     }
   }
 
-  // 2. 获取推送和展示的名字（备注优先）
+  // 2. 获取名字
   let pName = "AI 助手";
   const personaNames = { xiaorou: "小柔", cool: "阿冷", assistant: "助手" };
   try {
@@ -140,7 +136,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     }
   } catch {}
 
-  // 3. 存入当前用户消息 (写入动态表)
+  // 3. 存入用户消息
   await db.from(tableName).insert({
     persona_id: pid,
     role: "user",
@@ -148,7 +144,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     timestamp: nowISO,
   });
 
-  // 4. 同步用户消息到消息总线 (只有非 Beta 模式才进总线语料库)
+  // 4. 同步消息总线
   if (!isBeta) {
     const { receiveMessage: busReceive } = require("./bus");
     try {
@@ -164,11 +160,22 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     }
   }
 
-  // 5. 检测并更新底层行为模式与关系数据
+  // 5. 异步压缩 + 欲望系统 pulse（不阻塞主流程）
+  if (!isBeta) {
+    const { getMemoryConfig } = require("./memory");
+    getMemoryConfig().then((cfg) => {
+      if (cfg.compressThreshold > 0) {
+        compressOldMessages(pid, false).catch(() => {});
+      }
+    });
+    pulseOnUserMessage(pid, userMessage);
+  }
+
+  // 6. 检测行为模式与关系数据
   detectPatterns(pid, userMessage);
   updateDimensionsFromChat(pid, userMessage);
 
-  // 6. 💡 获取历史：传入 isBeta 参数，确保不读错表
+  // 7. 获取历史
   const history = await getSessionMemory(pid, 10, isBeta);
 
   // 计算距离上次对话的时间差
@@ -231,18 +238,35 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
 
   const fullPrompt = corePrompt + personaToUse + userPromptStr;
 
-  // 5. 获取分句条数设置
+  // 5. 获取分句条数 + 专属模型和温度
   let minMsg = 1,
     maxMsg = 3;
+  let personaModel = null;
+  let personaTemperature = null;
+  let personaApiKey = null;
+  let personaApiUrl = null;
+
   try {
     const { data: pDetail } = await db
       .from("custom_personas")
-      .select("min_messages, max_messages")
+      .select(
+        "min_messages, max_messages, custom_model, temperature, custom_api_key, custom_api_url",
+      )
       .eq("id", pid)
       .limit(1);
+
     if (pDetail && pDetail.length > 0) {
       if (pDetail[0].min_messages) minMsg = pDetail[0].min_messages;
       if (pDetail[0].max_messages) maxMsg = pDetail[0].max_messages;
+      if (pDetail[0].custom_model) personaModel = pDetail[0].custom_model;
+      if (
+        pDetail[0].temperature !== null &&
+        pDetail[0].temperature !== undefined
+      ) {
+        personaTemperature = pDetail[0].temperature;
+      }
+      if (pDetail[0].custom_api_key) personaApiKey = pDetail[0].custom_api_key;
+      if (pDetail[0].custom_api_url) personaApiUrl = pDetail[0].custom_api_url;
     } else {
       const { data: configRow } = await db
         .from("user_profile")
@@ -253,9 +277,20 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
         const config = JSON.parse(configRow[0].value);
         if (config.minMessages) minMsg = config.minMessages;
         if (config.maxMessages) maxMsg = config.maxMessages;
+        if (config.customModel) personaModel = config.customModel;
+        if (config.temperature !== null && config.temperature !== undefined) {
+          personaTemperature = config.temperature;
+        }
       }
     }
   } catch {}
+
+  // 最终使用的模型和温度
+  const modelToUse = personaModel || process.env.AI_MODEL;
+  const temperatureToUse =
+    personaTemperature !== null && personaTemperature !== undefined
+      ? personaTemperature
+      : parseFloat(process.env.AI_TEMPERATURE) || 0.7;
 
   // 6. 精简版默认世界书（角色扮演核心协议，防人设固化）
   const defaultWorldBook = `
@@ -414,7 +449,8 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   ];
 
   const body = JSON.stringify({
-    model: process.env.AI_MODEL,
+    model: modelToUse,
+    temperature: temperatureToUse,
     messages,
   });
 
@@ -432,17 +468,17 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   let data = null;
 
   try {
-    const response = await fetch(
-      `${process.env.AI_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          Authorization: `Bearer ${process.env.AI_API_KEY}`,
-        },
-        body: body,
+    const apiKey = personaApiKey || process.env.AI_API_KEY;
+    const apiUrl = personaApiUrl || process.env.AI_BASE_URL;
+
+    const response = await fetch(`${apiUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        Authorization: `Bearer ${apiKey}`,
       },
-    );
+      body: body,
+    });
 
     data = await response.json();
 
@@ -468,7 +504,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
       timestamp: new Date().toISOString(),
       debug: {
         layer1: {
-          model: process.env.AI_MODEL,
+          model: modelToUse,
           status: "error",
           error: apiError || "无有效回复",
           elapsed,
@@ -598,7 +634,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     personaName: pName,
     debug: {
       layer1: {
-        model: process.env.AI_MODEL,
+        model: modelToUse,
         status: "success",
         elapsed,
         actualTokens: data.usage || null,

@@ -32,11 +32,35 @@
                     </svg>
                 </div>
             </div>
+
+            <div class="section-label-sm">记忆与数据</div>
+            <div class="settings-group">
+                <div class="settings-group-item action-item" @click="$router.push('/settings/memory-manage')">
+                    <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #D8CDEA, #B8A8D0);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+                            <ellipse cx="12" cy="5" rx="9" ry="3" />
+                            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                        </svg>
+                    </div>
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">记忆管理</div>
+                        <div class="sgi-desc">自定义记忆写入逻辑，管理各模块启用状态</div>
+                    </div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        class="sgi-arrow">
+                        <path d="M9 18l6-6-6-6" />
+                    </svg>
+                </div>
+            </div>
         </div>
     </div>
 </template>
 
-<script setup></script>
+<script setup>
+import { useRouter } from 'vue-router'
+const router = useRouter()
+</script>
 
 <style scoped>
 .sub-page {

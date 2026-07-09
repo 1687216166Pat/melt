@@ -7,7 +7,6 @@
         </div>
 
         <div v-if="expanded" class="debug-content">
-            <!-- 第一层：模型/API -->
             <div class="debug-layer">
                 <h4>🤖 Layer 1 - 模型</h4>
                 <div class="debug-row">
@@ -42,7 +41,6 @@
                 </div>
             </div>
 
-            <!-- 第二层：人格/情绪/记忆 -->
             <div class="debug-layer">
                 <h4>💭 Layer 2 - 状态</h4>
                 <div class="debug-row">
@@ -73,7 +71,6 @@
                 </div>
             </div>
 
-            <!-- 第三层：系统 -->
             <div class="debug-layer">
                 <h4>⚙️ Layer 3 - 系统</h4>
                 <div class="debug-row">
@@ -94,7 +91,6 @@
                 </div>
             </div>
 
-            <!-- 第四层：记忆系统 -->
             <div v-if="info.memory" class="debug-layer">
                 <h4>🧠 Layer 4 - 记忆</h4>
                 <div class="debug-row">

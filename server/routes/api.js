@@ -402,9 +402,7 @@ router.get("/memories/:personaId/dates", async (req, res) => {
   res.json(result);
 });
 
-// server/routes/api.js
-
-// 获取模型列表 (增强防崩版)
+// 获取模型列表
 router.post("/test/models", async (req, res) => {
   const { baseUrl, key } = req.body;
   if (!baseUrl || !baseUrl.startsWith("http")) {
@@ -415,7 +413,6 @@ router.post("/test/models", async (req, res) => {
     const response = await fetch(`${baseUrl}/models`, {
       headers: { Authorization: `Bearer ${key}` },
     });
-
     const text = await response.text();
     let data;
     try {
@@ -426,7 +423,6 @@ router.post("/test/models", async (req, res) => {
         error: `中转站未返回 JSON，可能地址填错了。原始返回: ${text.slice(0, 50)}`,
       });
     }
-
     if (!response.ok) {
       return res.json({
         error: data.error?.message || `获取失败: HTTP ${response.status}`,
@@ -439,7 +435,7 @@ router.post("/test/models", async (req, res) => {
   }
 });
 
-// 测试 API 连接 (增强防崩版)
+// 测试 API 连接
 router.post("/test/connection", async (req, res) => {
   const { baseUrl, key, model } = req.body;
   if (!baseUrl || !baseUrl.startsWith("http")) {
@@ -459,7 +455,6 @@ router.post("/test/connection", async (req, res) => {
         max_tokens: 5,
       }),
     });
-
     const text = await response.text();
     let data;
     try {
@@ -467,7 +462,6 @@ router.post("/test/connection", async (req, res) => {
     } catch (parseErr) {
       return res.json({ error: "接口未返回 JSON 格式数据" });
     }
-
     res.json({ ok: response.ok, data });
   } catch (e) {
     console.error("[测试] 测试连接异常:", e.message);
@@ -475,11 +469,11 @@ router.post("/test/connection", async (req, res) => {
   }
 });
 
-// 保存 API 配置
+// 保存主 API 配置
 router.post("/settings/api", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
-  const { key, baseUrl, model } = req.body;
+  const { key, baseUrl, model, temperature } = req.body;
 
   if (key) {
     process.env.AI_API_KEY = key;
@@ -513,18 +507,29 @@ router.post("/settings/api", async (req, res) => {
       { onConflict: "key" },
     );
   }
+  if (temperature !== undefined) {
+    process.env.AI_TEMPERATURE = String(temperature);
+    await db.from("user_profile").upsert(
+      {
+        key: "api_temperature",
+        value: String(temperature),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+  }
 
   res.json({ success: true });
 });
 
-// 启动时加载 API 配置
+// 读取主 API 配置
 router.get("/settings/api", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
   const { data } = await db
     .from("user_profile")
     .select("key, value")
-    .in("key", ["api_key", "api_base_url", "api_model"]);
+    .in("key", ["api_key", "api_base_url", "api_model", "api_temperature"]);
 
   const config = {};
   if (data) {
@@ -532,21 +537,21 @@ router.get("/settings/api", async (req, res) => {
       if (row.key === "api_key") config.key = row.value;
       if (row.key === "api_base_url") config.baseUrl = row.value;
       if (row.key === "api_model") config.model = row.value;
+      if (row.key === "api_temperature")
+        config.temperature = parseFloat(row.value);
     });
   }
   res.json(config);
 });
 
+// 保存副 API 配置
 router.post("/settings/sub-api", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
-  const { key, baseUrl, model } = req.body;
-  if (key) process.env.AI_SUB_API_KEY = key;
-  if (baseUrl) process.env.AI_SUB_BASE_URL = baseUrl;
-  if (model) process.env.AI_SUB_MODEL = model;
+  const { key, baseUrl, model, temperature } = req.body;
 
-  // 持久化
-  if (key)
+  if (key) {
+    process.env.AI_SUB_API_KEY = key;
     await db.from("user_profile").upsert(
       {
         key: "sub_api_key",
@@ -555,7 +560,9 @@ router.post("/settings/sub-api", async (req, res) => {
       },
       { onConflict: "key" },
     );
-  if (baseUrl)
+  }
+  if (baseUrl) {
+    process.env.AI_SUB_BASE_URL = baseUrl;
     await db.from("user_profile").upsert(
       {
         key: "sub_api_base_url",
@@ -564,7 +571,9 @@ router.post("/settings/sub-api", async (req, res) => {
       },
       { onConflict: "key" },
     );
-  if (model)
+  }
+  if (model) {
+    process.env.AI_SUB_MODEL = model;
     await db.from("user_profile").upsert(
       {
         key: "sub_api_model",
@@ -573,26 +582,37 @@ router.post("/settings/sub-api", async (req, res) => {
       },
       { onConflict: "key" },
     );
+  }
+  if (temperature !== undefined) {
+    process.env.AI_SUB_TEMPERATURE = String(temperature);
+    await db.from("user_profile").upsert(
+      {
+        key: "sub_api_temperature",
+        value: String(temperature),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
+  }
 
   res.json({ success: true });
 });
 
-// 助手详情
+// 读取助手详情
 router.get("/persona/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
   const id = req.params.personaId;
 
-  // 先查自定义人格表
   const { data } = await db
     .from("custom_personas")
     .select("*")
     .eq("id", id)
     .limit(1);
+
   if (data && data.length > 0) {
     res.json(data[0]);
   } else {
-    // 内置人格：基本信息 + user_profile 里的配置
     const { getPersonaList } = require("../services/prompt");
     const list = getPersonaList();
     const found = list.find((p) => p.id === id) || {
@@ -601,7 +621,6 @@ router.get("/persona/:personaId", async (req, res) => {
       avatar: "💬",
     };
 
-    // 查是否有额外配置
     const { data: configRow } = await db
       .from("user_profile")
       .select("value")
@@ -617,6 +636,7 @@ router.get("/persona/:personaId", async (req, res) => {
   }
 });
 
+// 更新助手详情
 router.put("/persona/:personaId", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
@@ -660,6 +680,20 @@ router.put("/persona/:personaId", async (req, res) => {
       updateData.proactive_max = body.proactiveMax;
     if (body.proactiveAuto !== undefined)
       updateData.proactive_auto = body.proactiveAuto;
+    if (body.customModel !== undefined)
+      updateData.custom_model = body.customModel;
+    if (body.temperature !== undefined)
+      updateData.temperature = body.temperature;
+    if (body.emojiEnabled !== undefined)
+      updateData.emoji_enabled = body.emojiEnabled;
+    if (body.showDebug !== undefined) updateData.show_debug = body.showDebug;
+    if (body.chatTheme !== undefined) updateData.chat_theme = body.chatTheme;
+    if (body.bubbleMerge !== undefined)
+      updateData.bubble_merge = body.bubbleMerge;
+    if (body.customApiKey !== undefined)
+      updateData.custom_api_key = body.customApiKey;
+    if (body.customApiUrl !== undefined)
+      updateData.custom_api_url = body.customApiUrl;
 
     const { error } = await db
       .from("custom_personas")
@@ -1592,6 +1626,35 @@ router.post("/sediment-rules/:personaId", async (req, res) => {
     }
   }
 
+  res.json({ success: true });
+});
+
+router.get("/settings/memory-config", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "memory_manage_config")
+    .limit(1);
+  if (data && data.length > 0) {
+    res.json(JSON.parse(data[0].value));
+  } else {
+    res.json(null);
+  }
+});
+
+router.post("/settings/memory-config", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("user_profile").upsert(
+    {
+      key: "memory_manage_config",
+      value: JSON.stringify(req.body),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" }
+  );
   res.json({ success: true });
 });
 

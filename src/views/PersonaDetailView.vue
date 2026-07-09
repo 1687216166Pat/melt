@@ -1,199 +1,389 @@
 <template>
     <div class="detail-page">
-        <div class="detail-header">
-            <button class="back-btn" @click="$router.back()">‹</button>
-            <h2>助手详情</h2>
-            <button class="save-btn-top" @click="saveDetail">保存</button>
+        <div class="settings-blob sb-tl"></div>
+        <div class="settings-blob sb-br"></div>
+
+        <div class="detail-nav">
+            <button class="detail-back" @click="$router.back()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+            </button>
+            <span class="detail-title">助手详情</span>
+            <button class="detail-save-btn" @click="saveDetail">保存</button>
         </div>
 
         <div class="detail-content">
-            <!-- 合并的身份卡片 -->
-            <GlassCard size="lg" class="identity-card">
-                <div class="identity-top">
-                    <div class="avatar-area">
-                        <div class="avatar-preview">
-                            <img v-if="detail.avatarUrl" :src="detail.avatarUrl" />
-                            <span v-else>{{ detail.avatar || '💬' }}</span>
-                        </div>
-                        <button class="avatar-edit" @click="showAvatarEdit = !showAvatarEdit">✎</button>
-                    </div>
-                    <div class="identity-info">
-                        <p class="display-name">{{ detail.note || detail.name || '未命名' }}</p>
-                        <p class="real-name" v-if="detail.note && detail.name">{{ detail.name }}</p>
-                    </div>
-                </div>
 
-                <!-- 头像编辑（展开） -->
-                <div v-if="showAvatarEdit" class="avatar-edit-area">
-                    <DreamInput v-model="detail.avatarUrl" placeholder="图片URL或图床链接" />
-                    <input type="file" accept="image/*" @change="handleAvatarUpload" class="file-input" />
+            <!-- 身份卡片 -->
+            <div class="identity-hero">
+                <div class="identity-avatar-wrap">
+                    <div class="identity-avatar">
+                        <img v-if="detail.avatarUrl" :src="detail.avatarUrl" />
+                        <span v-else>{{ detail.avatar || '💬' }}</span>
+                    </div>
+                    <button class="avatar-edit-btn" @click="showAvatarEdit = !showAvatarEdit">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                    </button>
                 </div>
-
-                <!-- 基本信息行 -->
-                <div class="identity-details">
-                    <div class="detail-row">
-                        <span class="detail-label">对你的称呼</span>
-                        <input class="detail-value-input" v-model="detail.call_user" placeholder="例：主人、小然" />
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">性别</span>
-                        <select v-model="detail.gender" class="detail-select">
-                            <option value="">未设置</option>
-                            <option value="female">女</option>
-                            <option value="male">男</option>
-                            <option value="other">其他</option>
-                        </select>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">TA眼中的关系</span>
-                        <input class="detail-value-input" v-model="detail.ai_relationship" placeholder="例：恋人、朋友" />
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">我对TA的关系</span>
-                        <input class="detail-value-input" v-model="detail.user_relationship" placeholder="例：恋人、家人" />
-                    </div>
+                <div class="identity-meta">
+                    <p class="identity-name">{{ detail.note || detail.name || '未命名' }}</p>
+                    <p class="identity-sub" v-if="detail.note && detail.name">{{ detail.name }}</p>
                 </div>
-            </GlassCard>
+            </div>
 
-            <!-- 名字编辑 -->
-            <div class="section-block">
-                <h3 class="section-label">名字设置</h3>
-                <GlassCard size="md">
-                    <DreamInput label="显示名字（备注）" v-model="detail.note" placeholder="聊天页面顶部显示的名字" />
-                    <DreamInput label="真实名字" v-model="detail.name" placeholder="AI对自己的称呼" />
-                </GlassCard>
+            <!-- 头像编辑 -->
+            <div v-if="showAvatarEdit" class="settings-group" style="margin-bottom:10px;">
+                <div class="settings-group-item col-item">
+                    <div class="sgi-label">头像 URL</div>
+                    <input class="sgi-input-full" v-model="detail.avatarUrl" placeholder="图片URL或图床链接" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">上传图片</div>
+                    <label class="upload-label">
+                        选择文件
+                        <input type="file" accept="image/*" style="display:none" @change="handleAvatarUpload" />
+                    </label>
+                </div>
+            </div>
+
+            <!-- 基本信息 -->
+            <div class="section-label-sm">基本信息</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label">对你的称呼</div>
+                    <input class="sgi-input" v-model="detail.call_user" placeholder="例：主人、小然" />
+                </div>
+                <div class="settings-group-item" style="position:relative;">
+                    <div class="sgi-label">性别</div>
+                    <div class="sgi-right">
+                        <span class="sgi-value">{{ genderLabel }}</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" class="sgi-arrow">
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                    </div>
+                    <select class="sgi-select-hidden" v-model="detail.gender">
+                        <option value="">未设置</option>
+                        <option value="female">女</option>
+                        <option value="male">男</option>
+                        <option value="other">其他</option>
+                    </select>
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">TA眼中的关系</div>
+                    <input class="sgi-input" v-model="detail.ai_relationship" placeholder="例：恋人、朋友" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">我对TA的关系</div>
+                    <input class="sgi-input" v-model="detail.user_relationship" placeholder="例：恋人、家人" />
+                </div>
+            </div>
+
+            <!-- 名字 -->
+            <div class="section-label-sm">名字</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">显示名字</div>
+                        <div class="sgi-desc">聊天页面顶部显示</div>
+                    </div>
+                    <input class="sgi-input" v-model="detail.note" placeholder="备注名" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">真实名字</div>
+                        <div class="sgi-desc">AI 对自己的称呼</div>
+                    </div>
+                    <input class="sgi-input" v-model="detail.name" placeholder="角色名" />
+                </div>
             </div>
 
             <!-- 人设详情 -->
-            <div class="section-block">
-                <h3 class="section-label">人设详情</h3>
-                <GlassCard size="md">
-                    <DreamInput type="textarea" v-model="detail.content" :rows="10" placeholder="角色的性格、说话方式、背景设定..." />
-                </GlassCard>
+            <div class="section-label-sm">人设详情</div>
+            <div class="settings-group">
+                <div class="settings-group-item col-item">
+                    <textarea class="sgi-textarea" v-model="detail.content" rows="10"
+                        placeholder="角色的性格、说话方式、背景设定..."></textarea>
+                </div>
+            </div>
+
+            <!-- 专属 API -->
+            <div class="section-label-sm">专属 API <span class="section-label-hint">不填则使用全局设置</span></div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label">API Key</div>
+                    <input class="sgi-input" type="password" v-model="detail.customApiKey" placeholder="留空使用全局" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">API 地址</div>
+                    <input class="sgi-input" v-model="detail.customApiUrl" placeholder="留空使用全局" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">模型</div>
+                    <input class="sgi-input" v-model="detail.customModel" placeholder="留空使用全局模型" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">温度</div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <input class="sgi-input" type="number" v-model.number="detail.temperature" min="0" max="2"
+                            step="0.1" placeholder="0.7" style="width:60px;text-align:right;" />
+                        <span class="sgi-value">0~2</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 表情包 -->
+            <div class="section-label-sm">表情包</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">启用表情包</div>
+                        <div class="sgi-desc">AI 回复时可能附带表情包</div>
+                    </div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="detail.emojiEnabled" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- 世界书绑定 -->
-            <div class="section-block">
-                <h3 class="section-label" @click="showWorldBooks = !showWorldBooks" style="cursor:pointer">
-                    世界书绑定 {{ showWorldBooks ? '▾' : '▸' }}
-                    <span class="wb-count" v-if="detail.worldBookIds && detail.worldBookIds.length">{{
-                        detail.worldBookIds.length }}本</span>
-                </h3>
-                <GlassCard v-if="showWorldBooks" size="md" class="wb-card">
-                    <div class="wb-scroll">
-                        <div v-for="book in worldBooks" :key="book.id" class="wb-check-row"
-                            @click="toggleWorldBook(book.id)">
-                            <div class="wb-checkbox"
-                                :class="{ checked: detail.worldBookIds && detail.worldBookIds.includes(book.id) }">
-                                <span v-if="detail.worldBookIds && detail.worldBookIds.includes(book.id)">✓</span>
-                            </div>
-                            <span class="wb-name">{{ book.title }}</span>
-                        </div>
-                        <p v-if="worldBooks.length === 0" class="empty-text">暂无世界书</p>
+            <div class="section-label-sm" @click="showWorldBooks = !showWorldBooks"
+                style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+                <span>世界书绑定
+                    <span v-if="detail.worldBookIds && detail.worldBookIds.length" class="count-badge">
+                        {{ detail.worldBookIds.length }}
+                    </span>
+                </span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    class="sgi-arrow" :style="{ transform: showWorldBooks ? 'rotate(90deg)' : '' }">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+            </div>
+            <div v-if="showWorldBooks" class="settings-group">
+                <div v-for="book in worldBooks" :key="book.id" class="settings-group-item"
+                    @click="toggleWorldBook(book.id)" style="cursor:pointer;">
+                    <div class="sgi-label">{{ book.title }}</div>
+                    <div class="wb-checkbox-sm"
+                        :class="{ checked: detail.worldBookIds && detail.worldBookIds.includes(book.id) }">
+                        <svg v-if="detail.worldBookIds && detail.worldBookIds.includes(book.id)" viewBox="0 0 24 24"
+                            fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+                            <path d="M20 6L9 17l-5-5" />
+                        </svg>
                     </div>
-                </GlassCard>
+                </div>
+                <div v-if="worldBooks.length === 0" class="settings-group-item">
+                    <span class="sgi-value">暂无世界书</span>
+                </div>
             </div>
 
-            <!-- 独立主动消息 -->
-            <div class="section-block">
-                <h3 class="section-label">主动消息（独立设置）</h3>
-                <GlassCard size="md">
-                    <div class="detail-row">
-                        <span class="detail-label">启用</span>
-                        <label class="toggle">
-                            <input type="checkbox" v-model="detail.proactiveEnabled" />
-                            <span class="slider"></span>
+            <!-- 主动消息 -->
+            <div class="section-label-sm">主动消息</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label">启用</div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="detail.proactiveEnabled" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
+                <template v-if="detail.proactiveEnabled">
+                    <div class="settings-group-item" style="position:relative;">
+                        <div class="sgi-label">间隔单位</div>
+                        <div class="sgi-right">
+                            <span class="sgi-value">{{ detail.proactiveUnit === 'minutes' ? '分钟' : '小时' }}</span>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" class="sgi-arrow">
+                                <path d="M9 18l6-6-6-6" />
+                            </svg>
+                        </div>
+                        <select class="sgi-select-hidden" v-model="detail.proactiveUnit">
+                            <option value="minutes">分钟</option>
+                            <option value="hours">小时</option>
+                        </select>
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">间隔数值</div>
+                        <input class="sgi-input" type="number" v-model.number="detail.proactiveInterval" min="1"
+                            max="99" style="width:60px;text-align:right;" />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">每日最多</div>
+                        <input class="sgi-input" type="number" v-model.number="detail.proactiveMax" min="1" max="50"
+                            style="width:60px;text-align:right;" />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label-wrap">
+                            <div class="sgi-label">AI 自主决定</div>
+                            <div class="sgi-desc">根据对话氛围自主发起</div>
+                        </div>
+                        <label class="toggle-sm">
+                            <input type="checkbox" v-model="detail.proactiveAuto" />
+                            <span class="slider-sm"></span>
                         </label>
                     </div>
-                    <div v-if="detail.proactiveEnabled" class="proactive-settings">
-                        <div class="detail-row">
-                            <span class="detail-label">间隔</span>
-                            <div class="interval-input">
-                                <input type="number" v-model.number="detail.proactiveInterval" min="1" max="99"
-                                    class="interval-number" />
-                                <select v-model="detail.proactiveUnit">
-                                    <option value="minutes">分钟</option>
-                                    <option value="hours">小时</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">每日最多</span>
-                            <input type="number" v-model.number="detail.proactiveMax" min="1" max="50"
-                                class="interval-number" />
-                        </div>
-                        <div class="detail-row">
-                            <span class="detail-label">AI自主决定</span>
-                            <label class="toggle">
-                                <input type="checkbox" v-model="detail.proactiveAuto" />
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        <p class="setting-hint" v-if="detail.proactiveAuto">AI 会根据对话氛围自主决定何时主动发消息</p>
-                    </div>
-                </GlassCard>
+                </template>
             </div>
 
-            <!-- 回复条数 -->
-            <div class="section-block">
-                <h3 class="section-label">回复分句</h3>
-                <GlassCard size="md">
-                    <div class="detail-row">
-                        <span class="detail-label">最少条数</span>
-                        <input class="detail-value-input" type="number" v-model.number="detail.minMessages" min="1"
-                            max="10" />
+            <!-- 回复分句 -->
+            <div class="section-label-sm">回复分句</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label">最少条数</div>
+                    <input class="sgi-input" type="number" v-model.number="detail.minMessages" min="1" max="10"
+                        style="width:60px;text-align:right;" />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">最多条数</div>
+                    <input class="sgi-input" type="number" v-model.number="detail.maxMessages" min="1" max="10"
+                        style="width:60px;text-align:right;" />
+                </div>
+            </div>
+
+            <!-- 聊天控制台 -->
+            <div class="section-label-sm">聊天控制台</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">显示控制台</div>
+                        <div class="sgi-desc">显示 token 和调试信息</div>
                     </div>
-                    <div class="detail-row">
-                        <span class="detail-label">最多条数</span>
-                        <input class="detail-value-input" type="number" v-model.number="detail.maxMessages" min="1"
-                            max="10" />
-                    </div>
-                </GlassCard>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="detail.showDebug" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- 聊天壁纸 -->
-            <div class="section-block">
-                <h3 class="section-label">聊天壁纸</h3>
-                <GlassCard size="md">
-                    <div class="wallpaper-preview" v-if="detail.chatWallpaper">
-                        <img :src="detail.chatWallpaper" />
+            <div class="section-label-sm">聊天壁纸</div>
+            <div class="settings-group">
+                <div v-if="detail.chatWallpaper" class="wallpaper-preview-row">
+                    <img :src="detail.chatWallpaper" />
+                    <button class="wallpaper-clear-btn" @click="detail.chatWallpaper = ''">清除</button>
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">图片 URL</div>
+                    <input class="sgi-input" v-model="detail.chatWallpaper" placeholder="https://..." />
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">上传文件</div>
+                    <label class="upload-label">
+                        选择图片
+                        <input type="file" accept="image/*" style="display:none" @change="handleChatWallpaperUpload" />
+                    </label>
+                </div>
+            </div>
+
+            <!-- 聊天主题 -->
+            <div class="section-label-sm">聊天主题</div>
+            <div class="theme-grid">
+                <div v-for="t in chatThemes" :key="t.value" class="theme-item"
+                    :class="{ active: detail.chatTheme === t.value }" @click="detail.chatTheme = t.value">
+                    <div class="theme-preview" :class="'preview-' + t.value">
+                        <div class="preview-bubble preview-ai"></div>
+                        <div class="preview-bubble preview-user"></div>
                     </div>
-                    <DreamInput label="图片URL" v-model="detail.chatWallpaper" placeholder="输入图片链接..." />
-                    <div class="file-row">
-                        <span class="file-label">或上传文件</span>
-                        <input type="file" accept="image/*" @change="handleChatWallpaperUpload" class="file-input" />
+                    <span class="theme-name">{{ t.label }}</span>
+                </div>
+            </div>
+            <div class="settings-group" style="margin-top:10px;">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">气泡合并</div>
+                        <div class="sgi-desc">连续消息压缩间距</div>
                     </div>
-                    <SoftButton v-if="detail.chatWallpaper" variant="ghost" size="sm"
-                        @click="detail.chatWallpaper = ''">清除</SoftButton>
-                </GlassCard>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="detail.bubbleMerge" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 自定义主题 -->
+            <div class="section-label-sm">自定义主题</div>
+
+            <!-- 已保存的自定义方案 -->
+            <div v-if="customThemes.length > 0" class="settings-group">
+                <div v-for="(t, idx) in customThemes" :key="t.id" class="settings-group-item"
+                    :class="{ active: detail.chatTheme === t.id }" @click="detail.chatTheme = t.id">
+                    <div class="sgi-label">{{ t.name }}</div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div v-if="detail.chatTheme === t.id" class="active-dot"></div>
+                        <button class="inline-del-btn" @click.stop="deleteCustomTheme(idx)">×</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CSS 编辑器 -->
+            <div class="settings-group">
+                <div class="settings-group-item col-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">自定义 CSS</div>
+                        <div class="sgi-desc">针对该角色的聊天界面样式</div>
+                    </div>
+                    <textarea class="sgi-textarea code-textarea" v-model="customThemeCSS" rows="6" placeholder=".bubble-wrapper.ai .bubble {
+  background: rgba(200,180,220,0.2);
+}
+.bubble-wrapper.user .bubble {
+  background: linear-gradient(135deg,#c8a0d0,#b080c0);
+}"></textarea>
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">方案名称</div>
+                    <input class="sgi-input" v-model="customThemeName" placeholder="给这个方案起个名字..." />
+                </div>
+            </div>
+            <div class="btn-row">
+                <button class="action-btn primary" @click="saveCustomTheme">保存方案</button>
+                <button class="action-btn ghost" @click="previewCustomTheme">预览</button>
             </div>
 
             <!-- 进入对话 -->
-            <div class="section-block">
-                <SoftButton variant="primary" block @click="$router.push(`/chat/${personaId}`)">💬 进入对话</SoftButton>
+            <div class="action-row">
+                <button class="action-btn primary" @click="$router.push(`/chat/${personaId}`)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    进入对话
+                </button>
             </div>
 
             <!-- 危险操作 -->
-            <div class="section-block danger-area">
-                <h3 class="section-label">⚠️ 操作</h3>
-                <SoftButton variant="secondary" block @click="clearMessages">清空对话框（保留记忆）</SoftButton>
-                <SoftButton variant="secondary" block @click="clearMemory">清空记忆</SoftButton>
-                <SoftButton variant="danger" block @click="deletePersona">删除对话</SoftButton>
-                <SoftButton variant="danger" block @click="deleteAi">删除这个AI</SoftButton>
+            <div class="section-label-sm" style="margin-top:28px;">操作</div>
+            <div class="settings-group">
+                <div class="settings-group-item danger-item" @click="clearMessages">
+                    <div class="sgi-label" style="color:#C07070;">清空对话框</div>
+                    <span class="sgi-value">保留记忆</span>
+                </div>
+                <div class="settings-group-item danger-item" @click="clearMemory">
+                    <div class="sgi-label" style="color:#C07070;">清空记忆</div>
+                </div>
+                <div class="settings-group-item danger-item" @click="deletePersona">
+                    <div class="sgi-label" style="color:#C07070;">删除对话记录</div>
+                </div>
+                <div class="settings-group-item danger-item" @click="deleteAi">
+                    <div class="sgi-label" style="color:#C07070;">删除这个 AI</div>
+                </div>
             </div>
+
         </div>
 
-        <p v-if="saveMsg" class="save-msg">{{ saveMsg }}</p>
+        <Transition name="toast-fade">
+            <div v-if="saveMsg" class="save-toast-float">{{ saveMsg }}</div>
+        </Transition>
     </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/utils/api'
-import GlassCard from '@/components/ui/GlassCard.vue'
-import SoftButton from '@/components/ui/SoftButton.vue'
-import DreamInput from '@/components/ui/DreamInput.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -202,6 +392,55 @@ const saveMsg = ref('')
 const worldBooks = ref([])
 const showAvatarEdit = ref(false)
 const showWorldBooks = ref(false)
+const customThemes = ref([])
+const customThemeCSS = ref('')
+const customThemeName = ref('')
+
+function loadCustomThemes() {
+    const saved = localStorage.getItem(`chat_custom_themes_${personaId}`)
+    if (saved) customThemes.value = JSON.parse(saved)
+}
+
+function saveCustomTheme() {
+    if (!customThemeCSS.value.trim()) return
+    const id = 'custom_' + Date.now().toString(36)
+    const name = customThemeName.value.trim() || `方案 ${customThemes.value.length + 1}`
+    customThemes.value.push({ id, name, css: customThemeCSS.value })
+    localStorage.setItem(`chat_custom_themes_${personaId}`, JSON.stringify(customThemes.value))
+    detail.chatTheme = id
+    customThemeName.value = ''
+    saveMsg.value = '方案已保存 ✓'
+    setTimeout(() => { saveMsg.value = '' }, 1500)
+}
+
+function deleteCustomTheme(idx) {
+    const t = customThemes.value[idx]
+    if (detail.chatTheme === t.id) detail.chatTheme = 'default'
+    customThemes.value.splice(idx, 1)
+    localStorage.setItem(`chat_custom_themes_${personaId}`, JSON.stringify(customThemes.value))
+}
+
+function previewCustomTheme() {
+    const old = document.getElementById('preview-chat-css')
+    if (old) old.remove()
+    if (customThemeCSS.value.trim()) {
+        const style = document.createElement('style')
+        style.id = 'preview-chat-css'
+        style.textContent = customThemeCSS.value
+        document.head.appendChild(style)
+        saveMsg.value = '预览已应用，进入聊天查看效果'
+        setTimeout(() => { saveMsg.value = '' }, 2000)
+    }
+}
+
+const chatThemes = [
+    { value: 'default', label: '默认' },
+    { value: 'minimal', label: '极简' },
+    { value: '留白', label: '留白' },
+    { value: 'together', label: '同框' },
+    { value: 'liquid', label: '液态' },
+    { value: 'wechat', label: '微信' },
+]
 
 const detail = reactive({
     name: '',
@@ -211,6 +450,7 @@ const detail = reactive({
     gender: '',
     content: '',
     worldBookId: '',
+    worldBookIds: [],
     call_user: '',
     ai_relationship: '',
     user_relationship: '',
@@ -222,7 +462,20 @@ const detail = reactive({
     proactiveUnit: 'hours',
     proactiveMax: 3,
     proactiveAuto: false,
+    showDebug: false,
+    customModel: '',
+    temperature: null,
+    emojiEnabled: false,
+    chatTheme: 'default',
+    bubbleMerge: false,
+    customApiKey: '',
+    customApiUrl: '',
 
+})
+
+const genderLabel = computed(() => {
+    const map = { female: '女', male: '男', other: '其他', '': '未设置' }
+    return map[detail.gender] || '未设置'
 })
 
 async function loadDetail() {
@@ -239,19 +492,25 @@ async function loadDetail() {
         if (data.proactive_unit) detail.proactiveUnit = data.proactive_unit
         if (data.proactive_max) detail.proactiveMax = data.proactive_max
         if (data.proactive_auto !== undefined) detail.proactiveAuto = data.proactive_auto
+        if (data.show_debug !== undefined) detail.showDebug = data.show_debug
+        if (data.custom_model) detail.customModel = data.custom_model
+        if (data.temperature !== undefined && data.temperature !== null) detail.temperature = data.temperature
+        if (data.emoji_enabled !== undefined) detail.emojiEnabled = data.emoji_enabled
+        if (data.chat_theme) detail.chatTheme = data.chat_theme
+        if (data.bubble_merge !== undefined) detail.bubbleMerge = data.bubble_merge
+        if (data.custom_api_key) detail.customApiKey = data.custom_api_key
+        if (data.custom_api_url) detail.customApiUrl = data.custom_api_url
+
     } catch (e) {
         console.error('加载详情失败:', e)
     }
 }
 
-
 async function loadWorldBooks() {
     try {
         const res = await api('/api/worldbooks')
         worldBooks.value = await res.json()
-    } catch (e) {
-        console.error('加载世界书失败:', e)
-    }
+    } catch { }
 }
 
 async function saveDetail() {
@@ -278,11 +537,20 @@ async function saveDetail() {
                 proactiveUnit: detail.proactiveUnit,
                 proactiveMax: detail.proactiveMax,
                 proactiveAuto: detail.proactiveAuto,
+                showDebug: detail.showDebug,
+                customModel: detail.customModel,
+                temperature: detail.temperature,
+                emojiEnabled: detail.emojiEnabled,
+                chatTheme: detail.chatTheme,
+                bubbleMerge: detail.bubbleMerge,
+                customApiKey: detail.customApiKey,
+                customApiUrl: detail.customApiUrl,
+
             })
         })
         saveMsg.value = '已保存 ✓'
         setTimeout(() => { saveMsg.value = '' }, 2000)
-    } catch (e) {
+    } catch {
         saveMsg.value = '保存失败'
     }
 }
@@ -301,8 +569,7 @@ function handleAvatarUpload(event) {
                 if (w > h) { h = h * maxSize / w; w = maxSize }
                 else { w = w * maxSize / h; h = maxSize }
             }
-            canvas.width = w
-            canvas.height = h
+            canvas.width = w; canvas.height = h
             canvas.getContext('2d').drawImage(img, 0, 0, w, h)
             detail.avatarUrl = canvas.toDataURL('image/jpeg', 0.8)
         }
@@ -322,9 +589,7 @@ function handleChatWallpaperUpload(event) {
     const file = event.target.files[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (e) => {
-        detail.chatWallpaper = e.target.result
-    }
+    reader.onload = (e) => { detail.chatWallpaper = e.target.result }
     reader.readAsDataURL(file)
 }
 
@@ -347,23 +612,30 @@ async function deletePersona() {
     try {
         await api(`/api/messages/${personaId}`, { method: 'DELETE' })
         await api(`/api/memories/${personaId}/clear`, { method: 'DELETE' })
-
-        // 判断是自定义还是内置
         if (detail.custom) {
             await api(`/api/personas/custom/${personaId}`, { method: 'DELETE' })
         } else {
-            // 内置人格：隐藏
             await api(`/api/personas/builtin/${personaId}/hide`, { method: 'POST' })
         }
-
         const hidden = JSON.parse(localStorage.getItem('hidden_personas') || '[]')
         if (!hidden.includes(personaId)) {
             hidden.push(personaId)
             localStorage.setItem('hidden_personas', JSON.stringify(hidden))
         }
-
         router.push('/')
-    } catch (e) {
+    } catch {
+        saveMsg.value = '删除失败'
+    }
+}
+
+async function deleteAi() {
+    if (!confirm('确定删除这个 AI？此操作不可恢复。')) return
+    try {
+        await api(`/api/messages/${personaId}`, { method: 'DELETE' })
+        await api(`/api/memories/${personaId}/clear`, { method: 'DELETE' })
+        await api(`/api/personas/custom/${personaId}`, { method: 'DELETE' })
+        router.push('/')
+    } catch {
         saveMsg.value = '删除失败'
     }
 }
@@ -371,408 +643,683 @@ async function deletePersona() {
 onMounted(() => {
     loadDetail()
     loadWorldBooks()
+    loadCustomThemes()
 })
 </script>
 
 <style scoped>
-.detail-page * {
-    max-width: 100%;
-    overflow-wrap: break-word;
-}
-
 .detail-page {
-    padding-top: calc(env(safe-area-inset-top, 44px) + 16px);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    background: linear-gradient(180deg, #FFFBFA 0%, #FFF0F2 60%, #FFE9ED 100%);
+    box-sizing: border-box;
 }
 
-.detail-header {
+.settings-blob {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(60px);
+}
+
+.sb-tl {
+    top: -40px;
+    left: -50px;
+    width: 220px;
+    height: 220px;
+    background: #F1DADD;
+    opacity: 0.45;
+}
+
+.sb-br {
+    bottom: 40px;
+    right: -60px;
+    width: 200px;
+    height: 200px;
+    background: #98CBEA;
+    opacity: 0.2;
+}
+
+.detail-nav {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--color-border);
+    justify-content: space-between;
+    padding: calc(env(safe-area-inset-top, 44px) + 8px) 16px 4px;
     flex-shrink: 0;
+    position: relative;
+    z-index: 2;
 }
 
-.back-btn {
+.detail-back {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: saturate(180%) blur(12px);
+    -webkit-backdrop-filter: saturate(180%) blur(12px);
+    border: 1px solid rgba(255, 240, 242, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(217, 163, 175, 0.08);
+}
+
+.detail-back svg {
+    width: 16px;
+    height: 16px;
+    stroke: #D9A3AF;
+}
+
+.detail-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #4A3F41;
+}
+
+.detail-save-btn {
     background: none;
     border: none;
-    font-size: 24px;
-    color: var(--color-primary);
-    cursor: pointer;
-    opacity: 0.75;
-}
-
-.detail-header h2 {
-    flex: 1;
     font-size: 15px;
-    font-weight: 500;
-    color: var(--color-text);
-}
-
-.save-btn-top {
-    background: none;
-    border: none;
-    font-size: 13px;
-    color: var(--color-primary);
-    font-weight: 500;
+    color: #D9A3AF;
+    font-weight: 700;
     cursor: pointer;
-    letter-spacing: 0.03em;
+    font-family: inherit;
+    padding: 4px 0;
 }
 
 .detail-content {
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
-    padding: 20px 0;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
-}
-
-.section-block {
-    margin-bottom: 22px;
-    animation: fadeIn 0.4s var(--ease-soft) backwards;
-}
-
-.section-block:nth-child(2) {
-    animation-delay: 0.05s;
-}
-
-.section-block:nth-child(3) {
-    animation-delay: 0.1s;
-}
-
-.section-block:nth-child(4) {
-    animation-delay: 0.15s;
-}
-
-.section-block:nth-child(5) {
-    animation-delay: 0.2s;
-}
-
-.section-label {
-    font-size: 12px;
-    color: var(--color-text-light);
-    margin-bottom: 10px;
-    font-weight: 400;
-    letter-spacing: 0.5px;
-}
-
-.avatar-row {
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-}
-
-.avatar-preview {
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: var(--color-bg-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 26px;
-    overflow: hidden;
-    flex-shrink: 0;
-    box-shadow: 0 2px 10px rgba(200, 130, 160, 0.1);
-}
-
-.avatar-preview img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.avatar-actions {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.file-input {
-    font-size: 11px;
-    color: var(--color-text-light);
-}
-
-.select-group {
-    margin-bottom: 14px;
-}
-
-.select-label {
-    display: block;
-    font-size: 11px;
-    color: var(--color-text-light);
-    margin-bottom: 6px;
-    letter-spacing: 0.4px;
-}
-
-.select-field {
-    width: auto;
-    height: 40px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
-    padding: 0 14px;
-    font-size: 14px;
-    background: var(--color-card);
-    outline: none;
-    color: var(--color-text);
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-.select-field.full {
-    width: 100%;
-}
-
-.danger-area {
-    border-top: 1px solid var(--color-border);
-    padding-top: 18px;
-}
-
-.danger-area>* {
-    margin-bottom: 8px;
-}
-
-.save-msg {
-    text-align: center;
-    color: var(--color-primary);
-    font-size: 12px;
-    padding: 10px;
-    opacity: 0.8;
-}
-
-.dream-input,
-.dream-textarea {
-    word-break: break-all;
-    overflow-wrap: break-word;
-}
-
-/* 身份卡片 */
-.identity-card {
-    margin-bottom: 20px;
-}
-
-.identity-top {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 16px;
-}
-
-.avatar-area {
+    padding: 8px 16px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
     position: relative;
+    z-index: 1;
 }
 
-.avatar-preview {
-    width: 56px;
-    height: 56px;
+.detail-content::-webkit-scrollbar {
+    display: none;
+}
+
+/* 身份英雄区 */
+.identity-hero {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 4px 24px;
+}
+
+.identity-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.identity-avatar {
+    width: 72px;
+    height: 72px;
     border-radius: 50%;
-    background: var(--color-bg-secondary);
+    background: rgba(255, 233, 237, 0.6);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 26px;
+    font-size: 32px;
     overflow: hidden;
-    box-shadow: 0 2px 10px rgba(200, 130, 160, 0.1);
+    box-shadow: 0 4px 16px rgba(217, 163, 175, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.8);
 }
 
-.avatar-preview img {
+.identity-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.avatar-edit {
+.avatar-edit-btn {
     position: absolute;
     bottom: -2px;
     right: -2px;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
-    background: var(--color-primary);
-    color: white;
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
     border: none;
-    font-size: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    box-shadow: 0 2px 6px rgba(217, 163, 175, 0.3);
 }
 
-.identity-info {
+.avatar-edit-btn svg {
+    width: 12px;
+    height: 12px;
+    stroke: white;
+}
+
+.identity-meta {
     flex: 1;
 }
 
-.display-name {
-    font-size: 18px;
-    font-weight: 500;
-    color: var(--color-text);
+.identity-name {
+    font-size: 22px;
+    font-weight: 700;
+    color: #4A3F41;
+    letter-spacing: 0.3px;
 }
 
-.real-name {
-    font-size: 12px;
-    color: var(--color-text-light);
-    margin-top: 2px;
-    opacity: 0.6;
+.identity-sub {
+    font-size: 13px;
+    color: #B8A9AC;
+    margin-top: 3px;
 }
 
-.avatar-edit-area {
-    padding: 12px 0;
-    border-top: 1px solid var(--color-border);
-    margin-bottom: 12px;
-}
-
-.file-input {
+/* section 标签 */
+.section-label-sm {
     font-size: 11px;
-    color: var(--color-text-light);
-    margin-top: 8px;
+    font-weight: 700;
+    color: #B8A9AC;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 0 4px 8px;
+    margin-top: 20px;
+    display: block;
 }
 
-.identity-details {
-    border-top: 1px solid var(--color-border);
-    padding-top: 14px;
+.section-label-hint {
+    font-size: 10px;
+    color: #B8A9AC;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    margin-left: 4px;
 }
 
-.detail-row {
-    display: flex;
-    justify-content: space-between;
+.count-badge {
+    display: inline-flex;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--color-border);
+    justify-content: center;
+    background: rgba(217, 163, 175, 0.2);
+    color: #D9A3AF;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 1px 6px;
+    margin-left: 6px;
 }
 
-.detail-row:last-child {
+/* 卡片组 */
+.settings-group {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-radius: 22px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    box-shadow: 0 8px 24px rgba(217, 163, 175, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+}
+
+.settings-group-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(217, 163, 175, 0.08);
+    position: relative;
+}
+
+.settings-group-item:last-child {
     border-bottom: none;
 }
 
-.detail-label {
-    font-size: 13px;
-    color: var(--color-text-light);
+.col-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.sgi-label {
+    font-size: 14px;
+    color: #4A3F41;
     flex-shrink: 0;
 }
 
-.detail-value-input {
-    text-align: right;
-    border: none;
-    background: none;
+.sgi-label-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sgi-desc {
+    font-size: 11px;
+    color: #B8A9AC;
+}
+
+.sgi-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sgi-value {
     font-size: 13px;
-    color: var(--color-text);
+    color: #B8A9AC;
+}
+
+.sgi-arrow {
+    width: 14px;
+    height: 14px;
+    stroke: #D4C8CA;
+    transition: transform 0.2s;
+}
+
+.sgi-input {
+    flex: 1;
+    border: none;
+    background: transparent;
     outline: none;
-    width: 50%;
+    font-size: 14px;
+    color: #4A3F41;
+    text-align: right;
     font-family: inherit;
 }
 
-.detail-value-input::placeholder {
-    color: var(--color-text-light);
-    opacity: 0.4;
+.sgi-input::placeholder {
+    color: #D4C8CA;
 }
 
-.detail-select {
-    border: none;
-    background: none;
+.sgi-input-full {
+    width: 100%;
+    border: 1px solid rgba(255, 240, 242, 0.5);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    padding: 10px 14px;
     font-size: 13px;
-    color: var(--color-text);
+    color: #4A3F41;
     outline: none;
-    text-align: right;
-    appearance: none;
-    -webkit-appearance: none;
+    font-family: inherit;
+    box-sizing: border-box;
 }
 
-.wb-check-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 0;
+.sgi-input-full::placeholder {
+    color: #D4C8CA;
+}
+
+.sgi-textarea {
+    width: 100%;
+    border: 1px solid rgba(255, 240, 242, 0.5);
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: #4A3F41;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    line-height: 1.6;
+    box-sizing: border-box;
+}
+
+.sgi-textarea::placeholder {
+    color: #D4C8CA;
+}
+
+.sgi-select-hidden {
+    position: absolute;
+    opacity: 0;
+    right: 16px;
+    width: 80px;
+    height: 44px;
     cursor: pointer;
-    border-bottom: 1px solid var(--color-border);
 }
 
-.wb-check-row:last-child {
-    border-bottom: none;
+/* 开关 */
+.toggle-sm {
+    position: relative;
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
 }
 
-.wb-checkbox {
-    width: 20px;
-    height: 20px;
-    border-radius: 5px;
-    border: 1.5px solid var(--color-border);
+.toggle-sm input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider-sm {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(217, 163, 175, 0.2);
+    border-radius: 13px;
+    transition: 0.28s ease;
+}
+
+.slider-sm:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 2px;
+    bottom: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: 0.28s ease;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.toggle-sm input:checked+.slider-sm {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+}
+
+.toggle-sm input:checked+.slider-sm:before {
+    transform: translateX(18px);
+}
+
+/* 世界书勾选 */
+.wb-checkbox-sm {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 1.5px solid rgba(217, 163, 175, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
-    color: white;
     transition: all 0.2s;
+    flex-shrink: 0;
 }
 
-.wb-checkbox.checked {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
+.wb-checkbox-sm svg {
+    width: 13px;
+    height: 13px;
 }
 
-.wb-name {
-    font-size: 13px;
-    color: var(--color-text);
+.wb-checkbox-sm.checked {
+    background: #D9A3AF;
+    border-color: #D9A3AF;
 }
 
-.wb-card {
-    max-height: 160px;
-    overflow: hidden;
-}
-
-.wb-scroll {
-    max-height: 140px;
-    overflow-y: auto;
-}
-
-.wb-count {
-    font-size: 10px;
-    color: var(--color-primary);
-    margin-left: 6px;
-    opacity: 0.7;
-}
-
-.wallpaper-preview {
-    width: 100%;
+/* 壁纸预览 */
+.wallpaper-preview-row {
+    position: relative;
     height: 100px;
-    border-radius: 10px;
     overflow: hidden;
-    margin-bottom: 10px;
 }
 
-.wallpaper-preview img {
+.wallpaper-preview-row img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.proactive-settings {
-    margin-top: 8px;
+.wallpaper-clear-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(74, 63, 65, 0.6);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
 }
 
-.interval-input {
+/* 上传按钮 */
+.upload-label {
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(217, 163, 175, 0.3);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    color: #6B5B5E;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* 聊天主题网格 */
+.theme-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.theme-item {
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 6px;
+    cursor: pointer;
 }
 
-.interval-number {
-    width: 50px;
-    height: 32px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    padding: 0 8px;
-    font-size: 13px;
-    background: var(--color-bg);
-    color: var(--color-text);
-    outline: none;
-    text-align: center;
+.theme-preview {
+    width: 100%;
+    aspect-ratio: 1.6;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.45);
+    border: 2px solid rgba(255, 240, 242, 0.4);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(217, 163, 175, 0.08);
 }
 
-.setting-hint {
+.theme-item.active .theme-preview {
+    border-color: #D9A3AF;
+    background: rgba(217, 163, 175, 0.1);
+    box-shadow: 0 4px 16px rgba(217, 163, 175, 0.2);
+}
+
+.preview-bubble {
+    height: 10px;
+    border-radius: 10px;
+}
+
+.preview-ai {
+    width: 60%;
+    align-self: flex-start;
+    background: rgba(217, 163, 175, 0.25);
+}
+
+.preview-user {
+    width: 50%;
+    align-self: flex-end;
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    opacity: 0.7;
+}
+
+/* 微信主题预览 */
+.preview-wechat .preview-ai {
+    background: #F0F0F0;
+}
+
+.preview-wechat .preview-user {
+    background: #95EC69;
+    opacity: 1;
+}
+
+/* 液态主题预览 */
+.preview-liquid .preview-ai {
+    background: rgba(216, 205, 234, 0.4);
+    border-radius: 20px;
+    height: 14px;
+}
+
+.preview-liquid .preview-user {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    border-radius: 20px;
+    height: 14px;
+    opacity: 1;
+}
+
+/* 极简预览 */
+.preview-minimal .preview-ai {
+    background: rgba(200, 200, 200, 0.3);
+}
+
+.preview-minimal .preview-user {
+    background: rgba(217, 163, 175, 0.6);
+}
+
+.theme-name {
     font-size: 11px;
-    color: var(--color-text-light);
+    color: #6B5B5E;
+    font-weight: 500;
+}
+
+.theme-item.active .theme-name {
+    color: #D9A3AF;
+    font-weight: 700;
+}
+
+/* 进入对话按钮 */
+.action-row {
+    margin-top: 20px;
+    margin-bottom: 4px;
+}
+
+.action-btn {
+    width: 100%;
+    height: 48px;
+    border-radius: 16px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+}
+
+.action-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.action-btn.primary {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    color: white;
+    box-shadow: 0 6px 20px rgba(217, 163, 175, 0.35);
+}
+
+.action-btn.primary:active {
+    transform: scale(0.97);
+}
+
+/* 危险操作 */
+.danger-item {
+    cursor: pointer;
+}
+
+.danger-item:active {
+    background: rgba(192, 112, 112, 0.04);
+}
+
+/* 保存提示 */
+.save-toast-float {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(74, 63, 65, 0.85);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    backdrop-filter: blur(10px);
+    z-index: 100;
+    white-space: nowrap;
+}
+
+.toast-fade-enter-active {
+    transition: opacity 0.3s;
+}
+
+.toast-fade-leave-active {
+    transition: opacity 0.5s;
+}
+
+.toast-fade-enter-from,
+.toast-fade-leave-to {
+    opacity: 0;
+}
+
+.code-textarea {
+    font-family: 'Menlo', 'Monaco', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.active-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #D9A3AF;
+    flex-shrink: 0;
+}
+
+.inline-del-btn {
+    background: none;
+    border: none;
+    font-size: 16px;
+    color: #B8A9AC;
+    cursor: pointer;
+    padding: 0 4px;
     opacity: 0.5;
-    margin-top: 8px;
-    font-style: italic;
+    line-height: 1;
+}
+
+.btn-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.action-btn {
+    flex: 1;
+    height: 44px;
+    border-radius: 16px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.action-btn.primary {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    color: white;
+    box-shadow: 0 6px 16px rgba(217, 163, 175, 0.3);
+}
+
+.action-btn.ghost {
+    background: rgba(255, 255, 255, 0.5);
+    color: #6B5B5E;
+    border: 1px solid rgba(255, 240, 242, 0.5);
+}
+
+.action-btn:active {
+    transform: scale(0.97);
 }
 </style>

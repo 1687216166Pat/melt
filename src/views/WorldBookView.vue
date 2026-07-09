@@ -1,7 +1,7 @@
 <template>
     <div class="worldbook-page">
         <!-- 顶部 -->
-        <div class="wb-header">
+        <div class="wb-header-wrap">
             <button class="back-btn" @click="$router.push('/')">‹</button>
             <div class="wb-header-title">
                 <span class="wb-title">世界书</span>
@@ -498,18 +498,26 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding-top: env(safe-area-inset-top, 44px);
-    overflow-x: hidden;
+    overflow: hidden;
+    position: relative;
+    background: linear-gradient(180deg, #FFFBFA 0%, #FFF0F2 60%, #FFE9ED 100%);
+    box-sizing: border-box;
 }
 
 /* 头部 */
+.wb-header-wrap {
+    padding-top: env(safe-area-inset-top, 44px);
+    padding-left: 16px;
+    padding-right: 16px;
+    flex-shrink: 0;
+}
+
 .wb-header {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 12px 0;
     border-bottom: 1px solid var(--color-border);
-    flex-shrink: 0;
 }
 
 .back-btn {
@@ -581,6 +589,8 @@ onMounted(() => {
     color: #B8A9AC;
     font-size: 12px;
     flex-shrink: 0;
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 .guide-toggle svg {
@@ -641,6 +651,8 @@ onMounted(() => {
     padding: 8px 0;
     overflow-x: auto;
     flex-shrink: 0;
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 .category-filter::-webkit-scrollbar {
@@ -672,6 +684,8 @@ onMounted(() => {
     gap: 8px;
     padding: 10px 0;
     flex-shrink: 0;
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 .batch-btn {
@@ -702,6 +716,8 @@ onMounted(() => {
     overflow-y: auto;
     padding: 8px 0;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    padding-left: 16px;
+    padding-right: 16px;
 }
 
 .wb-card {

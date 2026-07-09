@@ -41,6 +41,12 @@
                     <div class="sgi-label">模型</div>
                     <input class="sgi-input" v-model="apiConfig.model" placeholder="gpt-4o-mini" />
                 </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">温度</div>
+                    <input class="sgi-input" v-model.number="apiConfig.temperature" type="number" min="0" max="2"
+                        step="0.1" placeholder="0.7" />
+                </div>
+
             </div>
 
             <div class="btn-row">
@@ -94,6 +100,12 @@
                     <div class="sgi-label">模型</div>
                     <input class="sgi-input" v-model="subApiConfig.model" placeholder="gpt-4o-mini" />
                 </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label">温度</div>
+                    <input class="sgi-input" v-model.number="subApiConfig.temperature" type="number" min="0" max="2"
+                        step="0.1" placeholder="0.7" />
+                </div>
+
             </div>
 
             <div class="btn-row">
@@ -128,14 +140,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '@/utils/api'
 
-const apiConfig = reactive({ name: '', key: '', baseUrl: '', model: '' })
+const apiConfig = reactive({ name: '', key: '', baseUrl: '', model: '', temperature: 0.7 })
 const savedConfigs = ref([])
 const currentConfigIdx = ref(-1)
 const modelList = ref([])
 const apiTestResult = ref(null)
 const apiSaved = ref(false)
 
-const subApiConfig = reactive({ name: '', key: '', baseUrl: '', model: '' })
+const subApiConfig = reactive({ name: '', key: '', baseUrl: '', model: '', temperature: 0.7 })
 const savedSubConfigs = ref([])
 const currentSubConfigIdx = ref(-1)
 const subModelList = ref([])
@@ -188,7 +200,7 @@ async function saveApiConfig() {
     await api('/api/settings/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: apiConfig.key, baseUrl: apiConfig.baseUrl, model: apiConfig.model })
+        body: JSON.stringify({ key: apiConfig.key, baseUrl: apiConfig.baseUrl, model: apiConfig.model, temperature: apiConfig.temperature })
     })
     apiSaved.value = true
     setTimeout(() => { apiSaved.value = false }, 2000)
@@ -264,7 +276,7 @@ async function saveSubApiConfig() {
     await api('/api/settings/sub-api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: subApiConfig.key, baseUrl: subApiConfig.baseUrl, model: subApiConfig.model })
+        body: JSON.stringify({ key: subApiConfig.key, baseUrl: subApiConfig.baseUrl, model: subApiConfig.model, temperature: subApiConfig.temperature })
     })
     subApiSaved.value = true
     setTimeout(() => { subApiSaved.value = false }, 2000)

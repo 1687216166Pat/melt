@@ -21,6 +21,7 @@ import SettingsStorageView from "../views/settings/SettingsStorageView.vue";
 import SettingsLockView from "../views/settings/SettingsLockView.vue";
 import SettingsLifestyleView from "../views/settings/SettingsLifestyleView.vue";
 import SettingsLifeAwareView from "../views/settings/SettingsLifeAwareView.vue";
+import SettingsMemoryView from "../views/settings/SettingsMemoryView.vue";
 import WalletView from "../views/settings/WalletView.vue";
 import PomodoroView from "../views/PomodoroView.vue";
 
@@ -85,8 +86,12 @@ const router = createRouter({
       name: "settings-life-aware",
       component: SettingsLifeAwareView,
     },
+    {
+      path: "/settings/memory-manage",
+      name: "settings-memory-manage",
+      component: SettingsMemoryView,
+    },
     { path: "/wallet", name: "wallet", component: WalletView },
-
     { path: "/pomodoro", name: "pomodoro", component: PomodoroView },
   ],
 });
