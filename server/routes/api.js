@@ -1744,4 +1744,29 @@ ${content.slice(0, 8000)}${content.length > 8000 ? "\n...(原文较长，已截�
   }
 });
 
+// 获取记忆碎片
+router.get("/memory-fragments/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("memory_fragments")
+    .select("id, content, heat, source_date, last_recalled_at")
+    .eq("persona_id", req.params.personaId)
+    .order("heat", { ascending: false })
+    .limit(50);
+  res.json(data || []);
+});
+
+// 获取记忆弧线
+router.get("/memory-arcs/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("memory_arcs")
+    .select("id, theme, summary, updated_at")
+    .eq("persona_id", req.params.personaId)
+    .order("updated_at", { ascending: false });
+  res.json(data || []);
+});
+
 module.exports = router;

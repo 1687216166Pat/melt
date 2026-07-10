@@ -411,6 +411,22 @@ async function processMemory(personaId, userMessage, aiReply, isBeta = false) {
   if (quickEvery > 0 && counter.total % quickEvery === 0) {
     await extractQuickMemory(personaId, userMessage, aiReply);
   }
+
+  if (quickEvery > 0 && counter.total % quickEvery === 0) {
+    await extractQuickMemory(personaId, userMessage, aiReply);
+    // 同时提取碎片
+    extractFragments(personaId, userMessage, aiReply).catch(() => {});
+  }
+
+  // 每50条消息更新一次弧线
+  if (counter.total % 50 === 0) {
+    updateArcs(personaId).catch(() => {});
+  }
+
+  // 每100条消息做一次碎片衰减
+  if (counter.total % 100 === 0) {
+    decayFragments(personaId).catch(() => {});
+  }
 }
 
 // ========== 轻量即时提取 ==========
@@ -531,6 +547,18 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
     for (const m of recentDays) {
       context += `${m.source_session}: ${m.content}\n`;
     }
+  }
+
+  // 5. 记忆碎片（星图层）
+  const fragmentsText = await recallFragments(personaId, userMessage);
+  if (fragmentsText) {
+    context += `[记忆碎片]\n${fragmentsText}\n`;
+  }
+
+  // 6. 弧线（长期主题）
+  const arcsText = await recallArcs(personaId);
+  if (arcsText) {
+    context += `[长期主题]\n${arcsText}\n`;
   }
 
   // 4. 行为模式
@@ -835,6 +863,256 @@ ${layerText}
   }
 }
 
+// ========== 记忆星图：碎片层 ==========
+
+async function extractFragments(personaId, userMessage, aiReply) {
+  const { getIdentityConfig } = require("./sediment");
+  const identity = await getIdentityConfig(personaId);
+  const cleanReply = aiReply.replace(/\|\|\|/g, " ");
+
+  const prompt = `从以下对话中提取记忆碎片。
+
+身份：${identity.userName}（用户）和${identity.aiName}
+
+规则：
+1. 只提取有意义的事实性信息，忽略闲聊
+2. 每条碎片是一个独立的事实，第三人称短句
+3. 最多提取3条，没有值得记录的就回复"无"
+4. 格式：每行一条，不带编号
+
+例：
+${identity.userName}喜欢喝美式咖啡
+${identity.aiName}记住了${identity.userName}的生日是3月15日
+${identity.userName}最近在准备考研
+
+对话：
+${identity.userName}: ${userMessage}
+${identity.aiName}: ${cleanReply}
+
+碎片：`;
+
+  try {
+    const result = await callSubAI(prompt, 100);
+    if (!result || result === "无" || result.trim().length < 3) return;
+
+    const db = getDB();
+    const today = new Date().toISOString().slice(0, 10);
+    const lines = result
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+
+    for (const line of lines) {
+      if (line.length < 4) continue;
+      await db.from("memory_fragments").insert({
+        persona_id: personaId,
+        content: line,
+        source_date: today,
+        heat: 1.0,
+        last_recalled_at: new Date().toISOString(),
+      });
+    }
+
+    console.log(`[碎片] ${personaId} 提取了 ${lines.length} 条碎片`);
+  } catch (e) {
+    console.error("[碎片] 提取失败:", e.message);
+  }
+}
+
+// ========== 记忆星图：遗忘衰减 ==========
+
+async function decayFragments(personaId) {
+  const db = getDB();
+  const now = new Date();
+  const day14 = new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const day90 = new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+  // 90天未被召回的直接删除
+  await db
+    .from("memory_fragments")
+    .delete()
+    .eq("persona_id", personaId)
+    .lt("last_recalled_at", day90)
+    .lt("heat", 0.3);
+
+  // 30天未被召回的降低热度
+  const { data: coldMems } = await db
+    .from("memory_fragments")
+    .select("id, heat")
+    .eq("persona_id", personaId)
+    .lt("last_recalled_at", day30)
+    .gte("last_recalled_at", day90);
+
+  if (coldMems && coldMems.length > 0) {
+    for (const mem of coldMems) {
+      await db
+        .from("memory_fragments")
+        .update({ heat: Math.max(0.1, mem.heat * 0.7) })
+        .eq("id", mem.id);
+    }
+  }
+
+  // 14天未被召回的轻微降低热度
+  const { data: coolMems } = await db
+    .from("memory_fragments")
+    .select("id, heat")
+    .eq("persona_id", personaId)
+    .lt("last_recalled_at", day14)
+    .gte("last_recalled_at", day30);
+
+  if (coolMems && coolMems.length > 0) {
+    for (const mem of coolMems) {
+      await db
+        .from("memory_fragments")
+        .update({ heat: Math.max(0.3, mem.heat * 0.9) })
+        .eq("id", mem.id);
+    }
+  }
+
+  console.log(`[衰减] ${personaId} 碎片衰减完成`);
+}
+
+// ========== 记忆星图：弧线层 ==========
+
+async function updateArcs(personaId) {
+  const db = getDB();
+
+  // 取最近热度较高的碎片
+  const { data: fragments } = await db
+    .from("memory_fragments")
+    .select("id, content, heat, source_date")
+    .eq("persona_id", personaId)
+    .gte("heat", 0.5)
+    .order("heat", { ascending: false })
+    .limit(30);
+
+  if (!fragments || fragments.length < 5) return;
+
+  const fragmentText = fragments
+    .map((f) => `[${f.source_date}] ${f.content}`)
+    .join("\n");
+
+  const { getIdentityConfig } = require("./sediment");
+  const identity = await getIdentityConfig(personaId);
+
+  const prompt = `从以下记忆碎片中，提炼出跨越时间的长期主题弧线。
+
+碎片列表：
+${fragmentText}
+
+规则：
+1. 找出反复出现的模式、习惯、偏好或关系变化
+2. 每条弧线是一个长期主题，不超过20字的标题 + 50字以内的描述
+3. 最多提取3条弧线
+4. 没有明显主题则回复"无"
+5. 格式：标题|描述
+
+例：
+${identity.userName}的作息习惯|${identity.userName}经常深夜活跃，偶尔提到失眠，可能有睡眠问题
+对咖啡的偏好|多次提到喜欢美式，不喜欢甜饮料
+
+弧线：`;
+
+  try {
+    const result = await callSubAI(prompt, 300);
+    if (!result || result === "无") return;
+
+    const lines = result
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.includes("|"))
+      .slice(0, 3);
+
+    for (const line of lines) {
+      const [theme, summary] = line.split("|").map((s) => s.trim());
+      if (!theme || !summary) continue;
+
+      // 检查是否已有同主题弧线
+      const { data: existing } = await db
+        .from("memory_arcs")
+        .select("id")
+        .eq("persona_id", personaId)
+        .eq("theme", theme)
+        .limit(1);
+
+      const fragmentIds = fragments.slice(0, 10).map((f) => f.id);
+
+      if (existing && existing.length > 0) {
+        await db
+          .from("memory_arcs")
+          .update({
+            summary,
+            fragment_ids: fragmentIds,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existing[0].id);
+      } else {
+        await db.from("memory_arcs").insert({
+          persona_id: personaId,
+          theme,
+          summary,
+          fragment_ids: fragmentIds,
+        });
+      }
+    }
+
+    console.log(`[弧线] ${personaId} 弧线更新完成`);
+  } catch (e) {
+    console.error("[弧线] 更新失败:", e.message);
+  }
+}
+
+// ========== 碎片召回（注入 prompt）==========
+
+async function recallFragments(personaId, userMessage) {
+  const db = getDB();
+
+  // 取热度最高的碎片（简单召回，后续可加语义搜索）
+  const { data: fragments } = await db
+    .from("memory_fragments")
+    .select("id, content, heat")
+    .eq("persona_id", personaId)
+    .gte("heat", 0.4)
+    .order("heat", { ascending: false })
+    .limit(8);
+
+  if (!fragments || fragments.length === 0) return "";
+
+  // 更新被召回碎片的热度和时间
+  const ids = fragments.map((f) => f.id);
+  for (const id of ids) {
+    const frag = fragments.find((f) => f.id === id);
+    if (frag) {
+      await db
+        .from("memory_fragments")
+        .update({
+          heat: Math.min(1.0, frag.heat + 0.1),
+          last_recalled_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+    }
+  }
+
+  return fragments.map((f) => f.content).join("\n");
+}
+
+async function recallArcs(personaId) {
+  const db = getDB();
+
+  const { data: arcs } = await db
+    .from("memory_arcs")
+    .select("theme, summary")
+    .eq("persona_id", personaId)
+    .order("updated_at", { ascending: false })
+    .limit(3);
+
+  if (!arcs || arcs.length === 0) return "";
+
+  return arcs.map((a) => `${a.theme}：${a.summary}`).join("\n");
+}
+
 module.exports = {
   processMemory,
   saveDailyMemory,
@@ -852,4 +1130,9 @@ module.exports = {
   initCounters,
   compressOldMessages,
   getMemoryConfig, // 加这行
+  extractFragments,
+  decayFragments,
+  updateArcs,
+  recallFragments,
+  recallArcs,
 };

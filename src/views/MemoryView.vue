@@ -51,6 +51,8 @@
 
             <!-- 主视图 -->
             <template v-if="currentView === 'main'">
+
+                <!-- 长期印象 -->
                 <div class="section-label-sm">长期印象</div>
                 <div class="settings-group">
                     <div class="settings-group-item col-item">
@@ -59,6 +61,37 @@
                     </div>
                 </div>
 
+                <!-- 弧线层 -->
+                <template v-if="arcs.length > 0">
+                    <div class="section-label-sm">长期主题</div>
+                    <div class="arc-list">
+                        <div v-for="arc in arcs" :key="arc.id" class="arc-card">
+                            <div class="arc-header">
+                                <span class="arc-theme">{{ arc.theme }}</span>
+                                <span class="arc-date">{{ arc.updated_at?.slice(0, 10) }}</span>
+                            </div>
+                            <p class="arc-summary">{{ arc.summary }}</p>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 碎片层 -->
+                <template v-if="fragments.length > 0">
+                    <div class="section-label-sm"
+                        style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>记忆碎片</span>
+                        <span class="fragment-count">{{ fragments.length }} 条</span>
+                    </div>
+                    <div class="fragment-list">
+                        <div v-for="frag in fragments" :key="frag.id" class="fragment-item">
+                            <div class="fragment-heat" :style="{ opacity: frag.heat }"></div>
+                            <span class="fragment-content">{{ frag.content }}</span>
+                            <span class="fragment-date">{{ frag.source_date }}</span>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 热力图 -->
                 <div class="section-label-sm">最近 63 天</div>
                 <div class="settings-group">
                     <div class="settings-group-item col-item" style="gap:10px;">
@@ -88,6 +121,7 @@
                     </div>
                 </div>
 
+                <!-- 记忆归档 -->
                 <div class="section-label-sm">记忆归档</div>
                 <div v-if="Object.keys(dateTree).length > 0" class="year-grid">
                     <div v-for="year in Object.keys(dateTree).sort().reverse()" :key="year" class="year-card"
@@ -102,6 +136,7 @@
                     <p class="empty-title">还没有记忆归档</p>
                     <p class="empty-sub">聊得越多，记忆库越丰富</p>
                 </div>
+
             </template>
 
             <!-- 年视图 -->
@@ -184,6 +219,8 @@ const profile = ref('')
 const heatmapData = ref({})
 const dateTree = ref({})
 const dayMemories = ref([])
+const fragments = ref([])
+const arcs = ref([])
 
 const currentView = ref('main')
 const selectedYear = ref('')
@@ -196,7 +233,6 @@ const newMemoryContent = ref('')
 const editMemoryContent = ref('')
 const editMemoryId = ref(null)
 
-// 热力图：按周排列，从周一对齐，共9列×7行=63格
 const heatmapDays = computed(() => {
     const days = []
     const now = new Date()
@@ -232,7 +268,13 @@ const monthDays = computed(() => {
 })
 
 async function loadAll() {
-    await Promise.all([loadProfile(), loadHeatmap(), loadDateTree()])
+    await Promise.all([
+        loadProfile(),
+        loadHeatmap(),
+        loadDateTree(),
+        loadFragments(),
+        loadArcs()
+    ])
 }
 
 async function loadProfile() {
@@ -254,6 +296,20 @@ async function loadDateTree() {
     try {
         const res = await api(`/api/memories/${currentPersona.value}/dates`)
         dateTree.value = await res.json()
+    } catch { }
+}
+
+async function loadFragments() {
+    try {
+        const res = await api(`/api/memory-fragments/${currentPersona.value}`)
+        fragments.value = await res.json()
+    } catch { }
+}
+
+async function loadArcs() {
+    try {
+        const res = await api(`/api/memory-arcs/${currentPersona.value}`)
+        arcs.value = await res.json()
     } catch { }
 }
 
@@ -594,6 +650,98 @@ onMounted(loadPersonas)
     font-style: italic;
 }
 
+/* 弧线 */
+.arc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.arc-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-radius: 16px;
+    padding: 14px 16px;
+    border: 1px solid rgba(216, 205, 234, 0.3);
+    box-shadow: 0 4px 12px rgba(216, 205, 234, 0.1);
+}
+
+.arc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.arc-theme {
+    font-size: 13px;
+    font-weight: 600;
+    color: #9B89B4;
+}
+
+.arc-date {
+    font-size: 10px;
+    color: #B8A9AC;
+}
+
+.arc-summary {
+    font-size: 12px;
+    color: #6B5B5E;
+    line-height: 1.6;
+}
+
+/* 碎片 */
+.fragment-count {
+    font-size: 11px;
+    color: #D9A3AF;
+    font-weight: 600;
+}
+
+.fragment-list {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+}
+
+.fragment-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    border-bottom: 1px solid rgba(217, 163, 175, 0.08);
+}
+
+.fragment-item:last-child {
+    border-bottom: none;
+}
+
+.fragment-heat {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #D9A3AF;
+    flex-shrink: 0;
+}
+
+.fragment-content {
+    flex: 1;
+    font-size: 13px;
+    color: #4A3F41;
+    line-height: 1.5;
+}
+
+.fragment-date {
+    font-size: 10px;
+    color: #B8A9AC;
+    flex-shrink: 0;
+}
+
 /* 热力图 */
 .heatmap-wrap {
     display: flex;
@@ -813,7 +961,6 @@ onMounted(loadPersonas)
 .empty-state-unified {
     text-align: center;
     padding: 48px 24px;
-    animation: fadeIn 0.6s var(--ease-soft);
 }
 
 .empty-icon {
