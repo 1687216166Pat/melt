@@ -38,15 +38,17 @@
                     <input class="sgi-input" v-model="apiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
                 </div>
                 <div class="settings-group-item">
-                    <div class="sgi-label">模型</div>
-                    <input class="sgi-input" v-model="apiConfig.model" placeholder="gpt-4o-mini" />
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">模型</div>
+                        <div class="sgi-desc">支持任意模型名，含前缀的会自动清理</div>
+                    </div>
+                    <input class="sgi-input" v-model="apiConfig.model" placeholder="gpt-4o / gemini-pro / ..." />
                 </div>
                 <div class="settings-group-item">
                     <div class="sgi-label">温度</div>
                     <input class="sgi-input" v-model.number="apiConfig.temperature" type="number" min="0" max="2"
-                        step="0.1" placeholder="0.7" />
+                        step="0.1" placeholder="0.7" style="max-width:80px;" />
                 </div>
-
             </div>
 
             <div class="btn-row">
@@ -54,15 +56,25 @@
                 <button class="action-btn ghost" @click="saveAsNewConfig">另存为新配置</button>
             </div>
             <div class="btn-row">
-                <button class="action-btn ghost" @click="fetchModels">获取模型</button>
-                <button class="action-btn ghost" @click="testApiConnection">测试连接</button>
+                <button class="action-btn ghost" @click="fetchModels" :disabled="fetchingModels">
+                    {{ fetchingModels ? '获取中...' : '获取模型列表' }}
+                </button>
+                <button class="action-btn ghost" @click="testApiConnection" :disabled="testingApi">
+                    {{ testingApi ? '测试中...' : '测试连接' }}
+                </button>
             </div>
 
+            <!-- 模型列表 -->
             <div v-if="modelList.length > 0" class="model-panel">
-                <div class="model-panel-title">可用模型 · 点击选择</div>
+                <div class="model-panel-header">
+                    <span class="model-panel-title">{{ modelList.length }} 个可用模型 · 点击选择并保存</span>
+                    <input class="model-search" v-model="modelSearch" placeholder="搜索..." />
+                </div>
                 <div class="model-scroll">
-                    <div v-for="m in modelList" :key="m" class="model-chip" :class="{ active: apiConfig.model === m }"
-                        @click="apiConfig.model = m">{{ m }}</div>
+                    <div v-for="m in filteredModelList" :key="m" class="model-chip"
+                        :class="{ active: apiConfig.model === m }" @click="selectModel(m)">
+                        {{ m }}
+                    </div>
                 </div>
             </div>
 
@@ -74,8 +86,10 @@
             <div v-if="apiSaved" class="save-toast">已保存 ✓</div>
 
             <!-- 副 API -->
-            <div class="section-label-sm" style="margin-top:28px;">副 API <span class="section-sub-hint">记忆 / 时间线 /
-                    主动消息</span></div>
+            <div class="section-label-sm" style="margin-top:28px;">
+                副 API
+                <span class="section-sub-hint">记忆 / 时间线 / 主动消息</span>
+            </div>
             <div class="settings-group">
                 <div v-if="savedSubConfigs.length > 0" class="config-pills">
                     <div v-for="(c, idx) in savedSubConfigs" :key="idx" class="config-pill"
@@ -97,15 +111,17 @@
                     <input class="sgi-input" v-model="subApiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
                 </div>
                 <div class="settings-group-item">
-                    <div class="sgi-label">模型</div>
-                    <input class="sgi-input" v-model="subApiConfig.model" placeholder="gpt-4o-mini" />
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">模型</div>
+                        <div class="sgi-desc">支持任意模型名，含前缀的会自动清理</div>
+                    </div>
+                    <input class="sgi-input" v-model="subApiConfig.model" placeholder="gpt-4o / gemini-pro / ..." />
                 </div>
                 <div class="settings-group-item">
                     <div class="sgi-label">温度</div>
                     <input class="sgi-input" v-model.number="subApiConfig.temperature" type="number" min="0" max="2"
-                        step="0.1" placeholder="0.7" />
+                        step="0.1" placeholder="0.7" style="max-width:80px;" />
                 </div>
-
             </div>
 
             <div class="btn-row">
@@ -113,15 +129,24 @@
                 <button class="action-btn ghost" @click="saveAsNewSubConfig">另存为新配置</button>
             </div>
             <div class="btn-row">
-                <button class="action-btn ghost" @click="fetchSubModels">获取模型</button>
-                <button class="action-btn ghost" @click="testSubApiConnection">测试连接</button>
+                <button class="action-btn ghost" @click="fetchSubModels" :disabled="fetchingSubModels">
+                    {{ fetchingSubModels ? '获取中...' : '获取模型列表' }}
+                </button>
+                <button class="action-btn ghost" @click="testSubApiConnection" :disabled="testingSubApi">
+                    {{ testingSubApi ? '测试中...' : '测试连接' }}
+                </button>
             </div>
 
             <div v-if="subModelList.length > 0" class="model-panel">
-                <div class="model-panel-title">可用模型 · 点击选择</div>
+                <div class="model-panel-header">
+                    <span class="model-panel-title">{{ subModelList.length }} 个可用模型 · 点击选择并保存</span>
+                    <input class="model-search" v-model="subModelSearch" placeholder="搜索..." />
+                </div>
                 <div class="model-scroll">
-                    <div v-for="m in subModelList" :key="m" class="model-chip"
-                        :class="{ active: subApiConfig.model === m }" @click="subApiConfig.model = m">{{ m }}</div>
+                    <div v-for="m in filteredSubModelList" :key="m" class="model-chip"
+                        :class="{ active: subApiConfig.model === m }" @click="selectSubModel(m)">
+                        {{ m }}
+                    </div>
                 </div>
             </div>
 
@@ -137,24 +162,48 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { api } from '@/utils/api'
+
+// 清理模型名中的前缀标记，如 [按次]、[个人次cli] 等
+function cleanModelName(model) {
+    if (!model) return model
+    return model.replace(/^$$.*?$$/g, '').trim()
+}
 
 const apiConfig = reactive({ name: '', key: '', baseUrl: '', model: '', temperature: 0.7 })
 const savedConfigs = ref([])
 const currentConfigIdx = ref(-1)
 const modelList = ref([])
+const modelSearch = ref('')
 const apiTestResult = ref(null)
 const apiSaved = ref(false)
+const fetchingModels = ref(false)
+const testingApi = ref(false)
 
 const subApiConfig = reactive({ name: '', key: '', baseUrl: '', model: '', temperature: 0.7 })
 const savedSubConfigs = ref([])
 const currentSubConfigIdx = ref(-1)
 const subModelList = ref([])
+const subModelSearch = ref('')
 const subApiTestResult = ref(null)
 const subApiSaved = ref(false)
+const fetchingSubModels = ref(false)
+const testingSubApi = ref(false)
 
-onMounted(() => {
+const filteredModelList = computed(() => {
+    if (!modelSearch.value.trim()) return modelList.value
+    const q = modelSearch.value.toLowerCase()
+    return modelList.value.filter(m => m.toLowerCase().includes(q))
+})
+
+const filteredSubModelList = computed(() => {
+    if (!subModelSearch.value.trim()) return subModelList.value
+    const q = subModelSearch.value.toLowerCase()
+    return subModelList.value.filter(m => m.toLowerCase().includes(q))
+})
+
+onMounted(async () => {
     const c = localStorage.getItem('api_config')
     if (c) Object.assign(apiConfig, JSON.parse(c))
     const cs = localStorage.getItem('api_configs')
@@ -168,7 +217,28 @@ onMounted(() => {
     if (scs) savedSubConfigs.value = JSON.parse(scs)
     const sidx = localStorage.getItem('active_sub_config_idx')
     if (sidx !== null) currentSubConfigIdx.value = parseInt(sidx)
+
+    // 从数据库同步当前配置
+    try {
+        const res = await api('/api/settings/api')
+        const data = await res.json()
+        if (data.key) apiConfig.key = data.key
+        if (data.baseUrl) apiConfig.baseUrl = data.baseUrl
+        if (data.model) apiConfig.model = data.model
+        if (data.temperature !== undefined) apiConfig.temperature = data.temperature
+    } catch { }
 })
+
+// 点击模型列表时直接选中并保存
+function selectModel(m) {
+    apiConfig.model = m
+    saveApiConfig()
+}
+
+function selectSubModel(m) {
+    subApiConfig.model = m
+    saveSubApiConfig()
+}
 
 function selectConfig(idx) {
     currentConfigIdx.value = idx
@@ -180,7 +250,8 @@ function selectConfig(idx) {
 function deleteConfig(idx) {
     savedConfigs.value.splice(idx, 1)
     localStorage.setItem('api_configs', JSON.stringify(savedConfigs.value))
-    if (currentConfigIdx.value >= savedConfigs.value.length) currentConfigIdx.value = savedConfigs.value.length - 1
+    if (currentConfigIdx.value >= savedConfigs.value.length)
+        currentConfigIdx.value = savedConfigs.value.length - 1
 }
 
 function saveAsNewConfig() {
@@ -192,6 +263,10 @@ function saveAsNewConfig() {
 }
 
 async function saveApiConfig() {
+    // 保存时清理模型名前缀
+    const cleanedModel = cleanModelName(apiConfig.model)
+    apiConfig.model = cleanedModel
+
     localStorage.setItem('api_config', JSON.stringify(apiConfig))
     if (currentConfigIdx.value >= 0 && savedConfigs.value[currentConfigIdx.value]) {
         savedConfigs.value[currentConfigIdx.value] = { ...apiConfig }
@@ -200,7 +275,12 @@ async function saveApiConfig() {
     await api('/api/settings/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: apiConfig.key, baseUrl: apiConfig.baseUrl, model: apiConfig.model, temperature: apiConfig.temperature })
+        body: JSON.stringify({
+            key: apiConfig.key,
+            baseUrl: apiConfig.baseUrl,
+            model: cleanedModel,
+            temperature: apiConfig.temperature
+        })
     })
     apiSaved.value = true
     setTimeout(() => { apiSaved.value = false }, 2000)
@@ -209,6 +289,8 @@ async function saveApiConfig() {
 async function fetchModels() {
     apiTestResult.value = null
     modelList.value = []
+    modelSearch.value = ''
+    fetchingModels.value = true
     try {
         const res = await api('/api/test/models', {
             method: 'POST',
@@ -224,25 +306,36 @@ async function fetchModels() {
         }
     } catch (e) {
         apiTestResult.value = { success: false, message: e.message }
+    } finally {
+        fetchingModels.value = false
     }
 }
 
 async function testApiConnection() {
     apiTestResult.value = null
+    testingApi.value = true
+    const cleanedModel = cleanModelName(apiConfig.model)
     try {
         const res = await api('/api/test/connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ baseUrl: apiConfig.baseUrl, key: apiConfig.key, model: apiConfig.model })
+            body: JSON.stringify({
+                baseUrl: apiConfig.baseUrl,
+                key: apiConfig.key,
+                model: cleanedModel
+            })
         })
         const data = await res.json()
         if (data.ok && data.data?.choices?.[0]) {
-            apiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${apiConfig.model}` }
+            apiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${cleanedModel}` }
         } else {
-            apiTestResult.value = { success: false, message: data.data?.error?.message || '未知错误' }
+            const errMsg = data.error || data.data?.error?.message || '未知错误'
+            apiTestResult.value = { success: false, message: errMsg }
         }
     } catch (e) {
         apiTestResult.value = { success: false, message: e.message }
+    } finally {
+        testingApi.value = false
     }
 }
 
@@ -256,7 +349,8 @@ function selectSubConfig(idx) {
 function deleteSubConfig(idx) {
     savedSubConfigs.value.splice(idx, 1)
     localStorage.setItem('sub_api_configs', JSON.stringify(savedSubConfigs.value))
-    if (currentSubConfigIdx.value >= savedSubConfigs.value.length) currentSubConfigIdx.value = savedSubConfigs.value.length - 1
+    if (currentSubConfigIdx.value >= savedSubConfigs.value.length)
+        currentSubConfigIdx.value = savedSubConfigs.value.length - 1
 }
 
 function saveAsNewSubConfig() {
@@ -268,6 +362,9 @@ function saveAsNewSubConfig() {
 }
 
 async function saveSubApiConfig() {
+    const cleanedModel = cleanModelName(subApiConfig.model)
+    subApiConfig.model = cleanedModel
+
     localStorage.setItem('sub_api_config', JSON.stringify(subApiConfig))
     if (currentSubConfigIdx.value >= 0 && savedSubConfigs.value[currentSubConfigIdx.value]) {
         savedSubConfigs.value[currentSubConfigIdx.value] = { ...subApiConfig }
@@ -276,7 +373,12 @@ async function saveSubApiConfig() {
     await api('/api/settings/sub-api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: subApiConfig.key, baseUrl: subApiConfig.baseUrl, model: subApiConfig.model, temperature: subApiConfig.temperature })
+        body: JSON.stringify({
+            key: subApiConfig.key,
+            baseUrl: subApiConfig.baseUrl,
+            model: cleanedModel,
+            temperature: subApiConfig.temperature
+        })
     })
     subApiSaved.value = true
     setTimeout(() => { subApiSaved.value = false }, 2000)
@@ -285,6 +387,8 @@ async function saveSubApiConfig() {
 async function fetchSubModels() {
     subApiTestResult.value = null
     subModelList.value = []
+    subModelSearch.value = ''
+    fetchingSubModels.value = true
     try {
         const res = await api('/api/test/models', {
             method: 'POST',
@@ -300,31 +404,41 @@ async function fetchSubModels() {
         }
     } catch (e) {
         subApiTestResult.value = { success: false, message: e.message }
+    } finally {
+        fetchingSubModels.value = false
     }
 }
 
 async function testSubApiConnection() {
     subApiTestResult.value = null
+    testingSubApi.value = true
+    const cleanedModel = cleanModelName(subApiConfig.model)
     try {
         const res = await api('/api/test/connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ baseUrl: subApiConfig.baseUrl, key: subApiConfig.key, model: subApiConfig.model })
+            body: JSON.stringify({
+                baseUrl: subApiConfig.baseUrl,
+                key: subApiConfig.key,
+                model: cleanedModel
+            })
         })
         const data = await res.json()
         if (data.ok && data.data?.choices?.[0]) {
-            subApiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${subApiConfig.model}` }
+            subApiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${cleanedModel}` }
         } else {
-            subApiTestResult.value = { success: false, message: data.data?.error?.message || '未知错误' }
+            const errMsg = data.error || data.data?.error?.message || '未知错误'
+            subApiTestResult.value = { success: false, message: errMsg }
         }
     } catch (e) {
         subApiTestResult.value = { success: false, message: e.message }
+    } finally {
+        testingSubApi.value = false
     }
 }
 </script>
 
 <style scoped>
-/* 基础容器 */
 .sub-page {
     width: 100%;
     height: 100%;
@@ -337,7 +451,6 @@ async function testSubApiConnection() {
     box-sizing: border-box;
 }
 
-/* 背景光斑 */
 .settings-blob {
     position: absolute;
     border-radius: 50%;
@@ -364,7 +477,6 @@ async function testSubApiConnection() {
     opacity: 0.2;
 }
 
-/* 顶部导航 */
 .settings-nav {
     display: flex;
     align-items: center;
@@ -402,18 +514,6 @@ async function testSubApiConnection() {
     color: #4A3F41;
 }
 
-.settings-save-btn {
-    background: none;
-    border: none;
-    font-size: 15px;
-    color: #D9A3AF;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    padding: 4px 0;
-}
-
-/* 内容区 */
 .sub-content {
     flex: 1;
     overflow-y: auto;
@@ -427,7 +527,6 @@ async function testSubApiConnection() {
     display: none;
 }
 
-/* 分区标签 */
 .section-label-sm {
     font-size: 11px;
     font-weight: 700;
@@ -447,7 +546,6 @@ async function testSubApiConnection() {
     text-transform: none;
 }
 
-/* 卡片组 */
 .settings-group {
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(20px);
@@ -455,7 +553,7 @@ async function testSubApiConnection() {
     border-radius: 22px;
     overflow: hidden;
     margin-bottom: 10px;
-    box-shadow: 0 8px 24px rgba(217, 163, 175, 0.1), 0 2px 6px rgba(217, 163, 175, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+    box-shadow: 0 8px 24px rgba(217, 163, 175, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
     border: 1px solid rgba(255, 240, 242, 0.4);
 }
 
@@ -466,41 +564,31 @@ async function testSubApiConnection() {
     padding: 14px 16px;
     border-bottom: 1px solid rgba(217, 163, 175, 0.08);
     position: relative;
+    gap: 12px;
 }
 
 .settings-group-item:last-child {
     border-bottom: none;
 }
 
-.col-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-}
-
-/* 字段 */
 .sgi-label {
     font-size: 14px;
     color: #4A3F41;
     flex-shrink: 0;
-    min-width: 80px;
+    min-width: 70px;
 }
 
-.sgi-right {
+.sgi-label-wrap {
+    flex-shrink: 0;
     display: flex;
-    align-items: center;
-    gap: 4px;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 70px;
 }
 
-.sgi-value {
-    font-size: 13px;
+.sgi-desc {
+    font-size: 10px;
     color: #B8A9AC;
-}
-
-.sgi-arrow {
-    width: 14px;
-    height: 14px;
-    stroke: #D4C8CA;
 }
 
 .sgi-input {
@@ -508,120 +596,17 @@ async function testSubApiConnection() {
     border: none;
     background: transparent;
     outline: none;
-    font-size: 14px;
+    font-size: 13px;
     color: #4A3F41;
     text-align: right;
     font-family: inherit;
+    min-width: 0;
 }
 
 .sgi-input::placeholder {
     color: #D4C8CA;
 }
 
-.sgi-input.full {
-    width: 100%;
-    text-align: left;
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 240, 242, 0.5);
-    border-radius: 14px;
-    padding: 12px 14px;
-    box-shadow: 0 4px 12px rgba(217, 163, 175, 0.06);
-}
-
-.sgi-select {
-    border: none;
-    background: transparent;
-    outline: none;
-    font-size: 14px;
-    color: #4A3F41;
-    font-family: inherit;
-    -webkit-appearance: none;
-    appearance: none;
-    cursor: pointer;
-    text-align: right;
-    padding-right: 4px;
-}
-
-.sgi-select-hidden {
-    position: absolute;
-    opacity: 0;
-    right: 16px;
-    width: 80px;
-    height: 44px;
-    cursor: pointer;
-}
-
-.sgi-textarea {
-    width: 100%;
-    border: 1px solid rgba(255, 240, 242, 0.5);
-    background: rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border-radius: 14px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: #4A3F41;
-    font-family: inherit;
-    resize: none;
-    outline: none;
-    line-height: 1.5;
-    box-shadow: 0 4px 12px rgba(217, 163, 175, 0.06);
-}
-
-.sgi-textarea::placeholder {
-    color: #D4C8CA;
-}
-
-/* 开关 */
-.toggle-sm {
-    position: relative;
-    width: 44px;
-    height: 26px;
-    flex-shrink: 0;
-}
-
-.toggle-sm input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.slider-sm {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(217, 163, 175, 0.2);
-    border-radius: 13px;
-    transition: 0.28s ease;
-}
-
-.slider-sm:before {
-    position: absolute;
-    content: "";
-    height: 22px;
-    width: 22px;
-    left: 2px;
-    bottom: 2px;
-    background: white;
-    border-radius: 50%;
-    transition: 0.28s ease;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-}
-
-.toggle-sm input:checked+.slider-sm {
-    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
-}
-
-.toggle-sm input:checked+.slider-sm:before {
-    transform: translateX(18px);
-}
-
-/* 按钮行 */
 .btn-row {
     display: flex;
     gap: 8px;
@@ -642,6 +627,11 @@ async function testSubApiConnection() {
     align-items: center;
     justify-content: center;
     gap: 6px;
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .action-btn.primary {
@@ -665,52 +655,8 @@ async function testSubApiConnection() {
 
 .action-btn.ghost:active {
     transform: scale(0.97);
-    background: rgba(255, 255, 255, 0.65);
 }
 
-.action-btn.danger {
-    background: rgba(192, 112, 112, 0.08);
-    color: #C07070;
-    border: 1px solid rgba(192, 112, 112, 0.15);
-}
-
-.action-btn.danger:active {
-    transform: scale(0.97);
-}
-
-/* 小型操作按钮 */
-.icon-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: rgba(232, 192, 201, 0.12);
-    border: 1px solid rgba(232, 192, 201, 0.3);
-    border-radius: 12px;
-    padding: 6px 12px;
-    font-size: 12px;
-    color: #D9A3AF;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.2s;
-    flex-shrink: 0;
-}
-
-.icon-btn:hover {
-    background: rgba(232, 192, 201, 0.2);
-}
-
-.icon-btn:active {
-    transform: scale(0.96);
-}
-
-.icon-btn svg {
-    width: 13px;
-    height: 13px;
-    stroke: #D9A3AF;
-}
-
-/* 配置标签 */
 .config-pills {
     display: flex;
     flex-wrap: wrap;
@@ -750,7 +696,6 @@ async function testSubApiConnection() {
     line-height: 1;
 }
 
-/* 模型列表 */
 .model-panel {
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(16px);
@@ -762,19 +707,44 @@ async function testSubApiConnection() {
     box-shadow: 0 6px 20px rgba(217, 163, 175, 0.08);
 }
 
+.model-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
 .model-panel-title {
     font-size: 11px;
     color: #B8A9AC;
-    margin-bottom: 8px;
     font-weight: 600;
     letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.model-search {
+    flex: 1;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.5);
+    color: #4A3F41;
+    outline: none;
+    font-family: inherit;
+    max-width: 120px;
+}
+
+.model-search::placeholder {
+    color: #D4C8CA;
 }
 
 .model-scroll {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    max-height: 120px;
+    max-height: 160px;
     overflow-y: auto;
 }
 
@@ -801,7 +771,6 @@ async function testSubApiConnection() {
     border-color: rgba(232, 192, 201, 0.3);
 }
 
-/* 结果与提示 */
 .result-bar {
     padding: 10px 14px;
     border-radius: 14px;
@@ -837,22 +806,5 @@ async function testSubApiConnection() {
 .toast-fade-enter-from,
 .toast-fade-leave-to {
     opacity: 0;
-}
-
-/* 危险操作 */
-.danger-item {
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.danger-item:active {
-    background: rgba(192, 112, 112, 0.04);
-}
-
-.danger-label {
-    color: #C07070;
-    font-size: 14px;
-    width: 100%;
-    text-align: center;
 }
 </style>

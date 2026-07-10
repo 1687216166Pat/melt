@@ -1653,9 +1653,46 @@ router.post("/settings/memory-config", async (req, res) => {
       value: JSON.stringify(req.body),
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "key" }
+    { onConflict: "key" },
   );
   res.json({ success: true });
+});
+
+// 世界书内容压缩
+router.post("/worldbooks/compress", async (req, res) => {
+  const { content, title } = req.body;
+  if (!content || content.length < 500) {
+    return res.json({ error: "内容太短，无需压缩" });
+  }
+
+  const { callSubAI } = require("../services/subai");
+
+  const prompt = `你是一个世界观设定压缩专家。请将以下世界书内容压缩为核心摘要。
+
+世界书标题：${title || "未命名"}
+
+压缩原则：
+1. 保留所有核心设定、规则、人物关系、重要事件
+2. 删除重复描述、冗余修饰、举例说明
+3. 保留专有名词、特殊规则、禁止事项
+4. 压缩后字数控制在原文的 20%-30%
+5. 用简洁的陈述句，不用散文风格
+6. 按类别分组，用标题区分（如：【人物】【规则】【背景】）
+
+原文内容：
+${content.slice(0, 8000)}${content.length > 8000 ? "\n...(原文较长，已截取前8000字进行压缩)" : ""}
+
+压缩后的核心设定：`;
+
+  try {
+    const compressed = await callSubAI(prompt, 2000);
+    if (!compressed) {
+      return res.json({ error: "压缩失败，请重试" });
+    }
+    res.json({ compressed });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

@@ -492,6 +492,9 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
     ? `memory_profile_beta_${personaId}`
     : `memory_profile_${personaId}`;
   const recentTable = isBeta ? "memories_beta" : "memories_recent";
+  const summaryKey = isBeta
+    ? `session_summary_beta_${personaId}`
+    : `session_summary_${personaId}`;
 
   // 1. 长期档案
   const { data: profileRow } = await db
@@ -501,13 +504,18 @@ async function buildMemoryContextAsync(personaId, userMessage, isBeta = false) {
     .limit(1);
 
   if (profileRow && profileRow.length > 0 && profileRow[0].value) {
-    context += `\n[长期印象]\n${profileRow[0].value}\n`;
+    context += `\n[长期印象] ${profileRow[0].value}\n`;
   }
 
-  // 2. 压缩摘要（如果有）
-  const compressed = await getCompressedSummary(personaId, isBeta);
-  if (compressed) {
-    context += `\n[早期对话摘要]\n${compressed}\n`;
+  // 2. 对话压缩摘要（如果有）
+  const { data: summaryRow } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", summaryKey)
+    .limit(1);
+
+  if (summaryRow && summaryRow.length > 0 && summaryRow[0].value) {
+    context += `\n[早期对话摘要]\n${summaryRow[0].value}\n`;
   }
 
   // 3. 最近 7 天记忆
@@ -612,12 +620,14 @@ async function upsertPattern(db, personaId, type, description) {
 async function getSessionMemory(personaId, limit = 10, isBeta = false) {
   const db = getDB();
   const tableName = isBeta ? "messages_beta" : "messages";
+
   const { data } = await db
     .from(tableName)
     .select("role, content, timestamp")
     .eq("persona_id", personaId)
     .order("id", { ascending: false })
     .limit(limit);
+
   return (data || []).reverse();
 }
 
@@ -698,6 +708,133 @@ async function consolidateMemories(personaId) {
   await dailyConsolidate(personaId);
 }
 
+async function getMemoryConfig() {
+  const db = getDB();
+  const { data } = await db
+    .from("user_profile")
+    .select("value")
+    .eq("key", "memory_config")
+    .limit(1);
+
+  if (data && data.length > 0) {
+    return JSON.parse(data[0].value);
+  }
+
+  return {
+    compressThreshold: 0, // 暂时关闭压缩，设为 0
+    keepRecent: 20,
+  };
+}
+
+async function compressOldMessages(personaId, isBeta = false) {
+  const db = getDB();
+  const tableName = isBeta ? "messages_beta" : "messages";
+  const summaryKey = isBeta
+    ? `session_summary_beta_${personaId}`
+    : `session_summary_${personaId}`;
+
+  // 获取当前 session 的所有消息
+  const { data: allMessages } = await db
+    .from(tableName)
+    .select("*")
+    .eq("persona_id", personaId)
+    .order("id", { ascending: true });
+
+  if (!allMessages || allMessages.length <= 40) {
+    console.log(
+      `[压缩] ${personaId} 消息数 ${allMessages?.length || 0}，无需压缩`,
+    );
+    return;
+  }
+
+  const keepRecent = 20; // 保留最近20条原文
+  const oldMessages = allMessages.slice(0, -keepRecent);
+  const total = oldMessages.length;
+
+  // 分层：近期40% → 详细，中期30% → 概括，早期30% → 极简
+  const recentStart = Math.floor(total * 0.6);
+  const midStart = Math.floor(total * 0.3);
+
+  const earlyMsgs = oldMessages.slice(0, midStart);
+  const midMsgs = oldMessages.slice(midStart, recentStart);
+  const recentMsgs = oldMessages.slice(recentStart);
+
+  const { getIdentityConfig } = require("./sediment");
+  const identity = await getIdentityConfig(personaId);
+
+  const layerText = `
+【早期】（${earlyMsgs.length}条）
+${earlyMsgs.map((m) => `${m.role === "user" ? identity.userName : identity.aiName}: ${m.content.slice(0, 100)}`).join("\n")}
+
+【中期】（${midMsgs.length}条）
+${midMsgs.map((m) => `${m.role === "user" ? identity.userName : identity.aiName}: ${m.content.slice(0, 150)}`).join("\n")}
+
+【近期】（${recentMsgs.length}条）
+${recentMsgs.map((m) => `${m.role === "user" ? identity.userName : identity.aiName}: ${m.content}`).join("\n")}
+`;
+
+  const compressPrompt = `你是对话压缩系统。将以下分层对话压缩成摘要。
+
+${layerText}
+
+输出要求：
+用第三人称。按以下格式输出：
+
+【近期】（500-800字）详细记录最近的对话
+【中期】（200-350字）概括较早的对话
+【早期】（80-150字）极简记录最早的对话
+
+关键规则：
+1. 必须保留所有日程、日期、时间、约定
+2. 必须保留具体的数字、人名、地点
+3. 必须保留所有承诺和待办
+4. 禁止用"讨论了""聊到了"这种空话替代具体内容
+`;
+
+  try {
+    const { callSubAI } = require("./subai");
+    const summary = await callSubAI(compressPrompt, 1000);
+
+    if (!summary || summary.length < 50) {
+      console.log(`[压缩] ${personaId} 压缩失败，摘要太短`);
+      return;
+    }
+
+    // 保存摘要到 user_profile
+    const { data: existing } = await db
+      .from("user_profile")
+      .select("id")
+      .eq("key", summaryKey)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      await db
+        .from("user_profile")
+        .update({
+          value: summary,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("key", summaryKey);
+    } else {
+      await db.from("user_profile").insert({ key: summaryKey, value: summary });
+    }
+
+    // 删除已压缩的旧消息（可选：也可以只标记不删除）
+    const oldestIdToDelete = oldMessages[oldMessages.length - 1].id;
+    await db
+      .from(tableName)
+      .delete()
+      .eq("persona_id", personaId)
+      .lte("id", oldestIdToDelete);
+
+    console.log(
+      `[压缩] ${personaId} 压缩完成：${oldMessages.length}条 → 摘要 ${summary.length}字`,
+    );
+  } catch (e) {
+    console.error(`[压缩] ${personaId} 压缩失败:`, e.message);
+  }
+}
+
 module.exports = {
   processMemory,
   saveDailyMemory,
@@ -714,6 +851,5 @@ module.exports = {
   getCounter,
   initCounters,
   compressOldMessages,
-  getCompressedSummary,
-  forgetCurveCleanup,
+  getMemoryConfig, // 加这行
 };

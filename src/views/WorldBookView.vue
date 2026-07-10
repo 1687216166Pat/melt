@@ -158,6 +158,28 @@
             </div>
         </BlurModal>
 
+        <!-- AI压缩区域 -->
+        <div v-if="bookForm.content && bookForm.content.length > 5000" class="compress-area">
+            <div class="compress-info">
+                <span class="compress-size">当前内容 {{ Math.round(bookForm.content.length / 1000) }}K 字</span>
+                <span class="compress-hint">内容较长，建议压缩后注入以节省 token</span>
+            </div>
+            <div class="compress-btns">
+                <button class="compress-btn" @click="compressContent" :disabled="compressing">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        stroke-linecap="round">
+                        <path
+                            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                    </svg>
+                    {{ compressing ? '压缩中...' : 'AI 提取核心' }}
+                </button>
+                <button v-if="originalContent" class="restore-btn" @click="restoreContent">
+                    恢复原文
+                </button>
+            </div>
+            <div v-if="compressMsg" class="compress-msg">{{ compressMsg }}</div>
+        </div>
+
         <!-- 绑定弹窗 -->
         <BlurModal :visible="showBindModal" @close="showBindModal = false">
             <h3>绑定世界书</h3>
@@ -227,6 +249,9 @@ const newCategory = ref('')
 const filterCategory = ref('')
 const importing = ref(false)
 const importError = ref('')
+const compressing = ref(false)
+const compressMsg = ref('')
+const originalContent = ref('')
 
 const guideItems = [
     { label: '最高覆盖', desc: '绝对核心，强规则、安全限制、禁止事项', color: '#E8C0C9' },
@@ -279,6 +304,46 @@ async function loadPersonas() {
     } catch { }
 }
 
+async function compressContent() {
+    if (!bookForm.content || bookForm.content.length < 1000) return
+    compressing.value = true
+    compressMsg.value = ''
+    originalContent.value = bookForm.content
+    try {
+        const res = await api('/api/worldbooks/compress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: bookForm.content,
+                title: bookForm.title
+            })
+        })
+        const data = await res.json()
+        if (data.compressed) {
+            const before = Math.round(bookForm.content.length / 1000)
+            bookForm.content = data.compressed
+            const after = Math.round(data.compressed.length / 1000)
+            compressMsg.value = `压缩完成：${before}K → ${after}K 字，保留了核心设定`
+        } else {
+            compressMsg.value = data.error || '压缩失败'
+            originalContent.value = ''
+        }
+    } catch (e) {
+        compressMsg.value = '压缩失败：' + e.message
+        originalContent.value = ''
+    } finally {
+        compressing.value = false
+    }
+}
+
+function restoreContent() {
+    if (originalContent.value) {
+        bookForm.content = originalContent.value
+        originalContent.value = ''
+        compressMsg.value = ''
+    }
+}
+
 function editBook(book) {
     editingBook.value = book
     bookForm.title = book.title
@@ -322,6 +387,8 @@ function closeModal() {
     bookForm.keywords = ''
     bookForm.keyword_enabled = false
     importError.value = ''
+    originalContent.value = ''
+    compressMsg.value = ''
 }
 
 function toggleSelectMode() {
@@ -506,10 +573,15 @@ onMounted(() => {
 
 /* 头部 */
 .wb-header-wrap {
-    padding-top: env(safe-area-inset-top, 44px);
+    padding-top: calc(env(safe-area-inset-top, 44px) + 27px);
     padding-left: 16px;
     padding-right: 16px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
 }
 
 .wb-header {
@@ -1048,5 +1120,78 @@ onMounted(() => {
     display: flex;
     gap: 10px;
     margin-top: 16px;
+}
+
+.compress-area {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(216, 205, 234, 0.1);
+    border: 1px solid rgba(216, 205, 234, 0.3);
+}
+
+.compress-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 10px;
+}
+
+.compress-size {
+    font-size: 12px;
+    font-weight: 600;
+    color: #9B89B4;
+}
+
+.compress-hint {
+    font-size: 11px;
+    color: #B8A9AC;
+}
+
+.compress-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.compress-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(216, 205, 234, 0.5);
+    background: rgba(216, 205, 234, 0.2);
+    font-size: 12px;
+    color: #9B89B4;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+.compress-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.compress-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.restore-btn {
+    padding: 7px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    color: #B8A9AC;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.compress-msg {
+    margin-top: 8px;
+    font-size: 11px;
+    color: #9B89B4;
 }
 </style>

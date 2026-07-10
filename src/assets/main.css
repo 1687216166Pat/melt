@@ -47,19 +47,20 @@ html {
     sans-serif;
 }
 
+/* src/index.css */
 html,
 body {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100vh; /* 从 100% 改成 100vh */
+  height: 100%; /* 从 100vh 改成 100% */
   overflow: hidden;
   background: #fdf6f8;
 }
 
 #app {
   width: 100%;
-  height: 100vh; /* 从 100% 改成 100vh */
+  height: 100%; /* 从 100vh 改成 100% */
   padding: 0;
   margin: 0;
   background: transparent;
@@ -675,3 +676,4 @@ select:focus {
 body {
   font-size: calc(14px * var(--font-scale, 1));
 }
+

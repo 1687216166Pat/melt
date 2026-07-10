@@ -33,12 +33,30 @@ export const useChatStore = defineStore("chat", () => {
   const pageSize = 10;
 
   function addMessage(msg) {
+    // 生成唯一 id
     const newMsg = {
-      id: msg.id || Date.now() + Math.random(),
+      id:
+        msg.id ||
+        `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
       role: msg.role,
       content: msg.content,
       timestamp: msg.timestamp || new Date().toISOString(),
     };
+
+    // 去重：检查最近 5 条，防止同样内容在短时间内重复添加
+    const recent = messages.value.slice(-5);
+    const isDuplicate = recent.some(
+      (m) =>
+        m.role === newMsg.role &&
+        m.content === newMsg.content &&
+        Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 2000,
+    );
+
+    if (isDuplicate) {
+      console.log("[Chat] 拦截重复消息:", newMsg.content.slice(0, 30));
+      return;
+    }
+
     messages.value.push(newMsg);
     allMessages.value.push(newMsg);
   }

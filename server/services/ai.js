@@ -165,7 +165,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     const { getMemoryConfig } = require("./memory");
     getMemoryConfig().then((cfg) => {
       if (cfg.compressThreshold > 0) {
-        compressOldMessages(pid, false).catch(() => {});
+        //compressOldMessages(pid, false).catch(() => {});
       }
     });
     pulseOnUserMessage(pid, userMessage);
@@ -406,6 +406,18 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (worldBookBeforeUser) systemContent += worldBookBeforeUser + "\n";
   if (worldBookTail) systemContent += worldBookTail + "\n";
   if (timeSinceLastMsg) systemContent += timeSinceLastMsg + "\n";
+
+  // 加这几行
+  console.log("[DEBUG] corePrompt长度:", corePrompt.length);
+  console.log("[DEBUG] personaToUse长度:", personaToUse.length);
+  console.log("[DEBUG] userPromptStr长度:", userPromptStr.length);
+  console.log("[DEBUG] worldBookBefore长度:", worldBookBefore.length);
+  console.log("[DEBUG] memoryContext长度:", (memoryContext || "").length);
+  console.log(
+    "[DEBUG] relationshipContext长度:",
+    (relationshipContext || "").length,
+  );
+  console.log("[DEBUG] systemContent总长度:", systemContent.length);
 
   // 追加最高优先级格式指令 (MANDATORY FORMAT RULE)
   systemContent += `
