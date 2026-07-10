@@ -1,8 +1,8 @@
-// server/services/proactive.js
 const { getDB } = require("../db/index");
 const { pushToAll } = require("../ws/socket");
 const { getMemoryProfile, getRecentMemories } = require("./memory");
 const { callSubAI } = require("./subai");
+const { tickEmotion } = require("./emotion");
 
 // ========== 欲望系统：8维驱动条 ==========
 // 每个 persona 独立维护一份状态
@@ -260,6 +260,8 @@ async function checkProactiveMessages() {
 
     // tick 驱动条
     tickDrives(persona.id, idleHours);
+
+    await tickEmotion(persona.id);
 
     // 欲望系统决策
     const intent = pickIntent(persona.id);

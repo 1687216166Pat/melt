@@ -497,8 +497,72 @@ async function bookmarkSelected() {
 }
 
 async function screenshotSelected() {
-    // html2canvas 长截图，后续实现
-    cancelSelect()
+    if (selectedIds.value.length === 0) return
+    
+    try {
+        const html2canvas = (await import('html2canvas')).default
+        
+        // 找到选中消息的 DOM 元素
+        const container = messagesContainer.value
+        if (!container) return
+        
+        // 临时创建一个截图容器
+        const screenshotDiv = document.createElement('div')
+        screenshotDiv.style.cssText = `
+            position: fixed;
+            left: -9999px;
+            top: 0;
+            width: ${container.offsetWidth}px;
+            background: var(--color-bg, #fdf6f8);
+            padding: 20px 16px;
+            font-family: inherit;
+        `
+        
+        // 把选中的消息 clone 进去
+        const allBubbles = container.querySelectorAll('.bubble-wrapper')
+        let clonedCount = 0
+        allBubbles.forEach(bubble => {
+            const msgId = bubble.dataset.msgId
+            if (selectedIds.value.some(id => String(id) === String(msgId))) {
+                const clone = bubble.cloneNode(true)
+                // 去掉多选状态的样式
+                clone.classList.remove('selected', 'select-mode')
+                clone.style.marginBottom = '12px'
+                screenshotDiv.appendChild(clone)
+                clonedCount++
+            }
+        })
+        
+        if (clonedCount === 0) {
+            // 如果没找到 data-msg-id，直接截整个消息列表
+            document.body.appendChild(screenshotDiv)
+            screenshotDiv.remove()
+            cancelSelect()
+            return
+        }
+        
+        document.body.appendChild(screenshotDiv)
+        
+        const canvas = await html2canvas(screenshotDiv, {
+            backgroundColor: '#fdf6f8',
+            scale: 2,
+            useCORS: true,
+            logging: false,
+        })
+        
+        document.body.removeChild(screenshotDiv)
+        
+        // 下载图片
+        const link = document.createElement('a')
+        link.download = `聊天记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '')}.png`
+        link.href = canvas.toDataURL('image/png')
+        link.click()
+        
+        cancelSelect()
+    } catch (e) {
+        console.error('截图失败:', e)
+        cancelSelect()
+    }
 }
 
 async function handleBookmark(msg) {

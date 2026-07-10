@@ -23,6 +23,7 @@ const {
 } = require("./relationship");
 const { checkTimelineEvent } = require("./timeline");
 const { pulseOnUserMessage } = require("./proactive");
+const { updateEmotionOnMessage, buildEmotionPrompt } = require("./emotion");
 
 // ========== 缓存系统 ==========
 const personaCache = new Map();
@@ -242,6 +243,11 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     timestamp: nowISO,
   });
 
+  // 异步更新情绪状态
+  if (!isBeta) {
+    updateEmotionOnMessage(pid, userMessage).catch(() => {});
+  }
+
   // 4. 同步消息总线
   if (!isBeta) {
     const { receiveMessage: busReceive } = require("./bus");
@@ -437,6 +443,9 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (worldBookAfter) systemContent += worldBookAfter + "\n";
   if (needWorldBook) systemContent += defaultWorldBook + "\n";
   systemContent += giftTransferGuide + "\n";
+  // 情绪状态注入
+  const emotionPrompt = isBeta ? "" : await buildEmotionPrompt(pid);
+  if (emotionPrompt) systemContent += emotionPrompt + "\n";
   if (memoryContext) systemContent += memoryContext + "\n";
   if (relationshipContext) systemContent += relationshipContext + "\n";
   if (phoneContext) systemContent += phoneContext + "\n";

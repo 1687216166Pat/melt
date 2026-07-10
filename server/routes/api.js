@@ -1775,4 +1775,122 @@ router.get("/desire-state/:personaId", async (req, res) => {
   res.json(status || {});
 });
 
+router.get("/emotion-state/:personaId", async (req, res) => {
+  const { getEmotionStatus } = require("../services/emotion");
+  const status = await getEmotionStatus(req.params.personaId);
+  res.json(status || {});
+});
+
+// 虚拟地图管理
+router.get("/virtual-map/:ownerType/:ownerId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { ownerType, ownerId } = req.params;
+
+  const { data: maps } = await db
+    .from("virtual_maps")
+    .select("*")
+    .eq("owner_type", ownerType)
+    .eq("owner_id", ownerId)
+    .limit(1);
+
+  if (!maps || maps.length === 0) {
+    return res.json({ map: null, locations: [] });
+  }
+
+  const map = maps[0];
+  const { data: locations } = await db
+    .from("map_locations")
+    .select("*")
+    .eq("map_id", map.id);
+
+  res.json({ map, locations: locations || [] });
+});
+
+router.post("/virtual-map", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { ownerType, ownerId, mapName, backgroundUrl } = req.body;
+
+  const { data: existing } = await db
+    .from("virtual_maps")
+    .select("id")
+    .eq("owner_type", ownerType)
+    .eq("owner_id", ownerId)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    await db
+      .from("virtual_maps")
+      .update({
+        map_name: mapName,
+        background_url: backgroundUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing[0].id);
+    res.json({ id: existing[0].id });
+  } else {
+    await db.from("virtual_maps").insert({
+      owner_type: ownerType,
+      owner_id: ownerId,
+      map_name: mapName,
+      background_url: backgroundUrl,
+    });
+    const { data: newMap } = await db
+      .from("virtual_maps")
+      .select("id")
+      .eq("owner_type", ownerType)
+      .eq("owner_id", ownerId)
+      .limit(1);
+    res.json({ id: newMap && newMap.length > 0 ? newMap[0].id : null });
+  }
+});
+
+router.post("/map-location", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { mapId, locationName, x, y, icon } = req.body;
+  await db.from("map_locations").insert({
+    map_id: mapId,
+    location_name: locationName,
+    x,
+    y,
+    icon: icon || "📍",
+  });
+  res.json({ success: true });
+});
+
+router.delete("/map-location/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("map_locations").delete().eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// 到达记录
+router.post("/location-log", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { ownerType, ownerId, locationName } = req.body;
+  await db.from("location_logs").insert({
+    owner_type: ownerType,
+    owner_id: ownerId,
+    location_name: locationName,
+  });
+  res.json({ success: true });
+});
+
+router.get("/location-logs/:ownerType/:ownerId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("location_logs")
+    .select("*")
+    .eq("owner_type", req.params.ownerType)
+    .eq("owner_id", req.params.ownerId)
+    .order("arrived_at", { ascending: false })
+    .limit(20);
+  res.json(data || []);
+});
+
 module.exports = router;

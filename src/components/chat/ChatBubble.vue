@@ -1,5 +1,5 @@
 <template>
-    <div class="bubble-wrapper" :class="[
+    <div class="bubble-wrapper" :data-msg-id="msg.id" :class="[
         msg.role,
         msg.type,
         theme,
