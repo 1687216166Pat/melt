@@ -414,6 +414,50 @@ function handleIncoming(data) {
             }, idx * 600)
         })
 
+        // 处理 AI 主动发送的特殊消息
+        if (data.specialPayload) {
+            const sp = data.specialPayload;
+            if (sp.type === 'gift') {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai',
+                        type: 'gift',
+                        giftName: sp.data.name,
+                        giftContent: sp.data.content,
+                        giftMessage: sp.data.message,
+                        content: `[礼物: ${sp.data.name}]`,
+                        timestamp: data.timestamp,
+                    })
+                    scrollToBottom()
+                }, (final.length) * 600 + 200)
+            } else if (sp.type === 'transfer') {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai',
+                        type: 'transfer',
+                        amount: sp.data.amount,
+                        note: sp.data.note,
+                        content: `[转账: ¥${sp.data.amount}]`,
+                        timestamp: data.timestamp,
+                    })
+                    scrollToBottom()
+                }, (final.length) * 600 + 200)
+            } else if (sp.type === 'location') {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai',
+                        type: 'location',
+                        lat: null,
+                        lng: null,
+                        locationName: sp.data.name,
+                        content: `[位置: ${sp.data.name}]`,
+                        timestamp: data.timestamp,
+                    })
+                    scrollToBottom()
+                }, (final.length) * 600 + 200)
+            }
+        }
+
         if (data.debug) debugInfo.value = data.debug
     }
 }

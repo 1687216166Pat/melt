@@ -5,7 +5,10 @@ let pool;
 function initDB() {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl:
+      process.env.NODE_ENV === "production"
+        ? { rejectUnauthorized: false }
+        : false,
     max: 10,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
@@ -13,7 +16,16 @@ function initDB() {
   pool.on("error", (err) => {
     console.error("数据库连接池错误:", err.message);
   });
-  console.log("Neon 数据库连接完成");
+
+  // 测试连接
+  pool
+    .query("SELECT 1")
+    .then(() => {
+      console.log("Neon 数据库连接完成");
+    })
+    .catch((err) => {
+      console.error("Neon 数据库连接失败:", err.message);
+    });
 }
 
 // ===== 兼容层：模拟 Supabase SDK 的链式调用 =====
@@ -228,8 +240,12 @@ class QueryBuilder {
 
       return { data: null, error: "未知操作" };
     } catch (e) {
-      console.error(`[DB错误] ${this.table} ${this._operation}:`, e.message);
-      return { data: null, error: e.message };
+      console.error(
+        `[DB错误] ${this.table} ${this._operation}:`,
+        e.message || e,
+        e.stack || "",
+      );
+      return { data: null, error: e.message || String(e) };
     }
   }
 

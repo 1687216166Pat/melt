@@ -333,6 +333,26 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
 - 对话向前流动，不要总结和确认
 `;
 
+  const giftTransferGuide = `
+[特殊交互格式]
+在合适的时机，你可以主动送礼物或转账给用户，使用以下格式（放在回复末尾）：
+
+送礼物：[GIFT:{"name":"礼物名称","content":"礼物内容描述","message":"附言"}]
+转账：[TRANSFER:{"amount":数字金额,"note":"备注"}]
+发位置：[LOCATION:{"name":"地点名称","address":"详细地址"}]
+
+使用时机：
+- 送礼物：特别的时刻、求婚、节日、想表达心意时
+- 转账：想给用户买东西、发红包时
+- 位置：告知自己在哪、约见面时
+
+规则：
+- 不要频繁使用，要在真正合适的时机
+- 格式必须严格遵守，不要随意修改
+- 一次回复最多一个特殊格式
+- 正常对话内容照常输出，特殊格式放在最后
+`;
+
   // 10. 记忆与关系召回
   const memoryContext = await buildMemoryContextAsync(pid, userMessage, isBeta);
   const relationshipContext = await buildRelationshipContext(pid);
@@ -416,7 +436,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   systemContent += fullPrompt + "\n";
   if (worldBookAfter) systemContent += worldBookAfter + "\n";
   if (needWorldBook) systemContent += defaultWorldBook + "\n";
-  systemContent += timeContext + "\n";
+  systemContent += giftTransferGuide + "\n";
   if (memoryContext) systemContent += memoryContext + "\n";
   if (relationshipContext) systemContent += relationshipContext + "\n";
   if (phoneContext) systemContent += phoneContext + "\n";
@@ -545,6 +565,57 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
   if (!aiReply) aiReply = "...";
 
+  // ===== 解析特殊格式 =====
+  let specialPayload = null;
+
+  const giftMatch = aiReply.match(/\[GIFT:(\{.*?\})\]/s);
+  const transferMatch = aiReply.match(/\[TRANSFER:(\{.*?\})\]/s);
+  const locationMatch = aiReply.match(/\[LOCATION:(\{.*?\})\]/s);
+
+  if (giftMatch) {
+    try {
+      const giftData = JSON.parse(giftMatch[1]);
+      specialPayload = { type: "gift", data: giftData };
+      await db.from("gifts").insert({
+        persona_id: pid,
+        direction: "ai_to_user",
+        gift_name: giftData.name || "礼物",
+        gift_content: giftData.content || "",
+        gift_message: giftData.message || "",
+      });
+      aiReply = aiReply.replace(giftMatch[0], "").trim();
+      console.log(`[礼物] ${pid} 送出礼物: ${giftData.name}`);
+    } catch (e) {
+      console.error("[礼物] 解析失败:", e.message);
+    }
+  } else if (transferMatch) {
+    try {
+      const transferData = JSON.parse(transferMatch[1]);
+      specialPayload = { type: "transfer", data: transferData };
+      await db.from("transfers").insert({
+        persona_id: pid,
+        direction: "ai_to_user",
+        amount: parseFloat(transferData.amount) || 0,
+        note: transferData.note || "",
+      });
+      aiReply = aiReply.replace(transferMatch[0], "").trim();
+      console.log(`[转账] ${pid} 转账: ¥${transferData.amount}`);
+    } catch (e) {
+      console.error("[转账] 解析失败:", e.message);
+    }
+  } else if (locationMatch) {
+    try {
+      const locationData = JSON.parse(locationMatch[1]);
+      specialPayload = { type: "location", data: locationData };
+      aiReply = aiReply.replace(locationMatch[0], "").trim();
+    } catch (e) {
+      console.error("[位置] 解析失败:", e.message);
+    }
+  }
+
+  if (!aiReply) aiReply = "...";
+  // ===== 特殊格式解析结束 =====
+
   await db.from(tableName).insert({
     persona_id: pid,
     role: "ai",
@@ -629,6 +700,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     content: aiReply,
     timestamp: new Date().toISOString(),
     personaName: pName,
+    specialPayload,
     debug: {
       layer1: {
         model: modelToUse,

@@ -1769,4 +1769,10 @@ router.get("/memory-arcs/:personaId", async (req, res) => {
   res.json(data || []);
 });
 
+router.get("/desire-state/:personaId", async (req, res) => {
+  const { getDesireStatus } = require("../services/desire");
+  const status = await getDesireStatus(req.params.personaId);
+  res.json(status || {});
+});
+
 module.exports = router;

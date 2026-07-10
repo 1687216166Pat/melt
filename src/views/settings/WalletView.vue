@@ -13,6 +13,18 @@
             <div style="width:36px;"></div>
         </div>
 
+        <!-- 角色切换，加在 settings-nav 和 sub-content 之间 -->
+        <div class="persona-scroll">
+            <div v-for="p in personas" :key="p.id" class="persona-chip" :class="{ active: currentPersona === p.id }"
+                @click="switchPersona(p.id)">
+                <div class="persona-chip-avatar">
+                    <img v-if="p.avatarUrl" :src="p.avatarUrl" />
+                    <span v-else>{{ p.avatar || '💬' }}</span>
+                </div>
+                <span>{{ p.note || p.name }}</span>
+            </div>
+        </div>
+
         <div class="sub-content">
 
             <!-- 余额卡片 -->
@@ -136,7 +148,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { api } from '@/utils/api'
 
 const balance = ref(0)
 const gifts = ref([])
@@ -145,54 +158,106 @@ const showTransferIn = ref(false)
 const showTransferOut = ref(false)
 const transferAmount = ref('')
 const transferDesc = ref('')
+const personas = ref([])
+const currentPersona = ref('')
 
-function load() {
-    balance.value = parseFloat(localStorage.getItem('wallet_balance') || '0')
-    gifts.value = JSON.parse(localStorage.getItem('wallet_gifts') || '[]')
-    transactions.value = JSON.parse(localStorage.getItem('wallet_transactions') || '[]')
+const currentPersonaName = computed(() => {
+    const p = personas.value.find(p => p.id === currentPersona.value)
+    return p ? (p.note || p.name) : 'TA'
+})
+
+async function loadPersonas() {
+    try {
+        const res = await api('/api/personas/all')
+        personas.value = await res.json()
+        const pinnedList = JSON.parse(localStorage.getItem('pinned_personas') || '[]')
+        personas.value.sort((a, b) => {
+            if (pinnedList.includes(a.id) && !pinnedList.includes(b.id)) return -1
+            if (!pinnedList.includes(a.id) && pinnedList.includes(b.id)) return 1
+            return 0
+        })
+        try {
+            const latestRes = await api('/api/messages/latest-persona')
+            const latestData = await latestRes.json()
+            currentPersona.value = latestData.personaId || personas.value[0]?.id || ''
+        } catch {
+            currentPersona.value = personas.value[0]?.id || ''
+        }
+        await load()
+    } catch { }
 }
 
-function save() {
-    localStorage.setItem('wallet_balance', balance.value.toString())
-    localStorage.setItem('wallet_gifts', JSON.stringify(gifts.value))
-    localStorage.setItem('wallet_transactions', JSON.stringify(transactions.value))
+async function load() {
+    if (!currentPersona.value) return
+    try {
+        const res = await api(`/api/wallet/${currentPersona.value}`)
+        const data = await res.json()
+        balance.value = data.balance || 0
+        gifts.value = (data.gifts || []).filter(g => g.direction === 'ai_to_user').map(g => ({
+            emoji: '🎁',
+            name: g.gift_name,
+            from: currentPersonaName.value,
+            date: g.created_at?.slice(0, 10),
+            note: g.gift_message,
+            content: g.gift_content,
+        }))
+        transactions.value = (data.transfers || []).map(t => ({
+            type: t.direction === 'ai_to_user' ? 'in' : 'out',
+            amount: t.amount,
+            desc: t.note || (t.direction === 'ai_to_user' ? '收款' : '转出'),
+            from: t.direction === 'ai_to_user' ? currentPersonaName.value : '我',
+            date: t.created_at?.slice(0, 10),
+        }))
+    } catch { }
 }
 
-function doTransferIn() {
+async function doTransferIn() {
     const amount = parseFloat(transferAmount.value)
     if (!amount || amount <= 0) return
-    balance.value = Math.round((balance.value + amount) * 100) / 100
-    transactions.value.unshift({
-        type: 'in',
-        amount,
-        desc: transferDesc.value || '收款',
-        from: '手动',
-        date: new Date().toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
-    })
-    save()
+    try {
+        await api(`/api/transfers/${currentPersona.value}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                direction: 'ai_to_user',
+                amount,
+                note: transferDesc.value || '收款'
+            })
+        })
+        await load()
+    } catch { }
     transferAmount.value = ''
     transferDesc.value = ''
     showTransferIn.value = false
 }
 
-function doTransferOut() {
+async function doTransferOut() {
     const amount = parseFloat(transferAmount.value)
-    if (!amount || amount <= 0 || amount > balance.value) return
-    balance.value = Math.round((balance.value - amount) * 100) / 100
-    transactions.value.unshift({
-        type: 'out',
-        amount,
-        desc: transferDesc.value || '转出',
-        from: '手动',
-        date: new Date().toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
-    })
-    save()
+    if (!amount || amount <= 0) return
+    try {
+        await api(`/api/transfers/${currentPersona.value}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                direction: 'user_to_ai',
+                amount,
+                note: transferDesc.value || '转出'
+            })
+        })
+        await load()
+    } catch { }
     transferAmount.value = ''
     transferDesc.value = ''
     showTransferOut.value = false
 }
 
-onMounted(load)
+function switchPersona(id) {
+    currentPersona.value = id
+    load()
+}
+
+onMounted(loadPersonas)
+
 </script>
 
 <style scoped>
@@ -656,5 +721,61 @@ onMounted(load)
     cursor: pointer;
     font-family: inherit;
     box-shadow: 0 6px 16px rgba(217, 163, 175, 0.3);
+}
+
+.persona-scroll {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px 4px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.persona-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.persona-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px 6px 6px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(16px);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #6B5B5E;
+    transition: all 0.2s;
+}
+
+.persona-chip.active {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    color: white;
+    border-color: transparent;
+}
+
+.persona-chip-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 233, 237, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.persona-chip-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 </style>
