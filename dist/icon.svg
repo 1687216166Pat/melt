@@ -1,10 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="100" fill="url(#g)"/>
   <defs>
-    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#e8a0bf"/>
-      <stop offset="100%" style="stop-color:#ba90c6"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fdf0f4"/>
+      <stop offset="50%" style="stop-color:#f8e4ec"/>
+      <stop offset="100%" style="stop-color:#f0d4e0"/>
     </linearGradient>
+    <linearGradient id="stroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8a0be"/>
+      <stop offset="100%" style="stop-color:#c87898"/>
+    </linearGradient>
+    <filter id="glass">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
+    </filter>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
-  <text x="256" y="300" font-size="200" text-anchor="middle" fill="white" font-family="Arial">AI</text>
+  
+  <!-- 背景 -->
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  
+  <!-- 毛玻璃装饰圆 -->
+  <circle cx="380" cy="120" r="80" fill="rgba(232,160,190,0.12)" filter="url(#glass)"/>
+  <circle cx="130" cy="400" r="60" fill="rgba(200,160,220,0.1)" filter="url(#glass)"/>
+  
+  <!-- 主气泡 - 线性风格 -->
+  <path d="M160 200 Q160 150 210 150 L302 150 Q352 150 352 200 L352 280 Q352 330 302 330 L240 330 L200 370 L210 330 L210 330 Q160 330 160 280 Z" 
+    fill="rgba(255,255,255,0.4)" 
+    stroke="url(#stroke)" 
+    stroke-width="3"
+    filter="url(#glow)"/>
+  
+  <!-- 内部小气泡装饰 -->
+  <circle cx="220" cy="240" r="6" fill="none" stroke="url(#stroke)" stroke-width="2.5" opacity="0.8"/>
+  <circle cx="256" cy="240" r="6" fill="none" stroke="url(#stroke)" stroke-width="2.5" opacity="0.6"/>
+  <circle cx="292" cy="240" r="6" fill="none" stroke="url(#stroke)" stroke-width="2.5" opacity="0.4"/>
+  
+  <!-- 心形点缀 -->
+  <path d="M340 170 C340 162 348 156 354 162 C360 156 368 162 368 170 C368 180 354 190 354 190 C354 190 340 180 340 170 Z" 
+    fill="none" 
+    stroke="url(#stroke)" 
+    stroke-width="2" 
+    opacity="0.5"/>
 </svg>

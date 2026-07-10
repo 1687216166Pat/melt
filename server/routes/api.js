@@ -184,6 +184,7 @@ router.post("/prompts/personas/:id/activate", async (req, res) => {
   res.json({ success });
 });
 
+// 获取用户偏好
 router.get("/prompts/user", async (req, res) => {
   const content = await getUserPrompt();
   res.json({
@@ -192,9 +193,17 @@ router.get("/prompts/user", async (req, res) => {
   });
 });
 
+// 保存用户偏好
 router.post("/prompts/user", async (req, res) => {
   const { content } = req.body;
   await setUserPrompt(content);
+
+  // 清除用户偏好缓存
+  try {
+    const { invalidateUserPromptCache } = require("../services/ai");
+    invalidateUserPromptCache();
+  } catch {}
+
   res.json({ success: true });
 });
 
@@ -654,6 +663,7 @@ router.put("/persona/:personaId", async (req, res) => {
     if (body.name !== undefined) updateData.name = body.name;
     if (body.content !== undefined) updateData.content = body.content;
     if (body.avatar !== undefined) updateData.avatar = body.avatar;
+    if (body.avatarUrl !== undefined) updateData.avatar_url = body.avatarUrl;
     if (body.note !== undefined) updateData.note = body.note;
     if (body.gender !== undefined) updateData.gender = body.gender;
     if (body.worldBookId !== undefined)
@@ -700,6 +710,12 @@ router.put("/persona/:personaId", async (req, res) => {
       .update(updateData)
       .eq("id", id);
     if (error) return res.status(500).json({ error: error.message });
+
+    // 清除人设缓存
+    try {
+      const { invalidatePersonaCache } = require("../services/ai");
+      invalidatePersonaCache(id);
+    } catch {}
   } else {
     const { error } = await db.from("user_profile").upsert(
       {
@@ -737,7 +753,7 @@ router.delete("/memories/:personaId/clear", async (req, res) => {
   res.json({ success: true });
 });
 
-// 世界书
+// 获取世界书列表
 router.get("/worldbooks", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
@@ -762,6 +778,13 @@ router.post("/worldbooks", async (req, res) => {
     keywords: keywords || "",
     keyword_enabled: keyword_enabled || false,
   });
+
+  // 清除世界书缓存
+  try {
+    const { invalidateWorldBookCache } = require("../services/ai");
+    invalidateWorldBookCache();
+  } catch {}
+
   res.json({ success: true, id });
 });
 
@@ -778,6 +801,7 @@ router.put("/worldbooks/:id", async (req, res) => {
     bind_type,
     bind_personas,
   } = req.body;
+
   const updateData = {};
   if (title !== undefined) updateData.title = title;
   if (content !== undefined) updateData.content = content;
@@ -798,17 +822,20 @@ router.put("/worldbooks/:id", async (req, res) => {
   if (req.body.proactiveAuto !== undefined)
     updateData.proactive_auto = req.body.proactiveAuto;
 
-  console.log("[PUT worldbook] id:", req.params.id, "updateData:", updateData);
-
   const { data, error } = await db
     .from("world_books")
     .update(updateData)
     .eq("id", req.params.id)
     .select();
 
-  console.log("[PUT worldbook] result:", { data, error });
-
   if (error) return res.status(500).json({ error: error.message });
+
+  // 清除世界书缓存
+  try {
+    const { invalidateWorldBookCache } = require("../services/ai");
+    invalidateWorldBookCache();
+  } catch {}
+
   res.json({ success: true });
 });
 
@@ -826,6 +853,13 @@ router.post("/worldbooks/bind", async (req, res) => {
       })
       .eq("id", id);
   }
+
+  // 清除世界书缓存
+  try {
+    const { invalidateWorldBookCache } = require("../services/ai");
+    invalidateWorldBookCache();
+  } catch {}
+
   res.json({ success: true });
 });
 
@@ -833,6 +867,13 @@ router.delete("/worldbooks/:id", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
   await db.from("world_books").delete().eq("id", req.params.id);
+
+  // 清除世界书缓存
+  try {
+    const { invalidateWorldBookCache } = require("../services/ai");
+    invalidateWorldBookCache();
+  } catch {}
+
   res.json({ success: true });
 });
 
@@ -1367,6 +1408,10 @@ router.post("/worldbooks/:id/toggle", async (req, res) => {
   const db = getDB();
   const { enabled } = req.body;
   await db.from("world_books").update({ enabled }).eq("id", req.params.id);
+  try {
+    const { invalidateWorldBookCache } = require("../services/ai");
+    invalidateWorldBookCache();
+  } catch {}
   res.json({ success: true });
 });
 
@@ -1378,6 +1423,10 @@ router.post("/worldbooks/categorize", async (req, res) => {
   for (const id of bookIds) {
     await db.from("world_books").update({ category }).eq("id", id);
   }
+  try {
+    const { invalidateWorldBookCache } = require("../services/ai");
+    invalidateWorldBookCache();
+  } catch {}
   res.json({ success: true });
 });
 
