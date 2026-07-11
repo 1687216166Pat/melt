@@ -905,7 +905,7 @@
                                         <span v-else>{{ contextMenu.persona?.avatar || '💬' }}</span>
                                     </div>
                                     <span class="ctx-name">{{ contextMenu.persona?.note || contextMenu.persona?.name
-                                        }}</span>
+                                    }}</span>
                                 </div>
                                 <div class="ctx-divider"></div>
                                 <button class="ctx-item" @click="pinFromMenu(contextMenu.persona?.id)">
@@ -1088,7 +1088,7 @@
                                     class="dp-input dp-edit-input" @blur="saveEditEvent(selectedDay, i)"
                                     @keyup.enter="saveEditEvent(selectedDay, i)" />
                                 <span v-else class="dp-event-text" @click="startEditEvent(i, ev.text)">{{ ev.text
-                                    }}</span>
+                                }}</span>
                                 <button class="dp-event-del" @click="removeEvent(selectedDay, i)">×</button>
                             </div>
                         </template>
@@ -1175,7 +1175,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, onUnmounted, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { api } from '@/utils/api'
 import BlurModal from '@/components/ui/BlurModal.vue'
@@ -2288,6 +2288,50 @@ function setupScrollFocus() {
 }
 
 // ===== onMounted =====
+// 放在 onMounted 前面，和其他函数并列
+async function refreshPreviews() {
+    const pid = currentAi.value.personaId
+    if (!pid) return
+    try {
+        const msgRes = await api(`/api/messages/${pid}/last`)
+        const lastMsg = await msgRes.json()
+        if (lastMsg) {
+            const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+            leftBubbleText.value = content.length > 30 ? content.slice(0, 30) + '...' : content
+        }
+    } catch { }
+
+    try {
+        const updated = await Promise.all(
+            allPersonas.value.map(async (p) => {
+                try {
+                    const res = await api(`/api/messages/${p.id}/last`)
+                    const last = await res.json()
+                    if (last) {
+                        const prefix = last.role === 'ai' ? '' : '我: '
+                        const content = last.content.split('|||')[0].replace(/\n/g, ' ')
+                        return {
+                            ...p,
+                            lastMessage: prefix + (content.length > 20 ? content.slice(0, 20) + '...' : content),
+                            lastMessageTime: last.timestamp || null
+                        }
+                    }
+                } catch { }
+                return p
+            })
+        )
+        allPersonas.value = updated
+        sessionStorage.setItem('cached_personas', JSON.stringify(allPersonas.value))
+    } catch { }
+}
+
+function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        refreshPreviews()
+    }
+}
+
+// onMounted 里只保留注册监听
 onMounted(async () => {
     loadCards()
     calculateDays()
@@ -2332,6 +2376,8 @@ onMounted(async () => {
         habitatStartDateInput.value = habitatStartDate.value
     }
 
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     await loadHomeData()
     await loadAllPersonas()
     await loadTogetherData()
@@ -2341,6 +2387,11 @@ onMounted(async () => {
     await loadHabitatStats()
 
     setTimeout(setupScrollFocus, 300)
+})
+
+// onUnmounted 和 onMounted 并列
+onUnmounted(() => {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 </script>

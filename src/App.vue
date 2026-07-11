@@ -162,14 +162,16 @@ onUnmounted(() => {
 <style scoped>
 .phone-screen {
     width: 100%;
-    height: 100%;
+    height: 100vh;
     display: flex;
     flex-direction: column;
     position: relative;
     overflow: hidden;
     transition: background 2s var(--ease-soft);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
     box-sizing: border-box;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .phone-screen.morning {
@@ -200,12 +202,10 @@ onUnmounted(() => {
     -webkit-overflow-scrolling: touch;
     position: relative;
     z-index: 1;
-    margin-bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
 }
 
 .screen-content.no-padding {
     padding: 0;
-    margin-bottom: calc(env(safe-area-inset-bottom, 0px) * -1);
 }
 
 .bg-decor {
