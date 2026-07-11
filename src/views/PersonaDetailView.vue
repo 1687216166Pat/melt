@@ -260,6 +260,73 @@
                 </div>
             </div>
 
+            <!-- 已读不回 -->
+            <div class="section-label-sm">已读不回</div>
+            <div class="settings-group">
+                <div class="settings-group-item" style="position:relative;">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">忙碌时的回复方式</div>
+                        <div class="sgi-desc">当 TA 处于忙碌状态时</div>
+                    </div>
+                    <div class="sgi-right">
+                        <span class="sgi-value">{{ busyModeLabel }}</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" class="sgi-arrow">
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                    </div>
+                    <select class="sgi-select-hidden" v-model="detail.busyMode">
+                        <option value="ai_decide">由 AI 决定</option>
+                        <option value="auto_reply">自动回复</option>
+                        <option value="silent">完全静默</option>
+                    </select>
+                </div>
+                <div v-if="detail.busyMode === 'auto_reply'" class="settings-group-item col-item">
+                    <div class="sgi-label">自动回复内容</div>
+                    <input class="sgi-input-full" v-model="detail.autoReplyText" placeholder="例：我在忙，稍后回你～" />
+                </div>
+            </div>
+
+            <!-- 当前状态 -->
+            <div class="section-label-sm">当前状态</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">状态</div>
+                        <div class="sgi-desc">{{ currentStatusDesc }}</div>
+                    </div>
+                    <div class="status-badge" :class="'status-' + personaCurrentStatus.status">
+                        {{ statusLabel }}
+                    </div>
+                </div>
+                <div v-if="personaCurrentStatus.status !== 'available'" class="settings-group-item">
+                    <div class="sgi-label">原因</div>
+                    <span class="sgi-value">{{ personaCurrentStatus.reason || '未说明' }}</span>
+                </div>
+                <div class="settings-group-item action-item" @click="setStatusAvailable">
+                    <div class="sgi-label" style="color:#6BAF7A;">手动恢复为在线</div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#6BAF7A" stroke-width="2" stroke-linecap="round"
+                        class="sgi-arrow">
+                        <path d="M9 18l6-6-6-6" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- HTML 小卡片 -->
+            <div class="section-label-sm">HTML 小卡片</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">允许发送卡片</div>
+                        <div class="sgi-desc">AI 可自主决定发送 HTML 小卡片</div>
+                    </div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="detail.cardEnabled" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
+            </div>
+
             <!-- 聊天壁纸 -->
             <div class="section-label-sm">聊天壁纸</div>
             <div class="settings-group">
@@ -470,12 +537,35 @@ const detail = reactive({
     bubbleMerge: false,
     customApiKey: '',
     customApiUrl: '',
-
+    cardEnabled: false,
+    busyMode: 'ai_decide',
+    autoReplyText: '',
 })
 
 const genderLabel = computed(() => {
     const map = { female: '女', male: '男', other: '其他', '': '未设置' }
     return map[detail.gender] || '未设置'
+})
+
+const personaCurrentStatus = ref({ status: 'available', reason: '' })
+
+const busyModeLabel = computed(() => {
+    const map = { ai_decide: '由 AI 决定', auto_reply: '自动回复', silent: '完全静默' }
+    return map[detail.busyMode] || '由 AI 决定'
+})
+
+const statusLabel = computed(() => {
+    const map = { available: '在线', busy: '忙碌中', offline: '离线' }
+    return map[personaCurrentStatus.value.status] || '在线'
+})
+
+const currentStatusDesc = computed(() => {
+    if (personaCurrentStatus.value.status === 'available') return '当前正常在线'
+    if (personaCurrentStatus.value.busy_until) {
+        const t = new Date(personaCurrentStatus.value.busy_until)
+        return `忙碌至 ${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`
+    }
+    return '忙碌中'
 })
 
 async function loadDetail() {
@@ -500,7 +590,9 @@ async function loadDetail() {
         if (data.bubble_merge !== undefined) detail.bubbleMerge = data.bubble_merge
         if (data.custom_api_key) detail.customApiKey = data.custom_api_key
         if (data.custom_api_url) detail.customApiUrl = data.custom_api_url
-
+        if (data.card_enabled !== undefined) detail.cardEnabled = data.card_enabled
+        if (data.busy_mode) detail.busyMode = data.busy_mode
+        if (data.auto_reply_text) detail.autoReplyText = data.auto_reply_text
     } catch (e) {
         console.error('加载详情失败:', e)
     }
@@ -510,6 +602,13 @@ async function loadWorldBooks() {
     try {
         const res = await api('/api/worldbooks')
         worldBooks.value = await res.json()
+    } catch { }
+}
+
+async function loadPersonaStatus() {
+    try {
+        const res = await api(`/api/persona-status/${personaId}`)
+        personaCurrentStatus.value = await res.json()
     } catch { }
 }
 
@@ -545,7 +644,9 @@ async function saveDetail() {
                 bubbleMerge: detail.bubbleMerge,
                 customApiKey: detail.customApiKey,
                 customApiUrl: detail.customApiUrl,
-
+                cardEnabled: detail.cardEnabled,
+                busyMode: detail.busyMode,
+                autoReplyText: detail.autoReplyText,
             })
         })
         saveMsg.value = '已保存 ✓'
@@ -553,6 +654,19 @@ async function saveDetail() {
     } catch {
         saveMsg.value = '保存失败'
     }
+}
+
+async function setStatusAvailable() {
+    try {
+        await api(`/api/persona-status/${personaId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'available', reason: '' })
+        })
+        personaCurrentStatus.value = { status: 'available', reason: '' }
+        saveMsg.value = '已恢复在线 ✓'
+        setTimeout(() => { saveMsg.value = '' }, 2000)
+    } catch { }
 }
 
 function handleAvatarUpload(event) {
@@ -644,6 +758,7 @@ onMounted(() => {
     loadDetail()
     loadWorldBooks()
     loadCustomThemes()
+    loadPersonaStatus()
 })
 </script>
 

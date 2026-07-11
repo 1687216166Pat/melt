@@ -98,6 +98,17 @@
                 </svg>
             </div>
 
+            <!-- HTML 小卡片 -->
+            <div v-else-if="msg.type === 'card'" class="card-bubble" @click.stop="showCardModal = true">
+                <div class="card-bubble-inner">
+                    <div class="card-bubble-preview" v-html="msg.cardHtml"></div>
+                    <div class="card-bubble-hint">
+                        <span>✦ 小卡片</span>
+                        <span>点击展开</span>
+                    </div>
+                </div>
+            </div>
+
             <div v-else class="bubble">
                 <p>{{ msg.content }}</p>
             </div>
@@ -155,7 +166,8 @@
                                 <span class="receipt-label">时间</span>
                                 <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
                                     month:
-                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
+                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                }) }}</span>
                             </div>
                         </div>
                         <div class="receipt-zigzag receipt-zigzag-bottom gift-zigzag"></div>
@@ -196,7 +208,8 @@
                                 <span class="receipt-label">时间</span>
                                 <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
                                     month:
-                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
+                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                }) }}</span>
                             </div>
                         </div>
                         <div class="receipt-zigzag receipt-zigzag-bottom transfer-zigzag"></div>
@@ -237,7 +250,8 @@
                                 <span class="receipt-label">时间</span>
                                 <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
                                     month:
-                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
+                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                }) }}</span>
                             </div>
                         </div>
                         <div class="receipt-zigzag receipt-zigzag-bottom location-zigzag"></div>
@@ -246,6 +260,19 @@
                                 收起卡片
                             </button>
                         </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- 卡片全屏弹窗 -->
+        <Teleport to="body">
+            <Transition name="modal-pop">
+                <div v-if="showCardModal" class="sp-overlay" @click.self="showCardModal = false">
+                    <div class="card-modal">
+                        <iframe :srcdoc="msg.cardHtml" class="card-iframe" sandbox="allow-scripts"
+                            scrolling="auto"></iframe>
+                        <button class="card-modal-close" @click="showCardModal = false">收起</button>
                     </div>
                 </div>
             </Transition>
@@ -277,6 +304,7 @@ const previewImage = ref(null)
 const showGiftModal = ref(false)
 const showTransferModal = ref(false)
 const showLocationModal = ref(false)
+const showCardModal = ref(false)
 
 const giftAccepted = ref(isAccepted(props.msg.id))
 const transferAccepted = ref(isAccepted(props.msg.id))
@@ -1189,5 +1217,82 @@ function acceptMsg(msgId) {
 .panel-enter-from,
 .panel-leave-to {
     opacity: 0;
+}
+
+/* HTML 小卡片气泡 */
+.card-bubble {
+    cursor: pointer;
+    max-width: 240px;
+    border-radius: 18px 18px 18px 6px;
+    overflow: hidden;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    box-shadow: 0 4px 16px rgba(217, 163, 175, 0.1);
+    transition: transform 0.15s;
+}
+
+.user .card-bubble {
+    border-radius: 18px 18px 6px 18px;
+}
+
+.card-bubble:active {
+    transform: scale(0.97);
+}
+
+.card-bubble-inner {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.card-bubble-preview {
+    padding: 12px;
+    max-height: 180px;
+    overflow: hidden;
+    pointer-events: none;
+    font-size: 12px;
+    transform-origin: top left;
+}
+
+.card-bubble-hint {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 12px 8px;
+    font-size: 10px;
+    color: #B8A9AC;
+    border-top: 1px solid rgba(217, 163, 175, 0.08);
+    background: rgba(255, 255, 255, 0.4);
+}
+
+/* 卡片全屏弹窗 */
+.card-modal {
+    width: 100%;
+    max-width: 320px;
+    background: rgba(255, 252, 253, 0.97);
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(180, 100, 130, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    display: flex;
+    flex-direction: column;
+}
+
+.card-iframe {
+    width: 100%;
+    height: 420px;
+    border: none;
+    background: white;
+}
+
+.card-modal-close {
+    width: 100%;
+    height: 46px;
+    border: none;
+    background: rgba(253, 246, 248, 0.8);
+    color: #A09098;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    border-top: 1px solid rgba(200, 150, 170, 0.08);
 }
 </style>

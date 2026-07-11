@@ -2040,4 +2040,119 @@ router.post("/gifts/:personaId", async (req, res) => {
   res.json({ success: true });
 });
 
+router.post("/messages/update-meta", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { personaId, role, contentPrefix, msgType, msgMeta } = req.body;
+  const { data } = await db
+    .from("messages")
+    .select("id")
+    .eq("persona_id", personaId)
+    .eq("role", role)
+    .like("content", `${contentPrefix}%`)
+    .order("id", { ascending: false })
+    .limit(1);
+  if (data && data.length > 0) {
+    await db
+      .from("messages")
+      .update({
+        msg_type: msgType,
+        msg_meta: msgMeta,
+      })
+      .eq("id", data[0].id);
+  }
+  res.json({ success: true });
+});
+
+// 获取人格状态
+router.get("/persona-status/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { personaId } = req.params;
+  const { data } = await db
+    .from("persona_status")
+    .select("*")
+    .eq("persona_id", personaId)
+    .limit(1);
+  if (!data || data.length === 0) {
+    return res.json({
+      status: "available",
+      reason: "",
+      busy_mode: "ai_decide",
+    });
+  }
+  const s = data[0];
+  // 检查是否已过期
+  if (s.busy_until && new Date(s.busy_until) < new Date()) {
+    await db
+      .from("persona_status")
+      .update({
+        status: "available",
+        reason: "",
+        busy_until: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("persona_id", personaId);
+    return res.json({
+      status: "available",
+      reason: "",
+      busy_mode: s.busy_mode,
+    });
+  }
+  res.json(s);
+});
+
+// 更新人格状态
+router.post("/persona-status/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { personaId } = req.params;
+  const { status, reason, busyMode, autoReplyText, busyUntil } = req.body;
+  const { data: existing } = await db
+    .from("persona_status")
+    .select("id")
+    .eq("persona_id", personaId)
+    .limit(1);
+  const payload = {
+    persona_id: personaId,
+    status: status || "available",
+    reason: reason || "",
+    busy_mode: busyMode || "ai_decide",
+    auto_reply_text: autoReplyText || "",
+    busy_until: busyUntil || null,
+    updated_at: new Date().toISOString(),
+  };
+  if (existing && existing.length > 0) {
+    await db.from("persona_status").update(payload).eq("persona_id", personaId);
+  } else {
+    await db.from("persona_status").insert(payload);
+  }
+  res.json({ success: true });
+});
+
+// 获取积压消息
+router.get("/pending-messages/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("pending_messages")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .eq("handled", false)
+    .order("received_at", { ascending: true });
+  res.json(data || []);
+});
+
+// 标记积压消息已处理
+router.post("/pending-messages/:personaId/clear", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db
+    .from("pending_messages")
+    .update({ handled: true })
+    .eq("persona_id", req.params.personaId)
+    .eq("handled", false);
+  res.json({ success: true });
+});
+
 module.exports = router;

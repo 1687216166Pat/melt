@@ -1606,17 +1606,35 @@ async function loadMonthlyStats() {
 }
 
 async function loadRecentPersona() {
-    // 找最近有消息的 persona
     if (allPersonas.value.length === 0) return
-    const sorted = [...allPersonas.value]
-        .filter(p => p.lastMessageTime)
-        .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime))
-    if (sorted.length > 0) {
-        recentPersona.value = sorted[0]
-    } else {
-        recentPersona.value = allPersonas.value[0]
-    }
+    try {
+        // 直接查哪个 persona 最近有消息
+        const res = await api('/api/messages/latest-persona')
+        const data = await res.json()
+        const latestId = data.personaId
+        if (latestId) {
+            const found = allPersonas.value.find(p => p.id === latestId)
+            if (found) {
+                // 再拉一下这个 persona 的最后一条消息
+                const msgRes = await api(`/api/messages/${latestId}/last`)
+                const lastMsg = await msgRes.json()
+                if (lastMsg) {
+                    const prefix = lastMsg.role === 'ai' ? '' : '我: '
+                    const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+                    recentPersona.value = {
+                        ...found,
+                        lastMessage: prefix + (content.length > 30 ? content.slice(0, 30) + '...' : content),
+                        lastMessageTime: lastMsg.timestamp
+                    }
+                    return
+                }
+            }
+        }
+    } catch { }
+    // fallback：用第一个 persona
+    recentPersona.value = allPersonas.value[0] || null
 }
+
 
 async function loadPersonaInsights() {
     const pid = currentAi.value.personaId

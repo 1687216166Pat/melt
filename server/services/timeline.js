@@ -88,8 +88,11 @@ ${toneGuide}
 - 特别瞬间
 
 如果不值得记录，回复"无"。
-如果值得，用以下格式回复（一行）：
-类型|内容描述（用${identity.userName}和${identity.aiName}称呼，像回忆一样，不超过30字）|标签
+如果值得，严格按以下格式回复一行，不要添加任何额外文字：
+[类型]|[一句像回忆一样的描述，用${identity.userName}和${identity.aiName}称呼，不超过30字]|[标签]
+
+示例：
+特别瞬间|${identity.userName}第一次说想见${identity.aiName}，两人约好了碰面的地方|温馨约定
 
 用户: ${userMessage}
 AI: ${aiReply}
@@ -116,6 +119,7 @@ AI: ${aiReply}
       period: fuzzyTime(new Date()),
       event_type: eventType,
       tags,
+      created_at: new Date().toISOString(),
     });
 
     console.log(
@@ -142,7 +146,10 @@ async function getTimeline(personaId, isBeta = false) {
 
   const groups = {};
   data.forEach((event) => {
-    const date = new Date(event.created_at).toISOString().slice(0, 10);
+    // 用北京时间做日期分组，避免 UTC 跨天问题
+    const date = new Date(event.created_at)
+      .toLocaleString("en-CA", { timeZone: "Asia/Shanghai" })
+      .slice(0, 10);
     if (!groups[date]) groups[date] = [];
     groups[date].push({
       id: event.id,
@@ -170,14 +177,21 @@ async function getTimeline(personaId, isBeta = false) {
 }
 
 function formatDateLabel(dateStr) {
-  const date = new Date(dateStr);
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const yesterday = new Date(now - 86400000).toISOString().slice(0, 10);
-  if (dateStr === today) return "今天";
-  if (dateStr === yesterday) return "昨天";
-  const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+  const todayBJ = now
+    .toLocaleString("en-CA", { timeZone: "Asia/Shanghai" })
+    .slice(0, 10);
+  const yesterdayBJ = new Date(now - 86400000)
+    .toLocaleString("en-CA", { timeZone: "Asia/Shanghai" })
+    .slice(0, 10);
+
+  if (dateStr === todayBJ) return "今天";
+  if (dateStr === yesterdayBJ) return "昨天";
+
+  const diff = Math.floor((now - new Date(dateStr)) / (1000 * 60 * 60 * 24));
   if (diff < 7) return `${diff}天前`;
+
+  const date = new Date(dateStr);
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 

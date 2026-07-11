@@ -142,7 +142,7 @@
                     </div>
                     <div class="sgi-label-wrap">
                         <div class="sgi-label">上传至云端</div>
-                        <div class="sgi-desc">数据已存储在 Supabase</div>
+                        <div class="sgi-desc">清除旧缓存，重新同步最新数据</div>
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         class="sgi-arrow">
@@ -158,7 +158,7 @@
                     </div>
                     <div class="sgi-label-wrap">
                         <div class="sgi-label">强制同步</div>
-                        <div class="sgi-desc">清除缓存并重新加载</div>
+                        <div class="sgi-desc">从云端读取最新数据，覆盖本地缓存</div>
                     </div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         class="sgi-arrow">
@@ -356,12 +356,92 @@ async function importData(event) {
     } catch (e) { showResult('导入失败: ' + e.message, false) }
 }
 
-function syncToCloud() { showResult('数据已在云端（Supabase），无需额外同步 ✓') }
+async function syncToCloud() {
+    if (!confirm('上传至云端会清除旧缓存并重新同步最新数据，确定继续？')) return
+    showResult('正在同步...')
+    try {
+        // 清除所有 sessionStorage 缓存
+        sessionStorage.clear()
+
+        // 清除 localStorage 里的缓存项（保留设置项）
+        const keysToRemove = Object.keys(localStorage).filter(k =>
+            k.startsWith('melt_cache_') ||
+            k === 'home_data_loaded' ||
+            k === 'personas_loaded' ||
+            k === 'cached_current_ai' ||
+            k === 'cached_left_bubble' ||
+            k === 'cached_personas' ||
+            k === 'cached_timeline' ||
+            k === 'cached_insights' ||
+            k === 'cached_total_messages' ||
+            k === 'cached_streak'
+        )
+        keysToRemove.forEach(k => localStorage.removeItem(k))
+
+        // 重新从后端拉取最新数据写入缓存
+        const [personasRes, latestRes] = await Promise.all([
+            api('/api/prompts/personas'),
+            api('/api/messages/latest-persona')
+        ])
+        const personasData = await personasRes.json()
+        const latestData = await latestRes.json()
+        const pid = latestData.personaId
+
+        if (pid) {
+            const [msgRes, timelineRes, insightRes, heatmapRes] = await Promise.all([
+                api(`/api/messages/${pid}/last`),
+                api(`/api/timeline/${pid}`),
+                api(`/api/sediment/${pid}/insights`),
+                api(`/api/memories/${pid}/heatmap`)
+            ])
+            const lastMsg = await msgRes.json()
+            const timeline = await timelineRes.json()
+            const insights = await insightRes.json()
+            const heatmap = await heatmapRes.json()
+
+            if (lastMsg) {
+                const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
+                localStorage.setItem('cached_left_bubble',
+                    content.length > 30 ? content.slice(0, 30) + '...' : content)
+            }
+            localStorage.setItem('cached_timeline', JSON.stringify(timeline))
+            localStorage.setItem('cached_insights', JSON.stringify(insights))
+            if (heatmap) {
+                const total = Object.values(heatmap).reduce((a, b) => a + b, 0)
+                localStorage.setItem('cached_total_messages', String(total))
+            }
+        }
+
+        showResult('已同步最新数据至本地缓存 ✓')
+    } catch (e) {
+        showResult('同步失败: ' + e.message, false)
+    }
+}
 
 async function forceSync() {
-    Object.keys(localStorage).forEach(key => { if (key.startsWith('melt_cache_')) localStorage.removeItem(key) })
-    showResult('缓存已清除，即将刷新...')
-    setTimeout(() => { location.reload() }, 1500)
+    if (!confirm('强制同步会清除所有本地缓存并从云端重新读取，确定？')) return
+    showResult('正在从云端读取...')
+    try {
+        // 清除所有缓存
+        sessionStorage.clear()
+        Object.keys(localStorage).forEach(key => {
+            if (
+                key.startsWith('melt_cache_') ||
+                key.startsWith('cached_') ||
+                key.startsWith('together_loaded_') ||
+                key.startsWith('insights_loaded_') ||
+                key.startsWith('bookmarks_loaded_') ||
+                key === 'home_data_loaded' ||
+                key === 'personas_loaded'
+            ) {
+                localStorage.removeItem(key)
+            }
+        })
+        showResult('缓存已清除，正在刷新...')
+        setTimeout(() => { location.reload() }, 1200)
+    } catch (e) {
+        showResult('同步失败: ' + e.message, false)
+    }
 }
 
 async function restoreBuiltinPersonas() {

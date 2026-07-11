@@ -182,6 +182,59 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     }
   }
 
+  // 检查人格状态
+  const { data: statusData } = await db
+    .from("persona_status")
+    .select("*")
+    .eq("persona_id", pid)
+    .limit(1);
+  const personaStatus =
+    statusData && statusData.length > 0 ? statusData[0] : null;
+  const isBusy =
+    personaStatus &&
+    personaStatus.status !== "available" &&
+    (!personaStatus.busy_until ||
+      new Date(personaStatus.busy_until) > new Date());
+
+  if (isBusy) {
+    const busyMode = personaStatus.busy_mode || "ai_decide";
+
+    // 存入积压消息
+    await db.from("pending_messages").insert({
+      persona_id: pid,
+      content: userMessage,
+      received_at: new Date().toISOString(),
+      handled: false,
+    });
+
+    if (busyMode === "silent") {
+      // 完全静默，不回复
+      return;
+    } else if (busyMode === "auto_reply") {
+      // 自动回复
+      const autoText =
+        personaStatus.auto_reply_text || "我现在有点忙，稍后回你";
+      const autoPayload = JSON.stringify({
+        type: "chat",
+        role: "ai",
+        content: autoText,
+        timestamp: new Date().toISOString(),
+        isAutoReply: true,
+      });
+      if (clients) {
+        clients.forEach((c) => {
+          if (c.readyState === 1) c.send(autoPayload);
+        });
+      } else {
+        ws.send(autoPayload);
+      }
+      return;
+    } else {
+      // ai_decide：让 AI 决定，但带上忙碌上下文
+      // 继续走正常流程，但在 system prompt 里注入状态
+    }
+  }
+
   // 2. 获取人设（走缓存，减少数据库查询）
   let pName = "AI 助手";
   let personaContent = "";
@@ -212,6 +265,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
       }
       if (cachedP.custom_api_key) personaApiKey = cachedP.custom_api_key;
       if (cachedP.custom_api_url) personaApiUrl = cachedP.custom_api_url;
+      if (cachedP.card_enabled) cardEnabled = cachedP.card_enabled;
     } else {
       // fallback：查 user_profile
       const { data: configRow } = await db
@@ -376,6 +430,23 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
 - 正常对话内容照常输出，特殊格式放在最后
 `;
 
+  const cardGuide = cardEnabled
+    ? `
+[HTML 小卡片格式]
+在特别的时刻，你可以发送一张 HTML 小卡片给用户，使用以下格式（放在回复末尾）：
+
+[CARD:<html>卡片内容</html>]
+
+要求：
+- 只在真正特别的时刻使用，不要频繁发送
+- 卡片内容是完整的 HTML 片段，可以有内联 CSS
+- 卡片尺寸控制在 280px 宽以内，高度不超过 400px
+- 风格要和你的人设相符，可以是情书、诗歌、小游戏、节日祝福等
+- 不要使用外部资源链接，只用内联样式和 emoji
+- 一次回复只能发一张卡片
+`
+    : "";
+
   // 10. 记忆与关系召回
   const memoryContext = await buildMemoryContextAsync(pid, userMessage, isBeta);
   const relationshipContext = await buildRelationshipContext(pid);
@@ -460,6 +531,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (worldBookAfter) systemContent += worldBookAfter + "\n";
   if (needWorldBook) systemContent += defaultWorldBook + "\n";
   systemContent += giftTransferGuide + "\n";
+  if (cardGuide) systemContent += cardGuide + "\n";
   // 情绪状态注入
   const emotionPrompt = isBeta ? "" : await buildEmotionPrompt(pid);
   if (emotionPrompt) systemContent += emotionPrompt + "\n";
@@ -468,6 +540,10 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (phoneContext) systemContent += phoneContext + "\n";
   if (worldBookBeforeUser) systemContent += worldBookBeforeUser + "\n";
   if (worldBookTail) systemContent += worldBookTail + "\n";
+  // 注入忙碌状态上下文（ai_decide 模式）
+  if (isBusy && personaStatus.busy_mode === "ai_decide") {
+    systemContent += `\n[当前状态] 你现在处于忙碌状态：${personaStatus.reason || "有事在忙"}。你可以自主决定：1.立刻回复 2.发送简短的"稍后回复"提示后不继续 3.完全不回（输出"[SKIP]"表示跳过）。根据你的人设和当前状态判断最合适的做法。\n`;
+  }
   if (timeSinceLastMsg) systemContent += timeSinceLastMsg + "\n";
 
   systemContent += `
@@ -584,6 +660,8 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   }
 
   let aiReply = data.choices[0].message.content || "";
+
+  // 先清理思考标签
   aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, "").trim();
   aiReply = aiReply.replace(/\[思考\][\s\S]*/g, "").trim();
   aiReply = aiReply.replace(/思考一下[\s\S]*?\n/g, "").trim();
@@ -591,12 +669,29 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
   if (!aiReply) aiReply = "...";
 
+  // 再检查 SKIP 指令
+  if (aiReply.includes("[SKIP]")) {
+    console.log(`[状态] ${pid} AI 决定暂不回复`);
+    return;
+  }
+
   // ===== 解析特殊格式 =====
   let specialPayload = null;
 
   const giftMatch = aiReply.match(/\[GIFT:(\{.*?\})\]/s);
   const transferMatch = aiReply.match(/\[TRANSFER:(\{.*?\})\]/s);
   const locationMatch = aiReply.match(/\[LOCATION:(\{.*?\})\]/s);
+
+  if (cardMatch) {
+    try {
+      const cardHtml = cardMatch[1].trim();
+      specialPayload = { type: "card", data: { html: cardHtml } };
+      aiReply = aiReply.replace(cardMatch[0], "").trim();
+      console.log(`[卡片] ${pid} 发送了 HTML 卡片`);
+    } catch (e) {
+      console.error("[卡片] 解析失败:", e.message);
+    }
+  }
 
   if (giftMatch) {
     try {
@@ -755,6 +850,40 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
       },
     },
   });
+
+  // 如果刚从忙碌恢复，检查是否有积压消息需要处理
+  if (!isBusy) {
+    const { data: pendingData } = await db
+      .from("pending_messages")
+      .select("*")
+      .eq("persona_id", pid)
+      .eq("handled", false)
+      .order("received_at", { ascending: true });
+
+    if (pendingData && pendingData.length > 0) {
+      // 标记已处理
+      await db
+        .from("pending_messages")
+        .update({ handled: true })
+        .eq("persona_id", pid)
+        .eq("handled", false);
+
+      // 构建积压消息摘要给 AI
+      const pendingSummary = pendingData
+        .map((m, i) => `[${i + 1}] ${m.content}`)
+        .join("\n");
+      const catchupContent = `[积压消息] 你刚结束忙碌状态，在你忙碌期间收到了以下消息：\n${pendingSummary}\n\n请根据你的人设决定如何回复：可以逐条引用回复，也可以只回复重要的，或者用自己的方式整合回复。`;
+
+      // 延迟 2 秒后触发积压消息处理
+      setTimeout(async () => {
+        try {
+          await handleChat(catchupContent, ws, pid, isBeta, clients);
+        } catch (e) {
+          console.error("[积压消息] 处理失败:", e.message);
+        }
+      }, 2000);
+    }
+  }
 
   if (clients) {
     clients.forEach((client) => {

@@ -118,6 +118,7 @@ export const useChatStore = defineStore("chat", () => {
     if (msg.emojiUrl !== undefined) newMsg.emojiUrl = msg.emojiUrl;
     if (msg.emojiName !== undefined) newMsg.emojiName = msg.emojiName;
     if (msg.images !== undefined) newMsg.images = msg.images;
+    if (msg.cardHtml !== undefined) newMsg.cardHtml = msg.cardHtml;
 
     // 去重：检查最近 5 条，防止同样内容在短时间内重复添加
     const recent = messages.value.slice(-5);

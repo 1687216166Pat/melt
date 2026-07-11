@@ -37,7 +37,32 @@
                         <textarea v-model="giftContent" placeholder="礼物内容（可选）：花束里有钻戒和小纸条..." class="gift-textarea"
                             rows="2"></textarea>
                         <input v-model="giftMessage" placeholder="附言（可选）" class="gift-input" />
-                        <button class="send-gift-btn" @click="sendGift" :disabled="!giftName.trim()">送出礼物 🎁</button>
+
+                        <!-- 送出方式 -->
+                        <div class="gift-method-row">
+                            <span class="gift-method-label">送出方式</span>
+                            <div class="gift-method-opts">
+                                <button v-for="m in giftMethods" :key="m.value" class="gift-method-btn"
+                                    :class="{ active: giftMethod === m.value }" @click="giftMethod = m.value">
+                                    {{ m.icon }} {{ m.label }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button class="send-gift-btn" @click="sendGift" :disabled="!giftName.trim()">
+                            送出礼物 🎁
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 卡片面板 -->
+                <div v-if="activePanel === 'card'" class="toolbar-panel">
+                    <div class="gift-input-area">
+                        <textarea v-model="cardHtml" placeholder="输入 HTML 内容..." class="gift-textarea" rows="5"
+                            style="font-family: monospace; font-size: 12px;"></textarea>
+                        <button class="send-gift-btn" @click="sendCard" :disabled="!cardHtml.trim()">
+                            发送卡片 ✦
+                        </button>
                     </div>
                 </div>
 
@@ -124,6 +149,15 @@
                         </svg>
                         <span>位置</span>
                     </button>
+                    <button class="toolbar-btn" :class="{ active: activePanel === 'card' }"
+                        @click="togglePanel('card')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round">
+                            <rect x="2" y="4" width="20" height="16" rx="2" />
+                            <path d="M8 10h8M8 14h4" />
+                        </svg>
+                        <span>卡片</span>
+                    </button>
                     <button class="toolbar-btn" :class="{ active: narrMode }" @click="toggleNarrMode">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round">
@@ -177,7 +211,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 const emit = defineEmits([
     'send', 'send-images', 'send-emoji', 'send-gift',
     'send-transfer', 'send-location', 'continue-reply',
-    'regenerate', 'multiselect'
+    'regenerate', 'multiselect','send-card'
 ])
 
 const text = ref('')
@@ -189,11 +223,24 @@ const narrMode = ref(false)
 const pendingImages = ref([])
 const imagesCollapsed = ref(true)
 const emojiList = ref([])
+const cardHtml = ref('')
+
+function sendCard() {
+    if (!cardHtml.value.trim()) return
+    emit('send-card', { html: cardHtml.value.trim() })
+    cardHtml.value = ''
+    activePanel.value = null
+}
 
 // 礼物
 const giftName = ref('')
 const giftContent = ref('')
-const giftMessage = ref('')
+const giftMethod = ref('in_person')
+const giftMethods = [
+    { value: 'in_person', icon: '🤝', label: '当面' },
+    { value: 'delivery', icon: '📦', label: '快递' },
+    { value: 'takeout', icon: '🛵', label: '外卖' },
+]
 
 // 转账
 const transferAmount = ref('')
@@ -302,16 +349,24 @@ function sendEmoji(emoji) {
 
 function sendGift() {
     if (!giftName.value.trim()) return
+    const methodMap = {
+        in_person: '当面送出',
+        delivery: '通过快递寄出',
+        takeout: '通过外卖送达',
+    }
+    const methodDesc = methodMap[giftMethod.value] || '送出'
     emit('send-gift', {
         name: giftName.value.trim(),
         content: giftContent.value.trim(),
-        message: giftMessage.value.trim()
+        message: giftMessage.value.trim(),
+        method: giftMethod.value,
+        methodDesc,
     })
     giftName.value = ''
     giftContent.value = ''
     giftMessage.value = ''
-    activePanel.value = ''
-    showToolbar.value = false
+    giftMethod.value = 'in_person'
+    activePanel.value = null
 }
 
 function sendTransfer() {
@@ -729,5 +784,43 @@ textarea::placeholder {
     opacity: 0.25;
     cursor: not-allowed;
     box-shadow: none;
+}
+
+.gift-method-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gift-method-label {
+    font-size: 11px;
+    color: #B8A9AC;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.gift-method-opts {
+    display: flex;
+    gap: 8px;
+}
+
+.gift-method-btn {
+    flex: 1;
+    padding: 8px 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    color: #B8A9AC;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.gift-method-btn.active {
+    background: rgba(217, 163, 175, 0.15);
+    color: #D9A3AF;
+    border-color: rgba(217, 163, 175, 0.4);
 }
 </style>

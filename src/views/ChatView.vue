@@ -1,3 +1,4 @@
+```vue
 <template>
     <div class="chat-page" :class="['theme-' + chatTheme, { 'bubble-merge': bubbleMerge }]">
 
@@ -15,9 +16,9 @@
                 </div>
                 <div class="header-text">
                     <span class="header-name">{{ personaName }}</span>
-                    <span class="header-status">
-                        <span class="status-dot"></span>
-                        在线
+                    <span class="header-status" :class="{ 'status-busy': isBusyStatus }">
+                        <span class="status-dot" :class="{ 'dot-busy': isBusyStatus }"></span>
+                        {{ isBusyStatus ? (personaStatus.reason || '忙碌中') : '在线' }}
                     </span>
                 </div>
             </div>
@@ -87,7 +88,7 @@
                             stroke-linecap="round">
                             <rect x="3" y="3" width="18" height="18" rx="2" />
                             <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path d="M21 15l-5-5L5 21" />
+                            <path d="M21 15l-5L5 21" />
                         </svg>
                         截图
                     </button>
@@ -102,12 +103,9 @@
             </div>
 
             <template v-for="(item, idx) in messagesWithTimestamp" :key="item.id || idx">
-                <!-- 时间戳分隔 -->
                 <div v-if="item.showTime" class="time-divider">
                     <span>{{ item.timeLabel }}</span>
                 </div>
-
-                <!-- 消息气泡 -->
                 <ChatBubble :msg="item" :theme="chatTheme" :merge="bubbleMerge" :is-merged="item.isMerged"
                     :show-avatar="shouldShowAvatar(item, idx)" :persona-avatar="personaAvatar"
                     :persona-avatar-url="personaAvatarUrl" :user-avatar="userAvatar" :select-mode="selectMode"
@@ -122,7 +120,8 @@
 
         <ChatInput @send="handleSend" @send-images="handleSendImages" @send-emoji="handleSendEmoji"
             @send-gift="handleSendGift" @send-transfer="handleSendTransfer" @send-location="handleSendLocation"
-            @continue-reply="handleContinueReply" @regenerate="handleRegenerateLatest" @multiselect="enterSelectMode" />
+            @continue-reply="handleContinueReply" @regenerate="handleRegenerateLatest" @multiselect="enterSelectMode"
+            @send-card="handleSendCard" />
     </div>
 </template>
 
@@ -157,19 +156,19 @@ const bubbleMerge = ref(false)
 const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
 const lastHandledContent = ref('')
 const lastHandledTime = ref(0)
+const personaStatus = ref({ status: 'available', reason: '' })
 
-// 多选
+const isBusyStatus = computed(() => personaStatus.value.status !== 'available')
+
 const selectMode = ref(false)
 const selectedIds = ref([])
 
 const personaId = computed(() => route.params.personaId)
 
-// 带时间戳分组和合并标记的消息列表
 const messagesWithTimestamp = computed(() => {
     const msgs = chatStore.messages
     const result = []
     let lastTime = null
-    let lastRole = null
 
     msgs.forEach((msg, idx) => {
         const ts = msg.timestamp ? new Date(msg.timestamp) : null
@@ -184,14 +183,12 @@ const messagesWithTimestamp = computed(() => {
             }
         }
 
-        // 是否合并（同角色连续消息）
         const isMerged = bubbleMerge.value && idx > 0
             && msgs[idx - 1].role === msg.role
             && !showTime
-            && !msg.type // 特殊消息类型不合并
+            && !msg.type
 
         result.push({ ...msg, showTime, timeLabel, isMerged })
-        lastRole = msg.role
     })
 
     return result
@@ -199,10 +196,7 @@ const messagesWithTimestamp = computed(() => {
 
 function formatTimeLabel(date) {
     const now = new Date()
-    const diff = now - date
-    const mins = Math.floor(diff / 60000)
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
+    const days = Math.floor((now - date) / 86400000)
 
     if (days === 0) {
         return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
@@ -213,14 +207,12 @@ function formatTimeLabel(date) {
     }
 }
 
-// 是否显示头像（只在需要显示头像的主题下，且是该角色连续消息的最后一条）
 function shouldShowAvatar(item, idx) {
     if (chatTheme.value === 'default' || chatTheme.value === 'minimal' || chatTheme.value === 'liquid') {
         return false
     }
     const msgs = messagesWithTimestamp.value
     const next = msgs[idx + 1]
-    // 最后一条或下一条是不同角色
     if (!next || next.role !== item.role) return true
     return false
 }
@@ -240,7 +232,6 @@ async function loadPersonaName() {
             maxBubbles.value = data.max_messages || data.maxMessages
         }
 
-        // 壁纸
         if (data.chat_wallpaper) {
             const chatPage = document.querySelector('.chat-page')
             if (chatPage) {
@@ -250,7 +241,6 @@ async function loadPersonaName() {
             }
         }
 
-        // 自定义主题 CSS
         if (data.chat_theme && data.chat_theme.startsWith('custom_')) {
             const saved = localStorage.getItem(`chat_custom_themes_${personaId.value}`)
             if (saved) {
@@ -267,6 +257,12 @@ async function loadPersonaName() {
             }
         }
     } catch (e) { }
+
+    // 加载状态
+    try {
+        const sRes = await api(`/api/persona-status/${personaId.value}`)
+        personaStatus.value = await sRes.json()
+    } catch { }
 }
 
 function scrollToBottom() {
@@ -285,7 +281,6 @@ function handleSend(text, opts = {}) {
     if (opts.autoReply !== false) {
         send({ type: 'chat', content: text, personaId: personaId.value })
         isTyping.value = true
-        // 30秒后兜底关掉，防止 AI 无响应时一直转
         setTimeout(() => { isTyping.value = false }, 30000)
     }
     scrollToBottom()
@@ -294,7 +289,7 @@ function handleSend(text, opts = {}) {
     }
 }
 
-function handleSendImages({ images, text, narr }) {
+function handleSendImages({ images, text }) {
     chatStore.addMessage({
         role: 'user',
         type: 'images',
@@ -324,18 +319,18 @@ function handleSendEmoji(emoji) {
     scrollToBottom()
 }
 
-async function handleSendGift({ name, content, message }) {
+async function handleSendGift({ name, content, message, method, methodDesc }) {
     chatStore.addMessage({
         role: 'user',
         type: 'gift',
         giftName: name,
         giftContent: content,
         giftMessage: message,
+        giftMethod: method,
         content: `[礼物: ${name}]`,
         timestamp: new Date().toISOString()
     })
 
-    // 存进礼物记录
     try {
         await api(`/api/gifts/${personaId.value}`, {
             method: 'POST',
@@ -349,8 +344,41 @@ async function handleSendGift({ name, content, message }) {
         })
     } catch { }
 
-    const desc = `[用户送了一份礼物: ${name}${content ? `，里面有：${content}` : ''}${message ? `，附言：${message}` : ''}]`
+    let desc = `[用户${methodDesc}一份礼物: ${name}`
+    if (content) desc += `，里面有：${content}`
+    if (message) desc += `，附言：${message}`
+    desc += `]`
+
     send({ type: 'chat', content: desc, personaId: personaId.value })
+    isTyping.value = true
+    scrollToBottom()
+
+    setTimeout(async () => {
+        try {
+            await api('/api/messages/update-meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    personaId: personaId.value,
+                    role: 'user',
+                    contentPrefix: `[礼物: ${name}]`,
+                    msgType: 'gift',
+                    msgMeta: JSON.stringify({ name, content, message, method })
+                })
+            })
+        } catch { }
+    }, 1000)
+}
+
+function handleSendCard({ html }) {
+    chatStore.addMessage({
+        role: 'user',
+        type: 'card',
+        cardHtml: html,
+        content: '[HTML卡片]',
+        timestamp: new Date().toISOString()
+    })
+    send({ type: 'chat', content: '[用户发送了一张 HTML 小卡片]', personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
@@ -365,7 +393,6 @@ async function handleSendTransfer({ amount, note }) {
         timestamp: new Date().toISOString()
     })
 
-    // 存进转账记录
     try {
         await api(`/api/transfers/${personaId.value}`, {
             method: 'POST',
@@ -381,6 +408,22 @@ async function handleSendTransfer({ amount, note }) {
     send({ type: 'chat', content: `[用户转账了 ¥${amount.toFixed(2)}${note ? `，备注：${note}` : ''}]`, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
+
+    setTimeout(async () => {
+        try {
+            await api('/api/messages/update-meta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    personaId: personaId.value,
+                    role: 'user',
+                    contentPrefix: `[转账: ¥${parseFloat(amount).toFixed(2)}]`,
+                    msgType: 'transfer',
+                    msgMeta: JSON.stringify({ amount: parseFloat(amount), note: note || '' })
+                })
+            })
+        } catch { }
+    }, 1000)
 }
 
 function handleSendLocation({ lat, lng, manual }) {
@@ -417,23 +460,21 @@ function handleRegenerateLatest() {
 }
 
 function handleIncoming(data) {
-    // bus_message 不是 AI 回复，但要确保 typing 不被卡住    
     if (data.type === 'bus_message') return
-    console.log('[Chat] handleIncoming 被调用', data.type, data.content?.slice(0, 20))
     if (data.type === 'chat' || data.type === 'push') {
-        console.log('[Chat] 进入处理分支')
-
-        // 前端再做一层去重，防止网络抖动时同一条消息处理两次
         const key = (data.content || '') + (data.timestamp || '')
         const now = Date.now()
-        if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) {
-            console.log('[Chat] 拦截重复 incoming:', data.content?.slice(0, 20))
-            return
-        }
+        if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) return
         lastHandledContent.value = key
         lastHandledTime.value = now
 
         isTyping.value = false
+
+        // 收到回复后刷新状态
+        api(`/api/persona-status/${personaId.value}`)
+            .then(r => r.json())
+            .then(s => { personaStatus.value = s })
+            .catch(() => { })
 
         let cleanContent = data.content
             .replace(/\[思考\][\s\S]*?\[思考\]/g, '')
@@ -451,16 +492,14 @@ function handleIncoming(data) {
             }
         }
 
-        console.log('[Chat] 气泡数量:', final.length)
-
         if (final.length === 0) {
             isTyping.value = false
             return
         }
 
         final.forEach((line, idx) => {
-            console.log('[Chat] 准备 push 气泡:', idx, line.slice(0, 15))
             setTimeout(() => {
+                if (idx === final.length - 1) isTyping.value = false
                 chatStore.addMessage({
                     role: 'ai',
                     content: line,
@@ -473,47 +512,44 @@ function handleIncoming(data) {
             }, idx * 600)
         })
 
-        // 处理 AI 主动发送的特殊消息
         if (data.specialPayload) {
             const sp = data.specialPayload
+            const delay = final.length * 600 + 200
             if (sp.type === 'gift') {
                 setTimeout(() => {
                     chatStore.addMessage({
-                        role: 'ai',
-                        type: 'gift',
-                        giftName: sp.data.name,
-                        giftContent: sp.data.content,
-                        giftMessage: sp.data.message,
-                        content: `[礼物: ${sp.data.name}]`,
-                        timestamp: data.timestamp,
+                        role: 'ai', type: 'gift',
+                        giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message,
+                        content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp,
                     })
                     scrollToBottom()
-                }, final.length * 600 + 200)
+                }, delay)
             } else if (sp.type === 'transfer') {
                 setTimeout(() => {
                     chatStore.addMessage({
-                        role: 'ai',
-                        type: 'transfer',
-                        amount: sp.data.amount,
-                        note: sp.data.note,
-                        content: `[转账: ¥${sp.data.amount}]`,
-                        timestamp: data.timestamp,
+                        role: 'ai', type: 'transfer',
+                        amount: sp.data.amount, note: sp.data.note,
+                        content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp,
                     })
                     scrollToBottom()
-                }, final.length * 600 + 200)
+                }, delay)
             } else if (sp.type === 'location') {
                 setTimeout(() => {
                     chatStore.addMessage({
-                        role: 'ai',
-                        type: 'location',
-                        lat: null,
-                        lng: null,
-                        locationName: sp.data.name,
-                        content: `[位置: ${sp.data.name}]`,
-                        timestamp: data.timestamp,
+                        role: 'ai', type: 'location',
+                        lat: null, lng: null, locationName: sp.data.name,
+                        content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp,
                     })
                     scrollToBottom()
-                }, final.length * 600 + 200)
+                }, delay)
+            } else if (sp.type === 'card') {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai', type: 'card',
+                        cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp,
+                    })
+                    scrollToBottom()
+                }, delay)
             }
         }
 
@@ -521,16 +557,8 @@ function handleIncoming(data) {
     }
 }
 
-// 多选
-function enterSelectMode() {
-    selectMode.value = true
-    selectedIds.value = []
-}
-
-function cancelSelect() {
-    selectMode.value = false
-    selectedIds.value = []
-}
+function enterSelectMode() { selectMode.value = true; selectedIds.value = [] }
+function cancelSelect() { selectMode.value = false; selectedIds.value = [] }
 
 function toggleSelect(msgId) {
     const idx = selectedIds.value.indexOf(msgId)
@@ -557,71 +585,34 @@ async function bookmarkSelected() {
 
 async function screenshotSelected() {
     if (selectedIds.value.length === 0) return
-
     try {
         const html2canvas = (await import('html2canvas')).default
-
-        // 找到选中消息的 DOM 元素
         const container = messagesContainer.value
         if (!container) return
-
-        // 临时创建一个截图容器
         const screenshotDiv = document.createElement('div')
-        screenshotDiv.style.cssText = `
-            position: fixed;
-            left: -9999px;
-            top: 0;
-            width: ${container.offsetWidth}px;
-            background: var(--color-bg, #fdf6f8);
-            padding: 20px 16px;
-            font-family: inherit;
-        `
-
-        // 把选中的消息 clone 进去
+        screenshotDiv.style.cssText = `position:fixed;left:-9999px;top:0;width:${container.offsetWidth}px;background:#fdf6f8;padding:20px 16px;font-family:inherit;`
         const allBubbles = container.querySelectorAll('.bubble-wrapper')
         let clonedCount = 0
         allBubbles.forEach(bubble => {
             const msgId = bubble.dataset.msgId
             if (selectedIds.value.some(id => String(id) === String(msgId))) {
                 const clone = bubble.cloneNode(true)
-                // 去掉多选状态的样式
                 clone.classList.remove('selected', 'select-mode')
                 clone.style.marginBottom = '12px'
                 screenshotDiv.appendChild(clone)
                 clonedCount++
             }
         })
-
-        if (clonedCount === 0) {
-            // 如果没找到 data-msg-id，直接截整个消息列表
-            document.body.appendChild(screenshotDiv)
-            screenshotDiv.remove()
-            cancelSelect()
-            return
-        }
-
+        if (clonedCount === 0) { cancelSelect(); return }
         document.body.appendChild(screenshotDiv)
-
-        const canvas = await html2canvas(screenshotDiv, {
-            backgroundColor: '#fdf6f8',
-            scale: 2,
-            useCORS: true,
-            logging: false,
-        })
-
+        const canvas = await html2canvas(screenshotDiv, { backgroundColor: '#fdf6f8', scale: 2, useCORS: true, logging: false })
         document.body.removeChild(screenshotDiv)
-
-        // 下载图片
         const link = document.createElement('a')
         link.download = `聊天记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '')}.png`
         link.href = canvas.toDataURL('image/png')
         link.click()
-
         cancelSelect()
-    } catch (e) {
-        console.error('截图失败:', e)
-        cancelSelect()
-    }
+    } catch (e) { console.error('截图失败:', e); cancelSelect() }
 }
 
 async function handleBookmark(msg) {
@@ -629,11 +620,7 @@ async function handleBookmark(msg) {
         await api(`/api/bookmarks/${personaId.value}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                type: msg.type || 'message',
-                content: msg.content,
-                source_id: msg.id
-            })
+            body: JSON.stringify({ type: msg.type || 'message', content: msg.content, source_id: msg.id })
         })
     } catch { }
 }
@@ -663,10 +650,7 @@ async function handleRegenerate(msgId) {
     }
 }
 
-function goToDetail() {
-    showPanel.value = false
-    router.push(`/persona-detail/${personaId.value}`)
-}
+function goToDetail() { showPanel.value = false; router.push(`/persona-detail/${personaId.value}`) }
 
 async function clearChat() {
     if (!confirm('清理这段时间的对话痕迹？')) return
@@ -689,7 +673,6 @@ function goBack() {
 
 function loadOlder() { chatStore.loadMore() }
 function handleScroll() { }
-function updateTime() { }
 
 onMounted(async () => {
     document.querySelector('.screen-content').style.overflow = 'hidden'
@@ -718,7 +701,6 @@ watch(personaId, async (newId, oldId) => {
     await loadPersonaName()
     scrollToBottom()
 })
-
 </script>
 
 <style>
@@ -1395,5 +1377,28 @@ watch(personaId, async (newId, oldId) => {
     border-color: rgba(0, 0, 0, 0.1);
     color: #191919;
     background: rgba(255, 255, 255, 0.8);
+}
+
+.header-status.status-busy {
+    color: #C4962A;
+}
+
+.status-dot.dot-busy {
+    background: #F5C24E;
+    animation: pulse-busy 2s ease-in-out infinite;
+}
+
+@keyframes pulse-busy {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+    }
 }
 </style>
