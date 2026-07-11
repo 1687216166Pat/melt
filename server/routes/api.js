@@ -1893,4 +1893,92 @@ router.get("/location-logs/:ownerType/:ownerId", async (req, res) => {
   res.json(data || []);
 });
 
+// 更新地点坐标（拖拽后保存）
+router.put("/map-location/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { x, y, locationName, icon } = req.body;
+  const updateData = { updated_at: new Date().toISOString() };
+  if (x !== undefined) updateData.x = x;
+  if (y !== undefined) updateData.y = y;
+  if (locationName) updateData.location_name = locationName;
+  if (icon) updateData.icon = icon;
+  await db.from("map_locations").update(updateData).eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// 保存地图路径（手绘区域）
+router.post("/map-paths", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { mapId, paths } = req.body;
+  // 先删旧的再插新的（全量覆盖）
+  await db.from("map_paths").delete().eq("map_id", mapId);
+  if (paths && paths.length > 0) {
+    for (const path of paths) {
+      await db.from("map_paths").insert({
+        map_id: mapId,
+        path_name: path.name || "",
+        path_type: path.type || "polygon",
+        points: JSON.stringify(path.points),
+        color: path.color || "#D9A3AF",
+      });
+    }
+  }
+  res.json({ success: true });
+});
+
+// 获取地图路径
+router.get("/map-paths/:mapId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("map_paths")
+    .select("*")
+    .eq("map_id", req.params.mapId);
+  const paths = (data || []).map((p) => ({
+    ...p,
+    points: typeof p.points === "string" ? JSON.parse(p.points) : p.points,
+  }));
+  res.json(paths);
+});
+
+// AI 生成地图图片
+router.post("/map-generate", async (req, res) => {
+  const { prompt, style } = req.body;
+  const apiKey = process.env.AI_API_KEY;
+  const baseUrl = process.env.AI_BASE_URL || "https://api.openai.com/v1";
+
+  const styleGuide =
+    style === "fantasy"
+      ? "fantasy map style, hand-drawn, parchment texture"
+      : style === "cute"
+        ? "cute pastel illustrated map, kawaii style, soft colors"
+        : "simple clean 2D map illustration, minimal style";
+
+  try {
+    const response = await fetch(`${baseUrl}/images/generations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "dall-e-3",
+        prompt: `A top-down 2D map illustration. ${prompt}. ${styleGuide}. No text labels, no compass rose, suitable as a background map.`,
+        n: 1,
+        size: "1024x1024",
+      }),
+    });
+    const data = await response.json();
+    if (data.data && data.data[0]) {
+      res.json({ url: data.data[0].url });
+    } else {
+      res.status(500).json({ error: "生成失败", detail: data });
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

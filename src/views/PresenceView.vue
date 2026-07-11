@@ -13,7 +13,6 @@
             <div style="width:36px;"></div>
         </div>
 
-        <!-- Tab 切换 -->
         <div class="presence-tabs">
             <button class="presence-tab" :class="{ active: currentTab === 'char' }" @click="currentTab = 'char'">
                 <div class="tab-avatar">
@@ -34,34 +33,42 @@
 
         <div class="presence-content">
 
-            <!-- Char 的手机 -->
+            <!-- Char Tab -->
             <template v-if="currentTab === 'char'">
-                <!-- 虚拟地图 -->
-                <div class="map-card" @click="showCharMapEdit = true">
-                    <div class="map-inner" :style="charMap.background_url
-                        ? { backgroundImage: `url(${charMap.background_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                        : {}">
-                        <div v-if="!charMap.background_url" class="map-placeholder">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                <div class="map-card">
+                    <MapCanvas :map="charMap" :locations="charLocations" :paths="charPaths"
+                        :current-location="charCurrentLocation" :edit-mode="charEditMode" :draw-mode="charDrawMode"
+                        :placing-pin="charPlacingPin" @location-click="setCharLocation"
+                        @location-drag="handleCharLocationDrag" @path-drawn="handleCharPathDrawn"
+                        @pin-placed="handleCharPinPlaced" @open-bg-edit="showCharMapEdit = true" />
+                    <div class="map-toolbar">
+                        <button class="tool-btn" :class="{ active: charEditMode }"
+                            @click="charEditMode = !charEditMode; charDrawMode = null; charPlacingPin = false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round">
-                                <path
-                                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                             </svg>
-                            <span>点击设置虚拟地图</span>
-                        </div>
-                        <!-- 地点标注 -->
-                        <div v-for="loc in charLocations" :key="loc.id" class="map-pin"
-                            :style="{ left: (loc.x * 100) + '%', top: (loc.y * 100) + '%' }"
-                            :class="{ active: charCurrentLocation === loc.location_name }"
-                            @click.stop="setCharLocation(loc)">
-                            <span class="pin-icon">{{ loc.icon }}</span>
-                            <span class="pin-label">{{ loc.location_name }}</span>
-                        </div>
+                            编辑
+                        </button>
+                        <button v-if="charEditMode" class="tool-btn" :class="{ active: charPlacingPin }"
+                            @click="charPlacingPin = !charPlacingPin; charDrawMode = null">
+                            📍 放置标记
+                        </button>
+                        <button v-if="charEditMode" class="tool-btn" :class="{ active: charDrawMode === 'polygon' }"
+                            @click="charDrawMode = charDrawMode === 'polygon' ? null : 'polygon'; charPlacingPin = false">
+                            ✏️ 手绘区域
+                        </button>
+                        <button v-if="charEditMode" class="tool-btn" :class="{ active: charDrawMode === 'circle' }"
+                            @click="charDrawMode = charDrawMode === 'circle' ? null : 'circle'; charPlacingPin = false">
+                            ⭕ 圆形
+                        </button>
+                        <button v-if="charEditMode" class="tool-btn accent" @click="showCharMapEdit = true">
+                            🖼️ 背景
+                        </button>
                     </div>
-                    <div class="map-edit-hint">点击编辑地图</div>
                 </div>
 
-                <!-- Char 手机状态 -->
                 <div class="phone-card">
                     <div class="phone-header">
                         <div class="phone-avatar">
@@ -93,7 +100,6 @@
                     </div>
                 </div>
 
-                <!-- 到达记录 -->
                 <div class="section-label-sm">到达记录</div>
                 <div v-if="charArrivalLogs.length === 0" class="empty-row">暂无记录</div>
                 <div v-else class="arrival-list">
@@ -105,33 +111,42 @@
                 </div>
             </template>
 
-            <!-- User 的手机 -->
+            <!-- User Tab -->
             <template v-if="currentTab === 'user'">
-                <!-- 虚拟地图 -->
-                <div class="map-card" @click="showUserMapEdit = true">
-                    <div class="map-inner" :style="userMap.background_url
-                        ? { backgroundImage: `url(${userMap.background_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-                        : {}">
-                        <div v-if="!userMap.background_url" class="map-placeholder">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                <div class="map-card">
+                    <MapCanvas :map="userMap" :locations="userLocations" :paths="userPaths"
+                        :current-location="userCurrentLocation" :edit-mode="userEditMode" :draw-mode="userDrawMode"
+                        :placing-pin="userPlacingPin" @location-click="setUserLocation"
+                        @location-drag="handleUserLocationDrag" @path-drawn="handleUserPathDrawn"
+                        @pin-placed="handleUserPinPlaced" @open-bg-edit="showUserMapEdit = true" />
+                    <div class="map-toolbar">
+                        <button class="tool-btn" :class="{ active: userEditMode }"
+                            @click="userEditMode = !userEditMode; userDrawMode = null; userPlacingPin = false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round">
-                                <path
-                                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                             </svg>
-                            <span>点击设置我的虚拟地图</span>
-                        </div>
-                        <div v-for="loc in userLocations" :key="loc.id" class="map-pin"
-                            :style="{ left: (loc.x * 100) + '%', top: (loc.y * 100) + '%' }"
-                            :class="{ active: userCurrentLocation === loc.location_name }"
-                            @click.stop="setUserLocation(loc)">
-                            <span class="pin-icon">{{ loc.icon }}</span>
-                            <span class="pin-label">{{ loc.location_name }}</span>
-                        </div>
+                            编辑
+                        </button>
+                        <button v-if="userEditMode" class="tool-btn" :class="{ active: userPlacingPin }"
+                            @click="userPlacingPin = !userPlacingPin; userDrawMode = null">
+                            📍 放置标记
+                        </button>
+                        <button v-if="userEditMode" class="tool-btn" :class="{ active: userDrawMode === 'polygon' }"
+                            @click="userDrawMode = userDrawMode === 'polygon' ? null : 'polygon'; userPlacingPin = false">
+                            ✏️ 手绘区域
+                        </button>
+                        <button v-if="userEditMode" class="tool-btn" :class="{ active: userDrawMode === 'circle' }"
+                            @click="userDrawMode = userDrawMode === 'circle' ? null : 'circle'; userPlacingPin = false">
+                            ⭕ 圆形
+                        </button>
+                        <button v-if="userEditMode" class="tool-btn accent" @click="showUserMapEdit = true">
+                            🖼️ 背景
+                        </button>
                     </div>
-                    <div class="map-edit-hint">点击编辑地图</div>
                 </div>
 
-                <!-- User 手机状态 -->
                 <div class="phone-card">
                     <div class="phone-header">
                         <div class="phone-avatar">
@@ -164,7 +179,6 @@
                     </div>
                 </div>
 
-                <!-- 到达记录 -->
                 <div class="section-label-sm">到达记录</div>
                 <div v-if="userArrivalLogs.length === 0" class="empty-row">暂无记录</div>
                 <div v-else class="arrival-list">
@@ -178,91 +192,152 @@
 
         </div>
 
-        <!-- Char 地图编辑弹窗 -->
-        <div v-if="showCharMapEdit" class="map-edit-overlay" @click.self="showCharMapEdit = false">
-            <div class="map-edit-panel">
-                <div class="map-edit-header">
-                    <span>编辑 {{ charName }} 的地图</span>
-                    <button @click="showCharMapEdit = false">×</button>
-                </div>
-                <div class="map-edit-body">
-                    <div class="edit-row">
-                        <span class="edit-label">地图背景 URL</span>
-                        <input class="edit-input" v-model="charMapBgUrl" placeholder="图片链接..." />
-                    </div>
-                    <div class="edit-row">
-                        <span class="edit-label">或上传图片</span>
-                        <label class="upload-btn">
-                            选择文件
-                            <input type="file" accept="image/*" style="display:none" @change="handleCharMapUpload" />
-                        </label>
-                    </div>
-                    <button class="edit-save-btn" @click="saveCharMap">保存地图</button>
-
-                    <div class="edit-divider">地点标注</div>
-                    <div class="location-add-row">
-                        <input class="edit-input-sm" v-model="newLocName" placeholder="地点名称" />
-                        <input class="edit-input-sm" v-model="newLocIcon" placeholder="图标" style="width:60px;" />
-                        <button class="add-loc-btn" @click="addCharLocation">添加</button>
-                    </div>
-                    <div class="location-hint">添加后点击地图上的地点可切换当前位置</div>
-                    <div class="location-list">
-                        <div v-for="loc in charLocations" :key="loc.id" class="location-chip">
-                            <span>{{ loc.icon }} {{ loc.location_name }}</span>
-                            <button @click="deleteLocation(loc.id, 'char')">×</button>
+        <!-- 放置标记命名弹窗 -->
+        <Teleport to="body">
+            <div v-if="showPinNameDialog" class="pin-dialog-overlay" @click.self="showPinNameDialog = false">
+                <div class="pin-dialog">
+                    <div class="pin-dialog-title">为这个地点命名</div>
+                    <input class="pin-dialog-input" v-model="pendingPinName" placeholder="地点名称，如：家、咖啡店..."
+                        @keyup.enter="confirmPin" autofocus />
+                    <div class="pin-dialog-row">
+                        <span class="pin-dialog-label">图标</span>
+                        <div class="icon-picker">
+                            <button v-for="ic in iconOptions" :key="ic" class="icon-opt"
+                                :class="{ active: pendingPinIcon === ic }" @click="pendingPinIcon = ic">{{ ic
+                                }}</button>
                         </div>
+                    </div>
+                    <div class="pin-dialog-btns">
+                        <button class="pin-btn-cancel" @click="showPinNameDialog = false">取消</button>
+                        <button class="pin-btn-confirm" @click="confirmPin">确定</button>
                     </div>
                 </div>
             </div>
-        </div>
+        </Teleport>
 
-        <!-- User 地图编辑弹窗 -->
-        <div v-if="showUserMapEdit" class="map-edit-overlay" @click.self="showUserMapEdit = false">
-            <div class="map-edit-panel">
-                <div class="map-edit-header">
-                    <span>编辑我的地图</span>
-                    <button @click="showUserMapEdit = false">×</button>
-                </div>
-                <div class="map-edit-body">
-                    <div class="edit-row">
-                        <span class="edit-label">地图背景 URL</span>
-                        <input class="edit-input" v-model="userMapBgUrl" placeholder="图片链接..." />
-                    </div>
-                    <div class="edit-row">
-                        <span class="edit-label">或上传图片</span>
-                        <label class="upload-btn">
-                            选择文件
-                            <input type="file" accept="image/*" style="display:none" @change="handleUserMapUpload" />
-                        </label>
-                    </div>
-                    <button class="edit-save-btn" @click="saveUserMap">保存地图</button>
-
-                    <div class="edit-divider">地点标注</div>
-                    <div class="location-add-row">
-                        <input class="edit-input-sm" v-model="newUserLocName" placeholder="地点名称" />
-                        <input class="edit-input-sm" v-model="newUserLocIcon" placeholder="图标" style="width:60px;" />
-                        <button class="add-loc-btn" @click="addUserLocation">添加</button>
-                    </div>
-                    <div class="location-hint">添加后点击地图上的地点可切换当前位置</div>
-                    <div class="location-list">
-                        <div v-for="loc in userLocations" :key="loc.id" class="location-chip">
-                            <span>{{ loc.icon }} {{ loc.location_name }}</span>
-                            <button @click="deleteLocation(loc.id, 'user')">×</button>
+        <!-- 手绘区域命名弹窗 -->
+        <Teleport to="body">
+            <div v-if="showPathNameDialog" class="pin-dialog-overlay" @click.self="showPathNameDialog = false">
+                <div class="pin-dialog">
+                    <div class="pin-dialog-title">为这片区域命名</div>
+                    <input class="pin-dialog-input" v-model="pendingPathName" placeholder="区域名称，如：商业街、公园..."
+                        @keyup.enter="confirmPath" autofocus />
+                    <div class="pin-dialog-row">
+                        <span class="pin-dialog-label">颜色</span>
+                        <div class="color-picker">
+                            <button v-for="c in colorOptions" :key="c" class="color-opt"
+                                :class="{ active: pendingPathColor === c }" :style="{ background: c }"
+                                @click="pendingPathColor = c"></button>
                         </div>
+                    </div>
+                    <div class="pin-dialog-btns">
+                        <button class="pin-btn-cancel" @click="showPathNameDialog = false">取消</button>
+                        <button class="pin-btn-confirm" @click="confirmPath">确定</button>
                     </div>
                 </div>
             </div>
-        </div>
+        </Teleport>
+
+        <!-- Char 背景编辑弹窗 -->
+        <Teleport to="body">
+            <div v-if="showCharMapEdit" class="map-edit-overlay" @click.self="showCharMapEdit = false">
+                <div class="map-edit-panel">
+                    <div class="map-edit-header">
+                        <span>{{ charName }} 的地图背景</span>
+                        <button @click="showCharMapEdit = false">×</button>
+                    </div>
+                    <div class="map-edit-body">
+                        <div class="edit-row">
+                            <span class="edit-label">图片链接</span>
+                            <input class="edit-input" v-model="charMapBgUrl" placeholder="粘贴图片 URL..." />
+                        </div>
+                        <div class="edit-row">
+                            <span class="edit-label">或上传图片</span>
+                            <label class="upload-btn">
+                                选择文件
+                                <input type="file" accept="image/*" style="display:none"
+                                    @change="handleCharMapUpload" />
+                            </label>
+                        </div>
+                        <div class="edit-divider">✨ AI 生成地图</div>
+                        <div class="edit-row">
+                            <span class="edit-label">描述场景</span>
+                            <textarea class="edit-textarea" v-model="aiMapPrompt"
+                                placeholder="例如：一个温馨的小镇，有咖啡店、书店、公园和住宅区..."></textarea>
+                        </div>
+                        <div class="edit-row">
+                            <span class="edit-label">风格</span>
+                            <div class="style-picker">
+                                <button v-for="s in mapStyles" :key="s.value" class="style-opt"
+                                    :class="{ active: aiMapStyle === s.value }" @click="aiMapStyle = s.value">{{ s.label
+                                    }}</button>
+                            </div>
+                        </div>
+                        <button class="edit-ai-btn" @click="generateCharMap" :disabled="aiGenerating">
+                            {{ aiGenerating ? '生成中...' : '✨ AI 生成' }}
+                        </button>
+                        <div v-if="aiError" class="ai-error">{{ aiError }}</div>
+                        <button class="edit-save-btn" @click="saveCharMap">保存背景</button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- User 背景编辑弹窗 -->
+        <Teleport to="body">
+            <div v-if="showUserMapEdit" class="map-edit-overlay" @click.self="showUserMapEdit = false">
+                <div class="map-edit-panel">
+                    <div class="map-edit-header">
+                        <span>我的地图背景</span>
+                        <button @click="showUserMapEdit = false">×</button>
+                    </div>
+                    <div class="map-edit-body">
+                        <div class="edit-row">
+                            <span class="edit-label">图片链接</span>
+                            <input class="edit-input" v-model="userMapBgUrl" placeholder="粘贴图片 URL..." />
+                        </div>
+                        <div class="edit-row">
+                            <span class="edit-label">或上传图片</span>
+                            <label class="upload-btn">
+                                选择文件
+                                <input type="file" accept="image/*" style="display:none"
+                                    @change="handleUserMapUpload" />
+                            </label>
+                        </div>
+                        <div class="edit-divider">✨ AI 生成地图</div>
+                        <div class="edit-row">
+                            <span class="edit-label">描述场景</span>
+                            <textarea class="edit-textarea" v-model="aiMapPrompt"
+                                placeholder="例如：一个温馨的小镇，有咖啡店、书店、公园和住宅区..."></textarea>
+                        </div>
+                        <div class="edit-row">
+                            <span class="edit-label">风格</span>
+                            <div class="style-picker">
+                                <button v-for="s in mapStyles" :key="s.value" class="style-opt"
+                                    :class="{ active: aiMapStyle === s.value }" @click="aiMapStyle = s.value">{{ s.label
+                                    }}</button>
+                            </div>
+                        </div>
+                        <button class="edit-ai-btn" @click="generateUserMap" :disabled="aiGenerating">
+                            {{ aiGenerating ? '生成中...' : '✨ AI 生成' }}
+                        </button>
+                        <div v-if="aiError" class="ai-error">{{ aiError }}</div>
+                        <button class="edit-save-btn" @click="saveUserMap">保存背景</button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
     </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '@/utils/api'
+import MapCanvas from '@/components/MapCanvas.vue'
 
 const currentTab = ref('char')
 
-// Char 信息
 const charName = ref('TA')
 const charAvatar = ref('💬')
 const charAvatarUrl = ref('')
@@ -272,13 +347,14 @@ const charEnvironment = ref('安静的房间')
 const charCurrentLocation = ref('')
 const charMap = ref({})
 const charLocations = ref([])
+const charPaths = ref([])
 const charArrivalLogs = ref([])
+const charEditMode = ref(false)
+const charDrawMode = ref(null)
+const charPlacingPin = ref(false)
 const showCharMapEdit = ref(false)
 const charMapBgUrl = ref('')
-const newLocName = ref('')
-const newLocIcon = ref('📍')
 
-// User 信息
 const userName = ref(localStorage.getItem('user_name') || '我')
 const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
 const myBattery = ref(0)
@@ -286,11 +362,38 @@ const myEnvironment = ref('未知')
 const userCurrentLocation = ref('')
 const userMap = ref({})
 const userLocations = ref([])
+const userPaths = ref([])
 const userArrivalLogs = ref([])
+const userEditMode = ref(false)
+const userDrawMode = ref(null)
+const userPlacingPin = ref(false)
 const showUserMapEdit = ref(false)
 const userMapBgUrl = ref('')
-const newUserLocName = ref('')
-const newUserLocIcon = ref('📍')
+
+const showPinNameDialog = ref(false)
+const pendingPinName = ref('')
+const pendingPinIcon = ref('📍')
+const pendingPinPos = ref({ x: 0.5, y: 0.5 })
+const pendingPinTarget = ref('char')
+
+const showPathNameDialog = ref(false)
+const pendingPathName = ref('')
+const pendingPathColor = ref('#D9A3AF')
+const pendingPathPoints = ref([])
+const pendingPathTarget = ref('char')
+
+const aiMapPrompt = ref('')
+const aiMapStyle = ref('cute')
+const aiGenerating = ref(false)
+const aiError = ref('')
+
+const iconOptions = ['📍', '🏠', '☕', '🌳', '🏪', '🏫', '🌸', '⭐', '💝', '🎪', '🏖️', '🌙']
+const colorOptions = ['#D9A3AF', '#98CBEA', '#A8D5A2', '#F5C17A', '#B8A0C8', '#F0A0A0']
+const mapStyles = [
+    { value: 'cute', label: '可爱插画' },
+    { value: 'fantasy', label: '奇幻手绘' },
+    { value: 'minimal', label: '简约线稿' },
+]
 
 function formatTime(ts) {
     if (!ts) return ''
@@ -311,7 +414,6 @@ async function loadCharData() {
         const latestRes = await api('/api/messages/latest-persona')
         const latestData = await latestRes.json()
         charPersonaId.value = latestData.personaId || 'xiaorou'
-
         const detailRes = await api(`/api/persona/${charPersonaId.value}`)
         const detail = await detailRes.json()
         charName.value = detail.note || detail.name || 'TA'
@@ -327,9 +429,19 @@ async function loadCharData() {
         charMapBgUrl.value = charMap.value.background_url || ''
     } catch { }
 
+    if (charMap.value?.id) {
+        try {
+            const res = await api(`/api/map-paths/${charMap.value.id}`)
+            charPaths.value = await res.json()
+        } catch { }
+    }
+
     try {
         const res = await api(`/api/location-logs/persona/${charPersonaId.value}`)
         charArrivalLogs.value = await res.json()
+        if (charArrivalLogs.value.length > 0) {
+            charCurrentLocation.value = charArrivalLogs.value[0].location_name
+        }
     } catch { }
 }
 
@@ -342,12 +454,21 @@ async function loadUserData() {
         userMapBgUrl.value = userMap.value.background_url || ''
     } catch { }
 
+    if (userMap.value?.id) {
+        try {
+            const res = await api(`/api/map-paths/${userMap.value.id}`)
+            userPaths.value = await res.json()
+        } catch { }
+    }
+
     try {
         const res = await api('/api/location-logs/user/default_user')
         userArrivalLogs.value = await res.json()
+        if (userArrivalLogs.value.length > 0) {
+            userCurrentLocation.value = userArrivalLogs.value[0].location_name
+        }
     } catch { }
 
-    // 电量
     if ('getBattery' in navigator) {
         try {
             const battery = await navigator.getBattery()
@@ -356,38 +477,169 @@ async function loadUserData() {
     }
 }
 
-async function saveCharMap() {
-    try {
-        const res = await api('/api/virtual-map', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ownerType: 'persona',
-                ownerId: charPersonaId.value,
-                mapName: `${charName.value}的地图`,
-                backgroundUrl: charMapBgUrl.value
-            })
-        })
-        await loadCharData()
-        showCharMapEdit.value = false
-    } catch { }
+async function handleCharLocationDrag({ id, x, y }) {
+    await api(`/api/map-location/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x, y })
+    })
+    const loc = charLocations.value.find(l => l.id === id)
+    if (loc) { loc.x = x; loc.y = y }
 }
 
-async function saveUserMap() {
-    try {
-        await api('/api/virtual-map', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ownerType: 'user',
-                ownerId: 'default_user',
-                mapName: '我的地图',
-                backgroundUrl: userMapBgUrl.value
-            })
+async function handleUserLocationDrag({ id, x, y }) {
+    await api(`/api/map-location/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x, y })
+    })
+    const loc = userLocations.value.find(l => l.id === id)
+    if (loc) { loc.x = x; loc.y = y }
+}
+
+function handleCharPinPlaced({ x, y }) {
+    pendingPinPos.value = { x, y }
+    pendingPinTarget.value = 'char'
+    pendingPinName.value = ''
+    pendingPinIcon.value = '📍'
+    showPinNameDialog.value = true
+}
+
+function handleUserPinPlaced({ x, y }) {
+    pendingPinPos.value = { x, y }
+    pendingPinTarget.value = 'user'
+    pendingPinName.value = ''
+    pendingPinIcon.value = '📍'
+    showPinNameDialog.value = true
+}
+
+async function confirmPin() {
+    if (!pendingPinName.value.trim()) return
+    let targetMapId = pendingPinTarget.value === 'char' ? charMap.value?.id : userMap.value?.id
+    if (!targetMapId) {
+        if (pendingPinTarget.value === 'char') await ensureCharMap()
+        else await ensureUserMap()
+        targetMapId = pendingPinTarget.value === 'char' ? charMap.value?.id : userMap.value?.id
+    }
+    if (!targetMapId) return
+    await api('/api/map-location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            mapId: targetMapId,
+            locationName: pendingPinName.value.trim(),
+            x: pendingPinPos.value.x,
+            y: pendingPinPos.value.y,
+            icon: pendingPinIcon.value
         })
+    })
+    showPinNameDialog.value = false
+    if (pendingPinTarget.value === 'char') {
+        charPlacingPin.value = false
+        await loadCharData()
+    } else {
+        userPlacingPin.value = false
         await loadUserData()
-        showUserMapEdit.value = false
-    } catch { }
+    }
+}
+
+function handleCharPathDrawn(points) {
+    pendingPathPoints.value = points
+    pendingPathTarget.value = 'char'
+    pendingPathName.value = ''
+    pendingPathColor.value = '#D9A3AF'
+    showPathNameDialog.value = true
+}
+
+function handleUserPathDrawn(points) {
+    pendingPathPoints.value = points
+    pendingPathTarget.value = 'user'
+    pendingPathName.value = ''
+    pendingPathColor.value = '#98CBEA'
+    showPathNameDialog.value = true
+}
+
+async function confirmPath() {
+    if (!pendingPathName.value.trim()) return
+    const isChar = pendingPathTarget.value === 'char'
+    let targetMapId = isChar ? charMap.value?.id : userMap.value?.id
+    if (!targetMapId) {
+        if (isChar) await ensureCharMap()
+        else await ensureUserMap()
+        targetMapId = isChar ? charMap.value?.id : userMap.value?.id
+    }
+    if (!targetMapId) return
+    const existingPaths = isChar ? charPaths.value : userPaths.value
+    const newPaths = [
+        ...existingPaths,
+        {
+            name: pendingPathName.value.trim(),
+            type: 'polygon',
+            points: pendingPathPoints.value,
+            color: pendingPathColor.value
+        }
+    ]
+    await api('/api/map-paths', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mapId: targetMapId, paths: newPaths })
+    })
+    showPathNameDialog.value = false
+    if (isChar) {
+        charDrawMode.value = null
+        await loadCharData()
+    } else {
+        userDrawMode.value = null
+        await loadUserData()
+    }
+}
+
+async function ensureCharMap() {
+    await api('/api/virtual-map', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ownerType: 'persona',
+            ownerId: charPersonaId.value,
+            mapName: `${charName.value}的地图`,
+            backgroundUrl: ''
+        })
+    })
+    await loadCharData()
+}
+
+async function ensureUserMap() {
+    await api('/api/virtual-map', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ownerType: 'user',
+            ownerId: 'default_user',
+            mapName: '我的地图',
+            backgroundUrl: ''
+        })
+    })
+    await loadUserData()
+}
+
+async function setCharLocation(loc) {
+    charCurrentLocation.value = loc.location_name
+    await api('/api/location-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerType: 'persona', ownerId: charPersonaId.value, locationName: loc.location_name })
+    })
+    await loadCharData()
+}
+
+async function setUserLocation(loc) {
+    userCurrentLocation.value = loc.location_name
+    await api('/api/location-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerType: 'user', ownerId: 'default_user', locationName: loc.location_name })
+    })
+    await loadUserData()
 }
 
 function handleCharMapUpload(event) {
@@ -406,72 +658,80 @@ function handleUserMapUpload(event) {
     reader.readAsDataURL(file)
 }
 
-async function addCharLocation() {
-    if (!newLocName.value.trim() || !charMap.value.id) return
-    await api('/api/map-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            mapId: charMap.value.id,
-            locationName: newLocName.value.trim(),
-            x: 0.5,
-            y: 0.5,
-            icon: newLocIcon.value || '📍'
-        })
-    })
-    newLocName.value = ''
-    await loadCharData()
-}
-
-async function addUserLocation() {
-    if (!newUserLocName.value.trim() || !userMap.value.id) return
-    await api('/api/map-location', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            mapId: userMap.value.id,
-            locationName: newUserLocName.value.trim(),
-            x: 0.5,
-            y: 0.5,
-            icon: newUserLocIcon.value || '📍'
-        })
-    })
-    newUserLocName.value = ''
-    await loadUserData()
-}
-
-async function deleteLocation(id, type) {
-    await api(`/api/map-location/${id}`, { method: 'DELETE' })
-    if (type === 'char') await loadCharData()
-    else await loadUserData()
-}
-
-async function setCharLocation(loc) {
-    charCurrentLocation.value = loc.location_name
-    await api('/api/location-log', {
+async function saveCharMap() {
+    await api('/api/virtual-map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             ownerType: 'persona',
             ownerId: charPersonaId.value,
-            locationName: loc.location_name
+            mapName: `${charName.value}的地图`,
+            backgroundUrl: charMapBgUrl.value
         })
     })
     await loadCharData()
+    showCharMapEdit.value = false
 }
 
-async function setUserLocation(loc) {
-    userCurrentLocation.value = loc.location_name
-    await api('/api/location-log', {
+async function saveUserMap() {
+    await api('/api/virtual-map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             ownerType: 'user',
             ownerId: 'default_user',
-            locationName: loc.location_name
+            mapName: '我的地图',
+            backgroundUrl: userMapBgUrl.value
         })
     })
     await loadUserData()
+    showUserMapEdit.value = false
+}
+
+async function generateCharMap() {
+    if (!aiMapPrompt.value.trim()) { aiError.value = '请描述地图场景'; return }
+    aiGenerating.value = true
+    aiError.value = ''
+    try {
+        const res = await api('/api/map-generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: aiMapPrompt.value, style: aiMapStyle.value })
+        })
+        const data = await res.json()
+        if (data.url) {
+            charMapBgUrl.value = data.url
+        } else {
+            aiError.value = data.error || '生成失败，请重试'
+        }
+    } catch {
+        aiError.value = '网络错误，请重试'
+    } finally {
+        aiGenerating.value = false
+    }
+}
+
+async function generateUserMap() {
+    if (!aiMapPrompt.value.trim()) { aiError.value = '请描述地图场景'; return }
+    aiGenerating.value = true
+    aiError.value = ''
+    try {
+        const res = await api('/api/map-generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: aiMapPrompt.value, style: aiMapStyle.value })
+        })
+        const data = await res.json()
+        if (data.url) {
+            userMapBgUrl.value = data.url
+        } else {
+            aiError.value = data.error || '生成失败，请重试'
+        }
+    } catch {
+        aiError.value = '网络错误，请重试'
+    } finally {
+        aiGenerating.value = false
+    }
 }
 
 onMounted(() => {
@@ -489,6 +749,8 @@ onMounted(() => {
     position: relative;
     background: linear-gradient(180deg, #FFFBFA 0%, #FFF0F2 60%, #FFE9ED 100%);
     box-sizing: border-box;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
 }
 
 .settings-blob {
@@ -554,7 +816,6 @@ onMounted(() => {
     color: #4A3F41;
 }
 
-/* Tab */
 .presence-tabs {
     display: flex;
     gap: 10px;
@@ -608,7 +869,6 @@ onMounted(() => {
     object-fit: cover;
 }
 
-/* 内容区 */
 .presence-content {
     flex: 1;
     overflow-y: auto;
@@ -622,88 +882,62 @@ onMounted(() => {
     display: none;
 }
 
-/* 地图卡片 */
 .map-card {
     border-radius: 24px;
     overflow: hidden;
     margin-bottom: 14px;
-    cursor: pointer;
     box-shadow: 0 8px 24px rgba(217, 163, 175, 0.15);
-    position: relative;
 }
 
-.map-inner {
-    width: 100%;
-    height: 220px;
-    background: rgba(255, 233, 237, 0.3);
-    position: relative;
+.map-toolbar {
     display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.map-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
     gap: 8px;
-    color: #D4C8CA;
-    font-size: 12px;
-}
-
-.map-placeholder svg {
-    width: 36px;
-    height: 36px;
-}
-
-.map-edit-hint {
-    padding: 8px 16px;
+    padding: 10px 12px;
     background: rgba(255, 255, 255, 0.7);
-    font-size: 11px;
-    color: #B8A9AC;
-    text-align: center;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    overflow-x: auto;
 }
 
-/* 地点标注 */
-.map-pin {
-    position: absolute;
-    transform: translate(-50%, -50%);
+.map-toolbar::-webkit-scrollbar {
+    display: none;
+}
+
+.tool-btn {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 5px;
+    padding: 6px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    color: #B8A9AC;
     cursor: pointer;
-    transition: transform 0.2s;
-}
-
-.map-pin:active {
-    transform: translate(-50%, -50%) scale(0.9);
-}
-
-.map-pin.active .pin-icon {
-    filter: drop-shadow(0 0 6px rgba(217, 163, 175, 0.8));
-}
-
-.pin-icon {
-    font-size: 24px;
-}
-
-.pin-label {
-    font-size: 10px;
-    color: #4A3F41;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 2px 6px;
-    border-radius: 8px;
     white-space: nowrap;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    font-family: inherit;
+    transition: all 0.2s;
+    flex-shrink: 0;
 }
 
-.map-pin.active .pin-label {
-    background: rgba(217, 163, 175, 0.9);
-    color: white;
+.tool-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
 }
 
-/* 手机卡片 */
+.tool-btn.active {
+    background: rgba(217, 163, 175, 0.15);
+    color: #D9A3AF;
+    border-color: rgba(217, 163, 175, 0.4);
+}
+
+.tool-btn.accent {
+    background: linear-gradient(135deg, rgba(232, 192, 201, 0.3), rgba(217, 163, 175, 0.3));
+    color: #D9A3AF;
+    border-color: rgba(217, 163, 175, 0.3);
+}
+
 .phone-card {
     background: rgba(255, 255, 255, 0.45);
     backdrop-filter: saturate(180%) blur(20px);
@@ -753,11 +987,6 @@ onMounted(() => {
     font-size: 14px;
     font-weight: 600;
     color: #4A3F41;
-}
-
-.phone-status {
-    font-size: 11px;
-    color: #6BAF7A;
 }
 
 .phone-status.online {
@@ -811,7 +1040,6 @@ onMounted(() => {
     font-weight: 500;
 }
 
-/* 小节标签 */
 .section-label-sm {
     font-size: 11px;
     font-weight: 700;
@@ -829,7 +1057,6 @@ onMounted(() => {
     padding: 12px 0;
 }
 
-/* 到达列表 */
 .arrival-list {
     display: flex;
     flex-direction: column;
@@ -867,11 +1094,154 @@ onMounted(() => {
     flex-shrink: 0;
 }
 
-/* 地图编辑弹窗 */
+/* 弹窗 */
+.pin-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 602;
+    background: rgba(74, 63, 65, 0.25);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.pin-dialog {
+    background: rgba(255, 252, 252, 0.97);
+    border-radius: 28px;
+    padding: 24px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 20px 60px rgba(217, 163, 175, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: fadeIn 0.25s ease;
+}
+
+.pin-dialog-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #4A3F41;
+    text-align: center;
+}
+
+.pin-dialog-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(217, 163, 175, 0.25);
+    border-radius: 14px;
+    font-size: 14px;
+    color: #4A3F41;
+    font-family: inherit;
+    outline: none;
+    background: rgba(255, 255, 255, 0.8);
+    box-sizing: border-box;
+}
+
+.pin-dialog-input:focus {
+    border-color: rgba(217, 163, 175, 0.5);
+    box-shadow: 0 0 0 3px rgba(217, 163, 175, 0.08);
+}
+
+.pin-dialog-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pin-dialog-label {
+    font-size: 12px;
+    color: #B8A9AC;
+    font-weight: 600;
+}
+
+.icon-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.icon-opt {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    background: rgba(255, 240, 242, 0.5);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+
+.icon-opt.active {
+    border-color: #D9A3AF;
+    background: rgba(217, 163, 175, 0.15);
+    transform: scale(1.1);
+}
+
+.color-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.color-opt {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+
+.color-opt.active {
+    border-color: #4A3F41;
+    transform: scale(1.15);
+}
+
+.pin-dialog-btns {
+    display: flex;
+    gap: 10px;
+}
+
+.pin-btn-cancel {
+    flex: 1;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    color: #B8A9AC;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.pin-btn-confirm {
+    flex: 1;
+    height: 44px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    font-size: 14px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 4px 12px rgba(217, 163, 175, 0.3);
+}
+
+/* 背景编辑弹窗 */
 .map-edit-overlay {
     position: fixed;
     inset: 0;
-    z-index: 300;
+    z-index: 601;
     background: rgba(74, 63, 65, 0.25);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -957,6 +1327,23 @@ onMounted(() => {
     color: #4A3F41;
     font-family: inherit;
     outline: none;
+    box-sizing: border-box;
+}
+
+.edit-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 240, 242, 0.6);
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 14px;
+    font-size: 13px;
+    color: #4A3F41;
+    font-family: inherit;
+    outline: none;
+    resize: none;
+    min-height: 72px;
+    line-height: 1.5;
+    box-sizing: border-box;
 }
 
 .upload-btn {
@@ -968,6 +1355,66 @@ onMounted(() => {
     color: #4A3F41;
     cursor: pointer;
     display: inline-block;
+    text-align: center;
+}
+
+.edit-divider {
+    font-size: 12px;
+    font-weight: 700;
+    color: #D9A3AF;
+    margin: 4px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(217, 163, 175, 0.08);
+}
+
+.style-picker {
+    display: flex;
+    gap: 8px;
+}
+
+.style-opt {
+    flex: 1;
+    padding: 8px 4px;
+    border-radius: 12px;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    color: #B8A9AC;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: center;
+    transition: all 0.15s;
+}
+
+.style-opt.active {
+    background: rgba(217, 163, 175, 0.15);
+    color: #D9A3AF;
+    border-color: rgba(217, 163, 175, 0.4);
+}
+
+.edit-ai-btn {
+    width: 100%;
+    height: 44px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #B8A0C8, #9880B8);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 4px 12px rgba(184, 160, 200, 0.3);
+    transition: opacity 0.2s;
+}
+
+.edit-ai-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ai-error {
+    font-size: 12px;
+    color: #C070;
     text-align: center;
 }
 
@@ -983,82 +1430,5 @@ onMounted(() => {
     cursor: pointer;
     font-family: inherit;
     box-shadow: 0 6px 16px rgba(217, 163, 175, 0.3);
-}
-
-.edit-divider {
-    font-size: 12px;
-    font-weight: 700;
-    color: #D9A3AF;
-    margin: 12px 0 4px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(217, 163, 175, 0.08);
-}
-
-.location-add-row {
-    display: flex;
-    gap: 8px;
-}
-
-.edit-input-sm {
-    flex: 1;
-    padding: 10px 12px;
-    border: 1px solid rgba(255, 240, 242, 0.6);
-    background: rgba(255, 255, 255, 0.6);
-    border-radius: 12px;
-    font-size: 13px;
-    color: #4A3F41;
-    font-family: inherit;
-    outline: none;
-}
-
-.add-loc-btn {
-    padding: 10px 16px;
-    border: none;
-    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
-    color: white;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-}
-
-.location-hint {
-    font-size: 11px;
-    color: #B8A9AC;
-    padding: 0 4px;
-}
-
-.location-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.location-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: 16px;
-    background: rgba(255, 240, 242, 0.5);
-    font-size: 12px;
-    color: #6B5B5E;
-}
-
-.location-chip button {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: rgba(217, 163, 175, 0.3);
-    border: none;
-    font-size: 14px;
-    color: #D9A3AF;
-    cursor: pointer;
-    font-family: inherit;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
 }
 </style>
