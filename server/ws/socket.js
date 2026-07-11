@@ -9,6 +9,19 @@ let clients = new Set();
 function initWebSocket(server) {
   wss = new WebSocketServer({ server });
 
+  // ✅ 移到外面，只注册一次
+  bus.on("message", (msg) => {
+    const payload = JSON.stringify({
+      type: "bus_message",
+      message: msg,
+    });
+    clients.forEach((client) => {
+      if (client.readyState === 1) {
+        client.send(payload);
+      }
+    });
+  });
+
   wss.on("connection", (ws) => {
     clients.add(ws);
     console.log("客户端已连接");
@@ -16,9 +29,7 @@ function initWebSocket(server) {
     ws.on("message", async (data) => {
       try {
         const msg = JSON.parse(data);
-
         if (msg.type === "chat") {
-          // 💡 将 msg.isBeta 传给 handleChat
           await handleChat(msg.content, ws, msg.personaId, msg.isBeta);
         }
       } catch (err) {
@@ -28,18 +39,6 @@ function initWebSocket(server) {
 
     ws.on("close", () => {
       clients.delete(ws);
-    });
-    // 监听消息总线，转发给所有 WebSocket 客户端
-    bus.on("message", (msg) => {
-      const payload = JSON.stringify({
-        type: "bus_message",
-        message: msg,
-      });
-      clients.forEach((ws) => {
-        if (ws.readyState === 1) {
-          ws.send(payload);
-        }
-      });
     });
   });
 }
@@ -57,9 +56,7 @@ function pushToAll(message) {
   });
 
   clients.forEach((ws) => {
-    if (ws.readyState === 1) {
-      ws.send(payload);
-    }
+    if (ws.readyState === 1) ws.send(payload);
   });
 
   const preview = message.length > 60 ? message.slice(0, 60) + "..." : message;

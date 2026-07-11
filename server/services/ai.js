@@ -238,6 +238,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   // 3. 存入用户消息
   await db.from(tableName).insert({
     persona_id: pid,
+    session_id: pid,
     role: "user",
     content: userMessage,
     timestamp: nowISO,
@@ -627,6 +628,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
 
   await db.from(tableName).insert({
     persona_id: pid,
+    session_id: pid,
     role: "ai",
     content: aiReply,
     timestamp: new Date().toISOString(),

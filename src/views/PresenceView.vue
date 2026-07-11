@@ -521,7 +521,8 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: calc(env(safe-area-inset-top, 44px) + 8px) 16px 4px;
+    padding: 8px 16px 4px;
+    margin-top: env(safe-area-inset-top, 44px);
     flex-shrink: 0;
     position: relative;
     z-index: 2;

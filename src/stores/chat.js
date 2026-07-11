@@ -169,6 +169,7 @@ export const useChatStore = defineStore("chat", () => {
     messages.value = [];
     allMessages.value = [];
     hasMore.value = false;
+    currentLoadedPersona = null; // 加这行，否则重连后走缓存分支加载不到消息
   }
 
   return {

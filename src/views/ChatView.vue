@@ -155,6 +155,8 @@ const personaName = ref('AI 助手')
 const chatTheme = ref('default')
 const bubbleMerge = ref(false)
 const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
+const lastHandledContent = ref('')
+const lastHandledTime = ref(0)
 
 // 多选
 const selectMode = ref(false)
@@ -384,9 +386,18 @@ function handleRegenerateLatest() {
     }
 }
 
+// handleIncoming 开头加去重
 function handleIncoming(data) {
     if (data.type === 'chat' || data.type === 'push') {
-        isTyping.value = false
+        // 前端再做一层去重，防止网络抖动时同一条消息处理两次
+        const key = (data.content || '') + (data.timestamp || '')
+        const now = Date.now()
+        if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) {
+            console.log('[Chat] 拦截重复 incoming:', data.content?.slice(0, 20))
+            return
+        }
+        lastHandledContent.value = key
+        lastHandledTime.value = now
 
         let cleanContent = data.content
             .replace(/$$思考$$[\s\S]*?$$思考$$/g, '')
@@ -406,11 +417,12 @@ function handleIncoming(data) {
 
         final.forEach((line, idx) => {
             setTimeout(() => {
-                chatStore.addMessage({ role: 'ai', content: line, timestamp: data.timestamp })
+                chatStore.addMessage({
+                    role: 'ai',
+                    content: line,
+                    timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString()
+                })
                 scrollToBottom()
-                if (idx === final.length - 1 && chatStore.allMessages) {
-                    setCache(`messages_${personaId.value}`, chatStore.allMessages)
-                }
             }, idx * 600)
         })
 
@@ -498,14 +510,14 @@ async function bookmarkSelected() {
 
 async function screenshotSelected() {
     if (selectedIds.value.length === 0) return
-    
+
     try {
         const html2canvas = (await import('html2canvas')).default
-        
+
         // 找到选中消息的 DOM 元素
         const container = messagesContainer.value
         if (!container) return
-        
+
         // 临时创建一个截图容器
         const screenshotDiv = document.createElement('div')
         screenshotDiv.style.cssText = `
@@ -517,7 +529,7 @@ async function screenshotSelected() {
             padding: 20px 16px;
             font-family: inherit;
         `
-        
+
         // 把选中的消息 clone 进去
         const allBubbles = container.querySelectorAll('.bubble-wrapper')
         let clonedCount = 0
@@ -532,7 +544,7 @@ async function screenshotSelected() {
                 clonedCount++
             }
         })
-        
+
         if (clonedCount === 0) {
             // 如果没找到 data-msg-id，直接截整个消息列表
             document.body.appendChild(screenshotDiv)
@@ -540,24 +552,24 @@ async function screenshotSelected() {
             cancelSelect()
             return
         }
-        
+
         document.body.appendChild(screenshotDiv)
-        
+
         const canvas = await html2canvas(screenshotDiv, {
             backgroundColor: '#fdf6f8',
             scale: 2,
             useCORS: true,
             logging: false,
         })
-        
+
         document.body.removeChild(screenshotDiv)
-        
+
         // 下载图片
         const link = document.createElement('a')
         link.download = `聊天记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '')}.png`
         link.href = canvas.toDataURL('image/png')
         link.click()
-        
+
         cancelSelect()
     } catch (e) {
         console.error('截图失败:', e)
@@ -634,7 +646,7 @@ function updateTime() { }
 
 onMounted(async () => {
     document.querySelector('.screen-content').style.overflow = 'hidden'
-    removeHandler(handleIncoming)
+    removeHandler(handleIncoming)  // 先清一次防万一
     onMessage(handleIncoming)
     loadPersonaName()
     chatStore.clearMessages()
@@ -642,20 +654,26 @@ onMounted(async () => {
     scrollToBottom()
 
     let mounted = false
-    const unwatch = watch(isConnected, async (val, oldVal) => {
+    let reloadTimer = null
+    watch(isConnected, async (val, oldVal) => {
         if (!mounted) { mounted = true; return }
         if (val && !oldVal) {
-            chatStore.clearMessages()
-            await chatStore.loadPersonaMessages(personaId.value)
-            scrollToBottom()
+            // 延迟 1 秒防抖，避免重连抖动时反复刷新
+            if (reloadTimer) clearTimeout(reloadTimer)
+            reloadTimer = setTimeout(async () => {
+                chatStore.clearMessages()
+                await chatStore.loadPersonaMessages(personaId.value)
+                scrollToBottom()
+            }, 1000)
         }
     })
+})
 
-    onUnmounted(() => {
-        unwatch()
-        const customStyle = document.getElementById('custom-chat-theme')
-        if (customStyle) customStyle.remove()
-    })
+// onUnmounted 独立出来，确保离开页面时清理 handler
+onUnmounted(() => {
+    removeHandler(handleIncoming)
+    const customStyle = document.getElementById('custom-chat-theme')
+    if (customStyle) customStyle.remove()
 })
 
 watch(() => chatStore.messages.length, scrollToBottom)

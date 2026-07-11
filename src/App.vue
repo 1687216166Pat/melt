@@ -171,17 +171,6 @@ onUnmounted(() => {
     box-sizing: border-box;
 }
 
-.phone-screen::after {
-    content: '';
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: env(safe-area-inset-bottom, 0px);
-    background: #fdf6f8;
-    z-index: 99;
-}
-
 .phone-screen.morning {
     background: linear-gradient(180deg, #fff8fa 0%, #fdf6f8 40%);
 }
