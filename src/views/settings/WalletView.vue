@@ -59,6 +59,7 @@
 
             <!-- 礼物收藏 -->
             <div class="section-label-sm">收到的礼物</div>
+            <div class="section-label-sm">礼物记录</div>
             <div v-if="gifts.length === 0" class="wallet-empty">
                 <svg viewBox="0 0 24 24" fill="none" stroke="#D4C8CA" stroke-width="1.2" stroke-linecap="round">
                     <path d="M20 12v10H4V12" />
@@ -72,12 +73,16 @@
             </div>
             <div v-else class="gift-list">
                 <div v-for="(gift, idx) in gifts" :key="idx" class="gift-item">
-                    <div class="gift-icon">{{ gift.emoji || '🎁' }}</div>
+                    <div class="gift-icon">{{ gift.emoji }}</div>
                     <div class="gift-info">
                         <div class="gift-name">{{ gift.name }}</div>
-                        <div class="gift-from">来自 {{ gift.from }} · {{ gift.date }}</div>
+                        <div v-if="gift.content" class="gift-content-text">内含：{{ gift.content }}</div>
+                        <div class="gift-from">
+                            {{ gift.direction === 'ai_to_user' ? `${gift.from} → 我` : `我 → ${gift.to}` }}
+                            · {{ gift.date }}
+                        </div>
                     </div>
-                    <div class="gift-note" v-if="gift.note">{{ gift.note }}</div>
+                    <div v-if="gift.message" class="gift-note">「{{ gift.message }}」</div>
                 </div>
             </div>
 
@@ -193,18 +198,24 @@ async function load() {
         const res = await api(`/api/wallet/${currentPersona.value}`)
         const data = await res.json()
         balance.value = data.balance || 0
-        gifts.value = (data.gifts || []).filter(g => g.direction === 'ai_to_user').map(g => ({
+
+        // 礼物：收到的和送出的都显示
+        gifts.value = (data.gifts || []).map(g => ({
             emoji: '🎁',
             name: g.gift_name,
-            from: currentPersonaName.value,
-            date: g.created_at?.slice(0, 10),
-            note: g.gift_message,
             content: g.gift_content,
+            message: g.gift_message,
+            direction: g.direction,
+            from: g.direction === 'ai_to_user' ? currentPersonaName.value : '我',
+            to: g.direction === 'ai_to_user' ? '我' : currentPersonaName.value,
+            date: g.created_at?.slice(0, 10),
         }))
+
+        // 交易记录：收到和转出都显示
         transactions.value = (data.transfers || []).map(t => ({
             type: t.direction === 'ai_to_user' ? 'in' : 'out',
             amount: t.amount,
-            desc: t.note || (t.direction === 'ai_to_user' ? '收款' : '转出'),
+            desc: t.note || (t.direction === 'ai_to_user' ? `${currentPersonaName.value} 转账` : '我转出'),
             from: t.direction === 'ai_to_user' ? currentPersonaName.value : '我',
             date: t.created_at?.slice(0, 10),
         }))
@@ -777,5 +788,11 @@ onMounted(loadPersonas)
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.gift-content-text {
+    font-size: 11px;
+    color: #D9A3AF;
+    margin-top: 1px;
 }
 </style>

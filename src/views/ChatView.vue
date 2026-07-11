@@ -141,7 +141,7 @@ import { setCache } from '@/utils/cache'
 const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
-const { send, onMessage, removeHandler, isConnected } = useWebSocket()
+const { send, onMessage, removeHandler, clearHandlers, isConnected } = useWebSocket()
 
 const messagesContainer = ref(null)
 const isTyping = ref(false)
@@ -282,10 +282,11 @@ function handleSend(text, opts = {}) {
     chatStore.addMessage({ role: 'user', content: text })
     if (personaId.value === 'wechat_sync') return
 
-    // autoReply 默认 true，除非明确传 false
     if (opts.autoReply !== false) {
         send({ type: 'chat', content: text, personaId: personaId.value })
         isTyping.value = true
+        // 30秒后兜底关掉，防止 AI 无响应时一直转
+        setTimeout(() => { isTyping.value = false }, 30000)
     }
     scrollToBottom()
     if (chatStore.allMessages) {
@@ -323,7 +324,7 @@ function handleSendEmoji(emoji) {
     scrollToBottom()
 }
 
-function handleSendGift({ name, content, message }) {
+async function handleSendGift({ name, content, message }) {
     chatStore.addMessage({
         role: 'user',
         type: 'gift',
@@ -333,13 +334,28 @@ function handleSendGift({ name, content, message }) {
         content: `[礼物: ${name}]`,
         timestamp: new Date().toISOString()
     })
+
+    // 存进礼物记录
+    try {
+        await api(`/api/gifts/${personaId.value}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                direction: 'user_to_ai',
+                giftName: name,
+                giftContent: content || '',
+                giftMessage: message || ''
+            })
+        })
+    } catch { }
+
     const desc = `[用户送了一份礼物: ${name}${content ? `，里面有：${content}` : ''}${message ? `，附言：${message}` : ''}]`
     send({ type: 'chat', content: desc, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
 
-function handleSendTransfer({ amount, note }) {
+async function handleSendTransfer({ amount, note }) {
     chatStore.addMessage({
         role: 'user',
         type: 'transfer',
@@ -348,6 +364,20 @@ function handleSendTransfer({ amount, note }) {
         content: `[转账: ¥${amount.toFixed(2)}]`,
         timestamp: new Date().toISOString()
     })
+
+    // 存进转账记录
+    try {
+        await api(`/api/transfers/${personaId.value}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                direction: 'user_to_ai',
+                amount: parseFloat(amount),
+                note: note || ''
+            })
+        })
+    } catch { }
+
     send({ type: 'chat', content: `[用户转账了 ¥${amount.toFixed(2)}${note ? `，备注：${note}` : ''}]`, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
@@ -386,9 +416,13 @@ function handleRegenerateLatest() {
     }
 }
 
-// handleIncoming 开头加去重
 function handleIncoming(data) {
+    // bus_message 不是 AI 回复，但要确保 typing 不被卡住    
+    if (data.type === 'bus_message') return
+    console.log('[Chat] handleIncoming 被调用', data.type, data.content?.slice(0, 20))
     if (data.type === 'chat' || data.type === 'push') {
+        console.log('[Chat] 进入处理分支')
+
         // 前端再做一层去重，防止网络抖动时同一条消息处理两次
         const key = (data.content || '') + (data.timestamp || '')
         const now = Date.now()
@@ -399,8 +433,10 @@ function handleIncoming(data) {
         lastHandledContent.value = key
         lastHandledTime.value = now
 
+        isTyping.value = false
+
         let cleanContent = data.content
-            .replace(/$$思考$$[\s\S]*?$$思考$$/g, '')
+            .replace(/\[思考\][\s\S]*?\[思考\]/g, '')
             .replace(/[\s\S]*?<\/think>/g, '')
             .trim()
 
@@ -415,7 +451,15 @@ function handleIncoming(data) {
             }
         }
 
+        console.log('[Chat] 气泡数量:', final.length)
+
+        if (final.length === 0) {
+            isTyping.value = false
+            return
+        }
+
         final.forEach((line, idx) => {
+            console.log('[Chat] 准备 push 气泡:', idx, line.slice(0, 15))
             setTimeout(() => {
                 chatStore.addMessage({
                     role: 'ai',
@@ -423,12 +467,15 @@ function handleIncoming(data) {
                     timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString()
                 })
                 scrollToBottom()
+                if (idx === final.length - 1 && chatStore.allMessages) {
+                    setCache(`messages_${personaId.value}`, chatStore.allMessages)
+                }
             }, idx * 600)
         })
 
         // 处理 AI 主动发送的特殊消息
         if (data.specialPayload) {
-            const sp = data.specialPayload;
+            const sp = data.specialPayload
             if (sp.type === 'gift') {
                 setTimeout(() => {
                     chatStore.addMessage({
@@ -441,7 +488,7 @@ function handleIncoming(data) {
                         timestamp: data.timestamp,
                     })
                     scrollToBottom()
-                }, (final.length) * 600 + 200)
+                }, final.length * 600 + 200)
             } else if (sp.type === 'transfer') {
                 setTimeout(() => {
                     chatStore.addMessage({
@@ -453,7 +500,7 @@ function handleIncoming(data) {
                         timestamp: data.timestamp,
                     })
                     scrollToBottom()
-                }, (final.length) * 600 + 200)
+                }, final.length * 600 + 200)
             } else if (sp.type === 'location') {
                 setTimeout(() => {
                     chatStore.addMessage({
@@ -466,7 +513,7 @@ function handleIncoming(data) {
                         timestamp: data.timestamp,
                     })
                     scrollToBottom()
-                }, (final.length) * 600 + 200)
+                }, final.length * 600 + 200)
             }
         }
 
@@ -646,30 +693,14 @@ function updateTime() { }
 
 onMounted(async () => {
     document.querySelector('.screen-content').style.overflow = 'hidden'
-    removeHandler(handleIncoming)  // 先清一次防万一
+    clearHandlers()
     onMessage(handleIncoming)
     loadPersonaName()
     chatStore.clearMessages()
     await chatStore.loadPersonaMessages(personaId.value)
     scrollToBottom()
-
-    let mounted = false
-    let reloadTimer = null
-    watch(isConnected, async (val, oldVal) => {
-        if (!mounted) { mounted = true; return }
-        if (val && !oldVal) {
-            // 延迟 1 秒防抖，避免重连抖动时反复刷新
-            if (reloadTimer) clearTimeout(reloadTimer)
-            reloadTimer = setTimeout(async () => {
-                chatStore.clearMessages()
-                await chatStore.loadPersonaMessages(personaId.value)
-                scrollToBottom()
-            }, 1000)
-        }
-    })
 })
 
-// onUnmounted 独立出来，确保离开页面时清理 handler
 onUnmounted(() => {
     removeHandler(handleIncoming)
     const customStyle = document.getElementById('custom-chat-theme')
@@ -677,6 +708,17 @@ onUnmounted(() => {
 })
 
 watch(() => chatStore.messages.length, scrollToBottom)
+
+watch(personaId, async (newId, oldId) => {
+    if (!newId || newId === oldId) return
+    clearHandlers()
+    onMessage(handleIncoming)
+    chatStore.clearMessages()
+    await chatStore.loadPersonaMessages(newId)
+    await loadPersonaName()
+    scrollToBottom()
+})
+
 </script>
 
 <style>

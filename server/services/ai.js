@@ -236,12 +236,27 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   }
 
   // 3. 存入用户消息
+  // 解析用户消息的特殊类型
+  let userMsgType = "text";
+  let userMsgMeta = null;
+  if (userMessage.startsWith("[用户送了一份礼物:")) {
+    userMsgType = "gift";
+  } else if (userMessage.startsWith("[用户转账了")) {
+    userMsgType = "transfer";
+    const match = userMessage.match(/¥([\d.]+)/);
+    if (match) userMsgMeta = JSON.stringify({ amount: parseFloat(match[1]) });
+  } else if (userMessage.startsWith("[用户分享了位置")) {
+    userMsgType = "location";
+  }
+
   await db.from(tableName).insert({
     persona_id: pid,
     session_id: pid,
     role: "user",
     content: userMessage,
     timestamp: nowISO,
+    msg_type: userMsgType,
+    msg_meta: userMsgMeta,
   });
 
   // 异步更新情绪状态
@@ -351,10 +366,11 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
 使用时机：
 - 送礼物：特别的时刻、求婚、节日、想表达心意时
 - 转账：想给用户买东西、发红包时
-- 位置：告知自己在哪、约见面时
+- 位置：你的位置发生了实际变化，且你认为有必要让用户知道你在哪时才发。如果位置没有变动，不要重复发送同一个地点。
 
 规则：
 - 不要频繁使用，要在真正合适的时机
+- 位置只在真正移动了或者第一次告知时发，不要在同一地点重复发
 - 格式必须严格遵守，不要随意修改
 - 一次回复最多一个特殊格式
 - 正常对话内容照常输出，特殊格式放在最后
@@ -632,6 +648,9 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     role: "ai",
     content: aiReply,
     timestamp: new Date().toISOString(),
+    tokens_used: data.usage ? data.usage.total_tokens || 0 : 0,
+    msg_type: specialPayload ? specialPayload.type : "text",
+    msg_meta: specialPayload ? JSON.stringify(specialPayload.data) : null,
   });
 
   const cleanReplyForMemory = aiReply.replace(/\|\|\|/g, " ");

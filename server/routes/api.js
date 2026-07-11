@@ -353,7 +353,7 @@ router.get("/memories/:personaId/heatmap", async (req, res) => {
   const counts = {};
   if (data) {
     data.forEach((m) => {
-      const day = m.timestamp.slice(0, 10);
+      const day = new Date(m.timestamp).toISOString().slice(0, 10);
       counts[day] = (counts[day] || 0) + 1;
     });
   }
@@ -1979,6 +1979,65 @@ router.post("/map-generate", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+router.get("/stats/monthly-tokens/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { personaId } = req.params;
+  const now = new Date();
+  const monthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  ).toISOString();
+
+  const { data } = await db
+    .from("messages")
+    .select("tokens_used")
+    .eq("persona_id", personaId)
+    .gte("timestamp", monthStart);
+
+  const total = (data || []).reduce((sum, m) => sum + (m.tokens_used || 0), 0);
+  const msgCount = (data || []).length;
+
+  res.json({ total, msgCount });
+});
+
+router.get("/stats/monthly-tokens-all", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const now = new Date();
+  const monthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  ).toISOString();
+
+  const { data } = await db
+    .from("messages")
+    .select("tokens_used")
+    .gte("timestamp", monthStart);
+
+  const total = (data || []).reduce((sum, m) => sum + (m.tokens_used || 0), 0);
+  const msgCount = (data || []).length;
+
+  res.json({ total, msgCount });
+});
+
+router.post("/gifts/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { personaId } = req.params;
+  const { direction, giftName, giftContent, giftMessage } = req.body;
+  await db.from("gifts").insert({
+    persona_id: personaId,
+    direction: direction || "user_to_ai",
+    gift_name: giftName || "礼物",
+    gift_content: giftContent || "",
+    gift_message: giftMessage || "",
+  });
+  res.json({ success: true });
 });
 
 module.exports = router;

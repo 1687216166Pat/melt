@@ -1,4 +1,3 @@
-// src/composables/useWebSocket.js
 import { ref } from "vue";
 
 let socket = null;
@@ -15,9 +14,11 @@ function getWsUrl() {
 }
 
 function connect() {
-  console.log("[WS] connect() 被调用, 当前 socket readyState:", socket?.readyState);
+  console.log(
+    "[WS] connect() 被调用, 当前 socket readyState:",
+    socket?.readyState,
+  );
 
-  // 已连接或正在连接，直接跳过，防止重复建连接
   if (
     socket &&
     (socket.readyState === WebSocket.OPEN ||
@@ -27,7 +28,6 @@ function connect() {
     return;
   }
 
-  // 清理旧连接
   if (socket) {
     socket.onclose = null;
     socket.onmessage = null;
@@ -44,6 +44,7 @@ function connect() {
   };
 
   socket.onmessage = (event) => {
+    console.log("[WS] 收到消息, handlers数量:", messageHandlers.size);
     let data;
     try {
       data = JSON.parse(event.data);
@@ -52,7 +53,6 @@ function connect() {
       return;
     }
 
-    // 去重：5秒内相同内容+类型的消息只处理一次
     const contentKey = (data.content || "") + (data.type || "");
     const now = Date.now();
     if (contentKey === lastReceivedContent && now - lastReceivedTime < 5000) {
@@ -75,7 +75,6 @@ function connect() {
     isConnected.value = false;
     socket = null;
     console.log("[WS] 连接断开，3秒后重连, code:", event.code);
-    // 1000 是正常关闭，也重连，因为可能是页面刷新导致的
     setTimeout(connect, 3000);
   };
 
@@ -94,14 +93,16 @@ function send(data) {
   }
 }
 
-// 注册消息处理器，同一个函数引用只会注册一次（Set 特性）
 function onMessage(handler) {
   messageHandlers.add(handler);
 }
 
-// 移除消息处理器，组件卸载时必须调用
 function removeHandler(handler) {
   messageHandlers.delete(handler);
+}
+
+function clearHandlers() {
+  messageHandlers.clear();
 }
 
 function requestNotificationPermission() {
@@ -124,24 +125,20 @@ function sendSystemNotification(content, title) {
 
 async function registerPushSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
-
   try {
     const registration = await navigator.serviceWorker.ready;
     const BASE = import.meta.env.VITE_API_URL || "";
     const res = await fetch(`${BASE}/api/push/vapid-key`);
     const { key } = await res.json();
-
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(key),
     });
-
     await fetch(`${BASE}/api/push/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(subscription),
     });
-
     console.log("[WS] Push 订阅成功");
   } catch (err) {
     console.error("[WS] Push 订阅失败:", err);
@@ -150,9 +147,7 @@ async function registerPushSubscription() {
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding)
-    .replace(/-/g, "+")
-    .replace(/_/g, "/");
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) {
@@ -167,6 +162,7 @@ export function useWebSocket() {
     send,
     onMessage,
     removeHandler,
+    clearHandlers,
     isConnected,
     requestNotificationPermission,
     sendSystemNotification,

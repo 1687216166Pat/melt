@@ -12,7 +12,6 @@
     ]" v-if="msg.content || msg.type" @touchstart="handleTouchStart" @touchend="handleTouchEnd"
         @touchmove="handleTouchEnd" @click="selectMode ? emit('select', msg.id) : null">
 
-        <!-- 多选勾选框 -->
         <div v-if="selectMode" class="select-checkbox" :class="{ checked: selected }">
             <svg v-if="selected" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
                 stroke-linecap="round">
@@ -20,22 +19,18 @@
             </svg>
         </div>
 
-        <!-- 头像（留白/同框主题，AI侧） -->
         <div v-if="showAvatar && msg.role === 'ai'" class="msg-avatar">
             <img v-if="personaAvatarUrl" :src="personaAvatarUrl" />
             <span v-else>{{ personaAvatar }}</span>
         </div>
         <div v-else-if="showAvatar && msg.role === 'ai'" class="avatar-placeholder"></div>
 
-        <!-- 消息内容区 -->
         <div class="bubble-content">
 
-            <!-- 旁白 -->
             <div v-if="msg.type === 'narr'" class="narr-bubble">
                 <p>{{ msg.content }}</p>
             </div>
 
-            <!-- 图片消息 -->
             <div v-else-if="msg.type === 'images'" class="bubble images-bubble">
                 <div class="images-grid" :class="{ single: msg.images.length === 1 }">
                     <img v-for="(img, idx) in displayImages(msg)" :key="idx" :src="img.url"
@@ -48,64 +43,67 @@
                 <p v-if="msg.content" class="image-caption">{{ msg.content }}</p>
             </div>
 
-            <!-- 表情包 -->
             <div v-else-if="msg.type === 'emoji'" class="emoji-bubble">
                 <img :src="msg.emojiUrl" :alt="msg.emojiName" class="emoji-img" />
             </div>
 
-            <!-- 礼物 -->
-            <div v-else-if="msg.type === 'gift'" class="bubble gift-bubble" @click.stop="msg._open = !msg._open">
-                <div class="gift-header">
-                    <span class="gift-icon">🎁</span>
-                    <div class="gift-info">
-                        <span class="gift-name">{{ msg.giftName }}</span>
-                        <span class="gift-hint">{{ msg._open ? '点击收起' : '点击查看' }}</span>
-                    </div>
+            <!-- 礼物气泡 -->
+            <div v-else-if="msg.type === 'gift'" class="postcard-bubble gift-postcard"
+                @click.stop="showGiftModal = true">
+                <div class="postcard-left">
+                    <span class="postcard-emoji">🎁</span>
                 </div>
-                <div v-if="msg._open" class="gift-detail">
-                    <p v-if="msg.giftContent" class="gift-content">{{ msg.giftContent }}</p>
-                    <p v-if="msg.giftMessage" class="gift-message">「{{ msg.giftMessage }}」</p>
+                <div class="postcard-right">
+                    <span class="postcard-title">{{ msg.giftName || '礼物' }}</span>
+                    <span v-if="msg.giftContent" class="postcard-sub">内含：{{ msg.giftContent }}</span>
+                    <span v-else-if="msg.giftMessage" class="postcard-sub">「{{ msg.giftMessage }}」</span>
+                    <span v-else class="postcard-sub">{{ msg.role === 'ai' ? '他送给你的' : '你送出的' }}</span>
                 </div>
+                <svg class="postcard-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round">
+                    <path d="M9 18l6-6-6" />
+                </svg>
             </div>
 
-            <!-- 转账 -->
-            <div v-else-if="msg.type === 'transfer'" class="bubble transfer-bubble">
-                <div class="transfer-card">
-                    <div class="transfer-icon">💸</div>
-                    <div class="transfer-info">
-                        <span class="transfer-amount">¥{{ msg.amount?.toFixed(2) }}</span>
-                        <span v-if="msg.note" class="transfer-note">{{ msg.note }}</span>
-                    </div>
-                    <span class="transfer-label">转账</span>
+            <!-- 转账气泡 -->
+            <div v-else-if="msg.type === 'transfer'" class="postcard-bubble transfer-postcard"
+                @click.stop="showTransferModal = true">
+                <div class="postcard-left">
+                    <span class="postcard-emoji">💸</span>
                 </div>
+                <div class="postcard-right">
+                    <span class="postcard-title">¥{{ Number(msg.amount || 0).toFixed(2) }}</span>
+                    <span v-if="msg.note" class="postcard-sub">{{ msg.note }}</span>
+                    <span v-else class="postcard-sub">{{ msg.role === 'ai' ? '他转给你的' : '你转出的' }}</span>
+                </div>
+                <svg class="postcard-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
             </div>
 
-            <!-- 位置 -->
-            <div v-else-if="msg.type === 'location'" class="bubble location-bubble">
-                <div class="location-card">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                        stroke-linecap="round">
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                        <circle cx="12" cy="10" r="3" />
-                    </svg>
-                    <div class="location-info">
-                        <span class="location-name">{{ msg.locationName || '我的位置' }}</span>
-                        <span class="location-coords" v-if="msg.lat">
-                            {{ msg.lat.toFixed(4) }}, {{ msg.lng.toFixed(4) }}
-                        </span>
-                        <span class="location-coords" v-else>位置已发送</span>
-                    </div>
+            <!-- 位置气泡 -->
+            <div v-else-if="msg.type === 'location'" class="postcard-bubble location-postcard"
+                @click.stop="showLocationModal = true">
+                <div class="postcard-left">
+                    <span class="postcard-emoji">📍</span>
                 </div>
+                <div class="postcard-right">
+                    <span class="postcard-title">{{ msg.locationName || '我的位置' }}</span>
+                    <span class="postcard-sub">{{ msg.role === 'ai' ? '他分享了位置' : '你分享了位置' }}</span>
+                </div>
+                <svg class="postcard-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
             </div>
 
-            <!-- 普通消息 -->
             <div v-else class="bubble">
                 <p>{{ msg.content }}</p>
             </div>
 
         </div>
 
-        <!-- 头像（同框主题，user侧） -->
         <div v-if="showAvatar && msg.role === 'user'" class="msg-avatar user-avatar">
             <img v-if="userAvatar && (userAvatar.startsWith('http') || userAvatar.startsWith('data'))"
                 :src="userAvatar" />
@@ -113,7 +111,6 @@
         </div>
         <div v-else-if="showAvatar && msg.role === 'user'" class="avatar-placeholder"></div>
 
-        <!-- 操作菜单 -->
         <transition name="panel">
             <div v-if="showActions && !selectMode" class="bubble-actions" @click.self="showActions = false">
                 <div class="action-menu">
@@ -126,12 +123,134 @@
             </div>
         </transition>
 
-        <!-- 图片全屏预览 -->
         <Teleport to="body">
             <div v-if="previewImage" class="image-preview-overlay" @click="previewImage = null">
                 <img :src="previewImage" />
             </div>
         </Teleport>
+
+        <!-- 礼物弹窗 -->
+        <Teleport to="body">
+            <Transition name="modal-pop">
+                <div v-if="showGiftModal" class="sp-overlay" @click.self="showGiftModal = false">
+                    <div class="receipt-card">
+                        <div class="receipt-top gift-receipt-top">
+                            <div class="receipt-emoji">🎁</div>
+                            <div class="receipt-type">礼物</div>
+                            <div class="receipt-from">{{ msg.role === 'ai' ? '他送给你的' : '你送出的' }}</div>
+                        </div>
+                        <div class="receipt-zigzag gift-zigzag"></div>
+                        <div class="receipt-body">
+                            <div class="receipt-title">{{ msg.giftName || '礼物' }}</div>
+                            <div v-if="msg.giftContent" class="receipt-row">
+                                <span class="receipt-label">里面有</span>
+                                <span class="receipt-value">{{ msg.giftContent }}</span>
+                            </div>
+                            <div v-if="msg.giftMessage" class="receipt-row">
+                                <span class="receipt-label">附言</span>
+                                <span class="receipt-value receipt-italic">「{{ msg.giftMessage }}」</span>
+                            </div>
+                            <div class="receipt-divider"></div>
+                            <div class="receipt-row receipt-row-small">
+                                <span class="receipt-label">时间</span>
+                                <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
+                                    month:
+                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
+                            </div>
+                        </div>
+                        <div class="receipt-zigzag receipt-zigzag-bottom gift-zigzag"></div>
+                        <div class="receipt-footer">
+                            <button class="receipt-btn gift-btn"
+                                @click="() => { if (msg.role === 'ai' && !giftAccepted) { acceptMsg(msg.id); giftAccepted = true } showGiftModal = false }">
+                                {{ msg.role === 'user' || giftAccepted ? '收起卡片' : '收下礼物 ✿' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- 转账弹窗 -->
+        <Teleport to="body">
+            <Transition name="modal-pop">
+                <div v-if="showTransferModal" class="sp-overlay" @click.self="showTransferModal = false">
+                    <div class="receipt-card">
+                        <div class="receipt-top transfer-receipt-top">
+                            <div class="receipt-emoji">💸</div>
+                            <div class="receipt-type">转账</div>
+                            <div class="receipt-from">{{ msg.role === 'ai' ? '他转给你的' : '你转出的' }}</div>
+                        </div>
+                        <div class="receipt-zigzag transfer-zigzag"></div>
+                        <div class="receipt-body">
+                            <div class="receipt-amount">¥{{ Number(msg.amount || 0).toFixed(2) }}</div>
+                            <div v-if="msg.note" class="receipt-row">
+                                <span class="receipt-label">备注</span>
+                                <span class="receipt-value">{{ msg.note }}</span>
+                            </div>
+                            <div v-else class="receipt-row">
+                                <span class="receipt-label">备注</span>
+                                <span class="receipt-value receipt-empty">无</span>
+                            </div>
+                            <div class="receipt-divider"></div>
+                            <div class="receipt-row receipt-row-small">
+                                <span class="receipt-label">时间</span>
+                                <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
+                                    month:
+                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
+                            </div>
+                        </div>
+                        <div class="receipt-zigzag receipt-zigzag-bottom transfer-zigzag"></div>
+                        <div class="receipt-footer">
+                            <button class="receipt-btn transfer-btn"
+                                @click="() => { if (msg.role === 'ai' && !transferAccepted) { acceptMsg(msg.id); transferAccepted = true } showTransferModal = false }">
+                                {{ msg.role === 'user' || transferAccepted ? '收起卡片' : '收下转账' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
+        <!-- 位置弹窗 -->
+        <Teleport to="body">
+            <Transition name="modal-pop">
+                <div v-if="showLocationModal" class="sp-overlay" @click.self="showLocationModal = false">
+                    <div class="receipt-card">
+                        <div class="receipt-top location-receipt-top">
+                            <div class="receipt-emoji">📍</div>
+                            <div class="receipt-type">位置</div>
+                            <div class="receipt-from">{{ msg.role === 'ai' ? '他分享的位置' : '你分享的位置' }}</div>
+                        </div>
+                        <div class="receipt-zigzag location-zigzag"></div>
+                        <div class="receipt-body">
+                            <div class="receipt-title">{{ msg.locationName || '我的位置' }}</div>
+                            <div v-if="msg.lat" class="receipt-row">
+                                <span class="receipt-label">坐标</span>
+                                <span class="receipt-value">{{ msg.lat.toFixed(4) }}, {{ msg.lng.toFixed(4) }}</span>
+                            </div>
+                            <div v-else class="receipt-row">
+                                <span class="receipt-label">说明</span>
+                                <span class="receipt-value">位置已分享</span>
+                            </div>
+                            <div class="receipt-divider"></div>
+                            <div class="receipt-row receipt-row-small">
+                                <span class="receipt-label">时间</span>
+                                <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
+                                    month:
+                                        'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</span>
+                            </div>
+                        </div>
+                        <div class="receipt-zigzag receipt-zigzag-bottom location-zigzag"></div>
+                        <div class="receipt-footer">
+                            <button class="receipt-btn location-btn" @click="showLocationModal = false">
+                                收起卡片
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
     </div>
 </template>
 
@@ -155,6 +274,13 @@ const emit = defineEmits(['edit', 'delete', 'regenerate', 'bookmark', 'select'])
 
 const showActions = ref(false)
 const previewImage = ref(null)
+const showGiftModal = ref(false)
+const showTransferModal = ref(false)
+const showLocationModal = ref(false)
+
+const giftAccepted = ref(isAccepted(props.msg.id))
+const transferAccepted = ref(isAccepted(props.msg.id))
+
 let longPressTimer = null
 
 function handleTouchStart(e) {
@@ -195,6 +321,19 @@ function bookmarkMsg() {
     showActions.value = false
     emit('bookmark', props.msg)
 }
+
+// 收下状态，用消息 id 存
+function isAccepted(msgId) {
+    const accepted = JSON.parse(localStorage.getItem('accepted_msgs') || '{}')
+    return !!accepted[msgId]
+}
+
+function acceptMsg(msgId) {
+    const accepted = JSON.parse(localStorage.getItem('accepted_msgs') || '{}')
+    accepted[msgId] = true
+    localStorage.setItem('accepted_msgs', JSON.stringify(accepted))
+}
+
 </script>
 
 <style scoped>
@@ -222,7 +361,6 @@ function bookmarkMsg() {
     margin-bottom: 3px;
 }
 
-/* 多选 */
 .bubble-wrapper.select-mode {
     padding-left: 36px;
     cursor: pointer;
@@ -259,7 +397,6 @@ function bookmarkMsg() {
     height: 13px;
 }
 
-/* ===== 默认主题头像（方形）===== */
 .msg-avatar {
     width: 40px;
     height: 40px;
@@ -285,7 +422,6 @@ function bookmarkMsg() {
     flex-shrink: 0;
 }
 
-/* 内容区 */
 .bubble-content {
     max-width: 68%;
     display: flex;
@@ -300,7 +436,6 @@ function bookmarkMsg() {
     align-items: flex-start;
 }
 
-/* 旁白 */
 .narr-bubble {
     max-width: 88%;
     padding: 8px 16px;
@@ -313,7 +448,6 @@ function bookmarkMsg() {
     border: 1px solid rgba(216, 205, 234, 0.3);
 }
 
-/* ===== 默认气泡（第四张参考，粉色圆角）===== */
 .bubble {
     padding: 10px 14px;
     border-radius: 18px;
@@ -347,7 +481,364 @@ function bookmarkMsg() {
     border-radius: 6px 18px 18px 6px;
 }
 
-/* ===== 极简主题 = iMessage ===== */
+/* ===== 明信片气泡（礼物/转账/位置）===== */
+.postcard-bubble {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    min-width: 200px;
+    max-width: 240px;
+    cursor: pointer;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    transition: transform 0.15s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.postcard-bubble::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.postcard-bubble:active {
+    transform: scale(0.97);
+}
+
+.ai .postcard-bubble {
+    border-radius: 18px 18px 18px 6px;
+}
+
+.user .postcard-bubble {
+    border-radius: 18px 18px 6px 18px;
+}
+
+.gift-postcard {
+    background: rgba(255, 233, 240, 0.65);
+    border: 1px solid rgba(232, 192, 201, 0.35);
+    box-shadow: 0 4px 16px rgba(217, 163, 175, 0.12);
+}
+
+.transfer-postcard {
+    background: rgba(224, 238, 255, 0.65);
+    border: 1px solid rgba(160, 200, 240, 0.35);
+    box-shadow: 0 4px 16px rgba(140, 180, 220, 0.12);
+}
+
+.location-postcard {
+    background: rgba(224, 245, 232, 0.65);
+    border: 1px solid rgba(160, 210, 175, 0.35);
+    box-shadow: 0 4px 16px rgba(130, 190, 150, 0.12);
+}
+
+.postcard-left {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.postcard-emoji {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.postcard-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.postcard-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #4A3F41;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.postcard-sub {
+    font-size: 11px;
+    color: #B8A9AC;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.postcard-chevron {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: #C8B8BC;
+    opacity: 0.7;
+}
+
+/* ===== 弹窗遮罩 ===== */
+.sp-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 800;
+    background: rgba(74, 63, 65, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+/* ===== 小票卡片 ===== */
+.receipt-card {
+    width: 100%;
+    max-width: 280px;
+    background: #FFFBFD;
+    border-radius: 4px;
+    box-shadow: 0 8px 40px rgba(180, 100, 130, 0.18), 0 2px 8px rgba(0, 0, 0, 0.06);
+    overflow: visible;
+}
+
+.receipt-top {
+    padding: 24px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    border-radius: 4px 4px 0 0;
+}
+
+.gift-receipt-top {
+    background: linear-gradient(160deg, #fce8ef, #f5d4e0);
+}
+
+.transfer-receipt-top {
+    background: linear-gradient(160deg, #e4eeff, #d0e4f8);
+}
+
+.location-receipt-top {
+    background: linear-gradient(160deg, #e4f4ea, #d0ead8);
+}
+
+.receipt-emoji {
+    font-size: 44px;
+    line-height: 1;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.08));
+}
+
+.receipt-type {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #A09098;
+    margin-top: 2px;
+}
+
+.receipt-from {
+    font-size: 12px;
+    color: #B8A9AC;
+    background: rgba(255, 255, 255, 0.6);
+    padding: 3px 12px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+}
+
+/* 锯齿边 */
+.receipt-zigzag {
+    height: 12px;
+    position: relative;
+}
+
+.receipt-zigzag::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 12px;
+    background-size: 16px 12px;
+    background-repeat: repeat-x;
+}
+
+.gift-zigzag::after {
+    background-image: radial-gradient(circle at 8px 0, #fce8ef 8px, #FFFBFD 8px);
+    top: 0;
+    background-position: 0 0;
+}
+
+.receipt-zigzag-bottom.gift-zigzag::after {
+    background-image: radial-gradient(circle at 8px 12px, #FFFBFD 8px, #fce8ef 8px);
+    top: auto;
+    bottom: 0;
+}
+
+.transfer-zigzag::after {
+    background-image: radial-gradient(circle at 8px 0, #e4eeff 8px, #FFFBFD 8px);
+    top: 0;
+    background-position: 0 0;
+}
+
+.receipt-zigzag-bottom.transfer-zigzag::after {
+    background-image: radial-gradient(circle at 8px 12px, #FFFBFD 8px, #e4eeff 8px);
+    top: auto;
+    bottom: 0;
+}
+
+.location-zigzag::after {
+    background-image: radial-gradient(circle at 8px 0, #e4f4ea 8px, #FFFBFD 8px);
+    top: 0;
+    background-position: 0 0;
+}
+
+.receipt-zigzag-bottom.location-zigzag::after {
+    background-image: radial-gradient(circle at 8px 12px, #FFFBFD 8px, #e4f4ea 8px);
+    top: auto;
+    bottom: 0;
+}
+
+.receipt-body {
+    padding: 12px 20px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #FFFBFD;
+}
+
+.receipt-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #4A3F41;
+    text-align: center;
+    letter-spacing: 0.02em;
+}
+
+.receipt-amount {
+    font-size: 32px;
+    font-weight: 800;
+    color: #4A3F41;
+    text-align: center;
+    letter-spacing: -1px;
+}
+
+.receipt-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.receipt-row-small {
+    opacity: 0.55;
+}
+
+.receipt-label {
+    font-size: 11px;
+    color: #C8B8BC;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    padding-top: 1px;
+}
+
+.receipt-value {
+    font-size: 13px;
+    color: #4A3F41;
+    text-align: right;
+    line-height: 1.5;
+    flex: 1;
+}
+
+.receipt-italic {
+    font-style: italic;
+    color: #8A7880;
+}
+
+.receipt-empty {
+    color: #C8BCBE;
+    font-style: italic;
+}
+
+.receipt-divider {
+    border-top: 1px dashed rgba(200, 150, 170, 0.2);
+    margin: 2px 0;
+}
+
+.receipt-footer {
+    padding: 8px 20px 20px;
+    background: #FFFBFD;
+    border-radius: 0 0 4px 4px;
+}
+
+.receipt-btn {
+    width: 100%;
+    height: 44px;
+    border-radius: 14px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s, opacity 0.15s;
+}
+
+.receipt-btn:active {
+    opacity: 0.8;
+    transform: scale(0.98);
+}
+
+.gift-btn {
+    background: linear-gradient(135deg, #F4C0CC, #E8A3B5);
+    color: white;
+    box-shadow: 0 4px 14px rgba(232, 163, 181, 0.3);
+}
+
+.transfer-btn {
+    background: linear-gradient(135deg, #A8C8F0, #88B0E0);
+    color: white;
+    box-shadow: 0 4px 14px rgba(136, 176, 224, 0.3);
+}
+
+.location-btn {
+    background: linear-gradient(135deg, #A0D4B0, #80C090);
+    color: white;
+    box-shadow: 0 4px 14px rgba(128, 192, 144, 0.3);
+}
+
+/* 弹窗动画 */
+.modal-pop-enter-active {
+    transition: opacity 0.25s ease;
+}
+
+.modal-pop-leave-active {
+    transition: opacity 0.2s ease;
+}
+
+.modal-pop-enter-from,
+.modal-pop-leave-to {
+    opacity: 0;
+}
+
+.modal-pop-enter-active .receipt-card {
+    transition: transform 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.modal-pop-enter-from .receipt-card {
+    transform: scale(0.93) translateY(14px);
+}
+
+/* ===== 主题变体 ===== */
 .bubble-wrapper.minimal .msg-avatar {
     border-radius: 50%;
 }
@@ -384,7 +875,6 @@ function bookmarkMsg() {
     border-top-left-radius: 4px;
 }
 
-/* 极简无头像 */
 .bubble-wrapper.minimal .msg-avatar {
     display: none;
 }
@@ -397,7 +887,6 @@ function bookmarkMsg() {
     max-width: 75%;
 }
 
-/* ===== 留白主题 = 小克毛玻璃 ===== */
 .bubble-wrapper.留白 .msg-avatar {
     display: none;
 }
@@ -431,7 +920,6 @@ function bookmarkMsg() {
     box-shadow: 0 2px 16px rgba(0, 0, 0, 0.15);
 }
 
-/* ===== 同框主题 = Discord ===== */
 .bubble-wrapper.together .msg-avatar {
     border-radius: 50%;
 }
@@ -469,7 +957,6 @@ function bookmarkMsg() {
     border-radius: 4px 16px 16px 4px;
 }
 
-/* ===== 液态主题 ===== */
 .bubble-wrapper.liquid .msg-avatar {
     display: none;
 }
@@ -505,7 +992,6 @@ function bookmarkMsg() {
     border-radius: 22px;
 }
 
-/* ===== 微信主题 ===== */
 .bubble-wrapper.wechat {
     margin-bottom: 8px;
     align-items: flex-start;
@@ -571,7 +1057,7 @@ function bookmarkMsg() {
     border-color: #07C160;
 }
 
-/* ===== 图片气泡 ===== */
+/* 图片气泡 */
 .images-bubble {
     padding: 6px;
 }
@@ -631,127 +1117,6 @@ function bookmarkMsg() {
     border-radius: 8px;
 }
 
-/* 礼物 */
-.gift-bubble {
-    cursor: pointer;
-    min-width: 160px;
-}
-
-.gift-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.gift-icon {
-    font-size: 26px;
-}
-
-.gift-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.gift-name {
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.gift-hint {
-    font-size: 10px;
-    opacity: 0.5;
-}
-
-.gift-detail {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.gift-content {
-    font-size: 13px;
-    line-height: 1.6;
-    margin-bottom: 4px;
-}
-
-.gift-message {
-    font-size: 13px;
-    font-style: italic;
-    opacity: 0.8;
-}
-
-/* 转账 */
-.transfer-bubble {
-    min-width: 170px;
-}
-
-.transfer-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.transfer-icon {
-    font-size: 22px;
-}
-
-.transfer-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.transfer-amount {
-    font-size: 18px;
-    font-weight: 700;
-}
-
-.transfer-note {
-    font-size: 11px;
-    opacity: 0.6;
-}
-
-.transfer-label {
-    font-size: 11px;
-    opacity: 0.4;
-}
-
-/* 位置 */
-.location-bubble {
-    min-width: 170px;
-}
-
-.location-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.location-card svg {
-    width: 26px;
-    height: 26px;
-    flex-shrink: 0;
-    color: var(--color-primary);
-}
-
-.location-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.location-name {
-    font-size: 14px;
-    font-weight: 500;
-}
-
-.location-coords {
-    font-size: 10px;
-    opacity: 0.5;
-}
-
 /* 操作菜单 */
 .bubble-actions {
     position: fixed;
@@ -793,37 +1158,6 @@ function bookmarkMsg() {
 
 .action-menu button.danger {
     color: #c07070;
-}
-
-/* 同框主题操作菜单 */
-.bubble-wrapper.together~.bubble-actions .action-menu,
-.theme-together .action-menu {
-    background: #1E1F22;
-    border-radius: 8px;
-}
-
-.theme-together .action-menu button {
-    color: #DBDEE1;
-}
-
-/* 留白主题操作菜单 */
-.theme-留白 .action-menu {
-    background: rgba(40, 34, 46, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.theme-留白 .action-menu button {
-    color: #E8D5C4;
-}
-
-/* 微信操作菜单 */
-.theme-wechat .action-menu {
-    background: #FFFFFF;
-    border-radius: 8px;
-}
-
-.theme-wechat .action-menu button {
-    color: #191919;
 }
 
 /* 图片全屏预览 */

@@ -572,7 +572,9 @@
                         </div>
 
                         <div class="slider-card-v8 stats-card focusable-card" @click="toggleChatStatLocal">
-                            <span class="s-title">聊天统计</span>
+                            <span class="s-title">聊天统计 · {{ (recentPersona || currentAi).note || (recentPersona ||
+                                currentAi).name
+                                }}</span>
                             <div class="s-value">{{ chatStatDisplay.v }}</div>
                             <span class="s-sub">{{ chatStatDisplay.l }}</span>
                             <div class="s-dots">
@@ -584,8 +586,10 @@
                         <div class="slider-card-v8 tokens focusable-card">
                             <span class="s-title">本月 Tokens</span>
                             <div class="token-ring-wrap">
-                                <div class="token-ring">60%</div>
-                                <span class="token-text">聊了不少呢～</span>
+                                <div class="token-ring">{{ monthlyTokens > 0 ? (monthlyTokens / 1000).toFixed(1) + 'k' :
+                                    monthlyMsgCount
+                                    + '条' }}</div>
+                                <span class="token-text">{{ monthlyTokens > 0 ? '本月消耗' : '本月对话' }}</span>
                             </div>
                         </div>
                     </div>
@@ -757,17 +761,22 @@
                     </div>
 
                     <!-- 聊天预览条：独立聚焦 -->
-                    <div class="chat-preview-v8 focusable-card" @click="openChat">
+                    <div class="chat-preview-v8 focusable-card"
+                        @click="recentPersona ? router.push(`/chat/${recentPersona.personaId || recentPersona.id}`) : openChat()">
                         <div class="p-avatar">
-                            <img v-if="currentAi.avatarUrl" :src="currentAi.avatarUrl" />
+                            <img v-if="(recentPersona || currentAi).avatarUrl"
+                                :src="(recentPersona || currentAi).avatarUrl" />
                             <span v-else>💬</span>
                         </div>
                         <div class="p-content">
-                            <span class="p-name">{{ currentAi.name }}</span>
-                            <span class="p-msg">{{ leftBubbleText }}</span>
+                            <span class="p-name">{{ (recentPersona || currentAi).note || (recentPersona ||
+                                currentAi).name }}</span>
+                            <span class="p-msg">{{ recentPersona?.lastMessage || leftBubbleText }}</span>
                         </div>
-                        <span class="p-time">刚刚</span>
+                        <span class="p-time">{{ recentPersona?.lastMessageTime ? formatLastTime(recentPersona) : '刚刚'
+                            }}</span>
                     </div>
+
                 </div>
 
                 <!-- 【第三页：共语列表】 -->
@@ -905,7 +914,7 @@
                                         <span v-else>{{ contextMenu.persona?.avatar || '💬' }}</span>
                                     </div>
                                     <span class="ctx-name">{{ contextMenu.persona?.note || contextMenu.persona?.name
-                                    }}</span>
+                                        }}</span>
                                 </div>
                                 <div class="ctx-divider"></div>
                                 <button class="ctx-item" @click="pinFromMenu(contextMenu.persona?.id)">
@@ -1088,7 +1097,7 @@
                                     class="dp-input dp-edit-input" @blur="saveEditEvent(selectedDay, i)"
                                     @keyup.enter="saveEditEvent(selectedDay, i)" />
                                 <span v-else class="dp-event-text" @click="startEditEvent(i, ev.text)">{{ ev.text
-                                }}</span>
+                                    }}</span>
                                 <button class="dp-event-del" @click="removeEvent(selectedDay, i)">×</button>
                             </div>
                         </template>
@@ -1211,6 +1220,9 @@ const showScheduleView = ref(false)
 const scheduleRange = ref(7)
 const showInsightFolder = ref(false)
 const currentFolderKey = ref('')
+const monthlyTokens = ref(0)
+const monthlyMsgCount = ref(0)
+const recentPersona = ref(null) // 最近联系的 persona
 
 // 共栖空间
 const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
@@ -1582,6 +1594,28 @@ async function loadTogetherData() {
     } catch { }
     sessionStorage.setItem('together_loaded_' + pid, '1')
     sessionStorage.setItem('cached_timeline', JSON.stringify(timelineEvents.value))
+}
+
+async function loadMonthlyStats() {
+    try {
+        const res = await api('/api/stats/monthly-tokens-all')
+        const data = await res.json()
+        monthlyTokens.value = data.total || 0
+        monthlyMsgCount.value = data.msgCount || 0
+    } catch { }
+}
+
+async function loadRecentPersona() {
+    // 找最近有消息的 persona
+    if (allPersonas.value.length === 0) return
+    const sorted = [...allPersonas.value]
+        .filter(p => p.lastMessageTime)
+        .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime))
+    if (sorted.length > 0) {
+        recentPersona.value = sorted[0]
+    } else {
+        recentPersona.value = allPersonas.value[0]
+    }
 }
 
 async function loadPersonaInsights() {
@@ -2323,6 +2357,8 @@ async function refreshPreviews() {
         allPersonas.value = updated
         sessionStorage.setItem('cached_personas', JSON.stringify(allPersonas.value))
     } catch { }
+    await loadRecentPersona()
+
 }
 
 function handleVisibilityChange() {
@@ -2385,6 +2421,8 @@ onMounted(async () => {
     await loadBookmarks()
     await loadContactGroups()
     await loadHabitatStats()
+    await loadMonthlyStats()
+    await loadRecentPersona()
 
     setTimeout(setupScrollFocus, 300)
 })
