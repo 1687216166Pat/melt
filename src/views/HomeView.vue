@@ -271,7 +271,7 @@
 
                     <!-- 备忘录入口 -->
                     <div class="section-label" style="margin-top:16px;">✦ 备忘录</div>
-                    <div class="memo-entry" @click="router.push('/diary?from=habitat')">
+                    <div class="memo-entry" @click="router.push('/memo')">
                         <div class="memo-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                                 stroke-linecap="round">
@@ -714,7 +714,7 @@
                                 <div class="more-apps-row">
                                     <!-- 备忘录（原镜中位置） -->
                                     <div class="sec-item more-app-sec"
-                                        @click="$router.push('/diary'); showMoreApps = false">
+                                        @click="$router.push('/memo'); showMoreApps = false">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                             stroke-linecap="round">
                                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

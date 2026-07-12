@@ -98,6 +98,44 @@
                 </svg>
             </div>
 
+            <!-- 外卖气泡 -->
+            <div v-else-if="msg.type === 'food'" class="postcard-bubble food-postcard"
+                @click.stop="showDeliveryModal = true">
+                <div class="postcard-left">
+                    <span class="postcard-emoji">🛵</span>
+                </div>
+                <div class="postcard-right">
+                    <span class="postcard-title">{{ msg.deliveryContent || '外卖' }}</span>
+                    <span class="postcard-sub">
+                        {{ msg.role === 'ai' ? 'TA 给你点的' : '你点的外卖' }}
+                        {{ msg.deliveryExpectedAt ? ' · 预计 ' + formatDeliveryTime(msg.deliveryExpectedAt) : '' }}
+                    </span>
+                </div>
+                <svg class="postcard-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+            </div>
+
+            <!-- 快递气泡 -->
+            <div v-else-if="msg.type === 'express'" class="postcard-bubble express-postcard"
+                @click.stop="showDeliveryModal = true">
+                <div class="postcard-left">
+                    <span class="postcard-emoji">📦</span>
+                </div>
+                <div class="postcard-right">
+                    <span class="postcard-title">{{ msg.deliveryContent || '快递' }}</span>
+                    <span class="postcard-sub">
+                        {{ msg.role === 'ai' ? 'TA 寄给你的' : '你寄出的' }}
+                        {{ msg.deliveryExpectedAt ? ' · 预计 ' + formatDeliveryDate(msg.deliveryExpectedAt) : '' }}
+                    </span>
+                </div>
+                <svg class="postcard-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round">
+                    <path d="M9 18l6-6-6-6" />
+                </svg>
+            </div>
+
             <!-- HTML 小卡片 -->
             <div v-else-if="msg.type === 'card'" class="card-bubble" @click.stop="showCardModal = true">
                 <div class="card-bubble-inner">
@@ -265,6 +303,74 @@
             </Transition>
         </Teleport>
 
+        <!-- 外卖/快递弹窗 -->
+        <Teleport to="body">
+            <Transition name="modal-pop">
+                <div v-if="showDeliveryModal" class="sp-overlay" @click.self="showDeliveryModal = false">
+                    <div class="receipt-card">
+                        <div class="receipt-top"
+                            :class="msg.type === 'food' ? 'food-receipt-top' : 'express-receipt-top'">
+                            <div class="receipt-emoji">{{ msg.type === 'food' ? '🛵' : '📦' }}</div>
+                            <div class="receipt-type">{{ msg.type === 'food' ? '外卖' : '快递' }}</div>
+                            <div class="receipt-from">
+                                {{ msg.role === 'ai'
+                                    ? (msg.type === 'food' ? 'TA 给你点的' : 'TA 寄给你的')
+                                    : (msg.type === 'food' ? '你点的外卖' : '你寄出的') }}
+                            </div>
+                        </div>
+                        <div class="receipt-zigzag" :class="msg.type === 'food' ? 'food-zigzag' : 'express-zigzag'">
+                        </div>
+                        <div class="receipt-body">
+                            <div class="receipt-title">{{ msg.deliveryContent }}</div>
+                            <div v-if="msg.deliveryAddress" class="receipt-row">
+                                <span class="receipt-label">地址</span>
+                                <span class="receipt-value">{{ msg.deliveryAddress }}</span>
+                            </div>
+                            <div v-if="msg.deliveryNote" class="receipt-row">
+                                <span class="receipt-label">备注</span>
+                                <span class="receipt-value receipt-italic">{{ msg.deliveryNote }}</span>
+                            </div>
+                            <div v-if="msg.deliveryExpectedAt" class="receipt-row">
+                                <span class="receipt-label">{{ msg.type === 'food' ? '预计送达' : '预计到达' }}</span>
+                                <span class="receipt-value">
+                                    {{ msg.type === 'food'
+                                        ? formatDeliveryTime(msg.deliveryExpectedAt)
+                                        : formatDeliveryDate(msg.deliveryExpectedAt) }}
+                                </span>
+                            </div>
+                            <div class="receipt-divider"></div>
+                            <div class="receipt-row receipt-row-small">
+                                <span class="receipt-label">时间</span>
+                                <span class="receipt-value">{{ new Date(msg.timestamp).toLocaleString('zh-CN', {
+                                    month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                }) }}</span>
+                            </div>
+                            <!-- 状态 -->
+                            <div class="receipt-row">
+                                <span class="receipt-label">状态</span>
+                                <span class="receipt-value delivery-status"
+                                    :class="deliveryArrived ? 'status-arrived' : 'status-waiting'">
+                                    {{ deliveryArrived ? '已到达 ✓' : '配送中...' }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="receipt-zigzag receipt-zigzag-bottom"
+                            :class="msg.type === 'food' ? 'food-zigzag' : 'express-zigzag'"></div>
+                        <div class="receipt-footer">
+                            <button v-if="!deliveryArrived && msg.role === 'ai'" class="receipt-btn"
+                                :class="msg.type === 'food' ? 'food-btn' : 'express-btn'" @click="confirmArrived">
+                                {{ msg.type === 'food' ? '外卖到了 🛵' : '快递到了 📦' }}
+                            </button>
+                            <button v-else class="receipt-btn" :class="msg.type === 'food' ? 'food-btn' : 'express-btn'"
+                                @click="showDeliveryModal = false">
+                                收起卡片
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Transition>
+        </Teleport>
+
         <!-- 卡片全屏弹窗 -->
         <Teleport to="body">
             <Transition name="modal-pop">
@@ -305,6 +411,51 @@ const showGiftModal = ref(false)
 const showTransferModal = ref(false)
 const showLocationModal = ref(false)
 const showCardModal = ref(false)
+const showDeliveryModal = ref(false)
+const deliveryArrived = ref(isDeliveryArrived(props.msg.id))
+
+function isDeliveryArrived(msgId) {
+    const arrived = JSON.parse(localStorage.getItem('delivery_arrived') || '{}')
+    return !!arrived[msgId]
+}
+
+function formatDeliveryTime(ts) {
+    if (!ts) return ''
+    return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDeliveryDate(ts) {
+    if (!ts) return ''
+    const d = new Date(ts)
+    return `${d.getMonth() + 1}月${d.getDate()}日`
+}
+
+async function confirmArrived() {
+    // 本地记录
+    const arrived = JSON.parse(localStorage.getItem('delivery_arrived') || '{}')
+    arrived[props.msg.id] = true
+    localStorage.setItem('delivery_arrived', JSON.stringify(arrived))
+    deliveryArrived.value = true
+    showDeliveryModal.value = false
+
+    // 更新后端状态
+    try {
+        const { api } = await import('@/utils/api')
+        // 找到对应的 delivery order id（通过消息时间戳匹配）
+        const res = await api(`/api/delivery/${props.msg.personaId || ''}`)
+        const orders = await res.json()
+        const matched = orders.find(o =>
+            Math.abs(new Date(o.created_at) - new Date(props.msg.timestamp)) < 60000
+        )
+        if (matched) {
+            await api(`/api/delivery/${matched.id}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'arrived' })
+            })
+        }
+    } catch { }
+}
 
 const giftAccepted = ref(isAccepted(props.msg.id))
 const transferAccepted = ref(isAccepted(props.msg.id))
@@ -1294,5 +1445,67 @@ function acceptMsg(msgId) {
     cursor: pointer;
     font-family: inherit;
     border-top: 1px solid rgba(200, 150, 170, 0.08);
+}
+
+.food-postcard {
+    background: rgba(255, 243, 220, 0.65);
+    border: 1px solid rgba(240, 200, 120, 0.35);
+    box-shadow: 0 4px 16px rgba(240, 190, 80, 0.12);
+}
+
+.express-postcard {
+    background: rgba(230, 235, 255, 0.65);
+    border: 1px solid rgba(160, 175, 240, 0.35);
+    box-shadow: 0 4px 16px rgba(140, 160, 220, 0.12);
+}
+
+.food-receipt-top {
+    background: linear-gradient(160deg, #fff3dc, #ffe8b0);
+}
+
+.express-receipt-top {
+    background: linear-gradient(160deg, #e6ebff, #d0d8f8);
+}
+
+.food-zigzag::after {
+    background-image: radial-gradient(circle at 8px 0, #fff3dc 8px, #FFFBFD 8px);
+    top: 0;
+}
+
+.receipt-zigzag-bottom.food-zigzag::after {
+    background-image: radial-gradient(circle at 8px 12px, #FFFBFD 8px, #fff3dc 8px);
+}
+
+.express-zigzag::after {
+    background-image: radial-gradient(circle at 8px 0, #e6ebff 8px, #FFFBFD 8px);
+    top: 0;
+}
+
+.receipt-zigzag-bottom.express-zigzag::after {
+    background-image: radial-gradient(circle at 8px 12px, #FFFBFD 8px, #e6ebff 8px);
+}
+
+.food-btn {
+    background: linear-gradient(135deg, #FFD580, #FFC040);
+    color: white;
+    box-shadow: 0 4px 14px rgba(255, 192, 64, 0.3);
+}
+
+.express-btn {
+    background: linear-gradient(135deg, #A0B0F0, #7090E0);
+    color: white;
+    box-shadow: 0 4px 14px rgba(112, 144, 224, 0.3);
+}
+
+.delivery-status {
+    font-weight: 600;
+}
+
+.status-waiting {
+    color: #F5A623;
+}
+
+.status-arrived {
+    color: #6BAF7A;
 }
 </style>

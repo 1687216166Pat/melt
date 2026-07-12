@@ -66,6 +66,32 @@
                     </div>
                 </div>
 
+                <!-- 外卖/快递面板 -->
+                <div v-if="activePanel === 'delivery'" class="toolbar-panel">
+                    <div class="gift-input-area">
+                        <div class="delivery-type-row">
+                            <button class="gift-method-btn" :class="{ active: deliveryType === 'food' }"
+                                @click="deliveryType = 'food'">🛵 外卖</button>
+                            <button class="gift-method-btn" :class="{ active: deliveryType === 'express' }"
+                                @click="deliveryType = 'express'">📦 快递</button>
+                        </div>
+                        <input v-model="deliveryContent"
+                            :placeholder="deliveryType === 'food' ? '想吃什么，例：麻辣烫、奶茶...' : '寄什么东西，例：生日礼物...'"
+                            class="gift-input" />
+                        <input v-if="deliveryType === 'food'" v-model="deliveryAddress" placeholder="送到哪里（可选）"
+                            class="gift-input" />
+                        <input v-model="deliveryNote" placeholder="备注（可选）" class="gift-input" />
+                        <div class="delivery-time-row">
+                            <span class="gift-method-label">{{ deliveryType === 'food' ? '预计送达' : '预计到达' }}</span>
+                            <input v-model="deliveryExpected" type="datetime-local"
+                                class="gift-input delivery-time-input" />
+                        </div>
+                        <button class="send-gift-btn" @click="sendDelivery" :disabled="!deliveryContent.trim()">
+                            {{ deliveryType === 'food' ? '点外卖 🛵' : '寄快递 📦' }}
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 转账面板 -->
                 <div v-if="activePanel === 'transfer'" class="toolbar-panel">
                     <div class="transfer-input-area">
@@ -158,6 +184,18 @@
                         </svg>
                         <span>卡片</span>
                     </button>
+                    <button class="toolbar-btn" :class="{ active: activePanel === 'delivery' }"
+                        @click="togglePanel('delivery')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round">
+                            <path d="M5 17H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v3" />
+                            <rect x="9" y="11" width="14" height="10" rx="2" />
+                            <circle cx="12" cy="21" r="1" />
+                            <circle cx="20" cy="21" r="1" />
+                        </svg>
+                        <span>外卖</span>
+                    </button>
+
                     <button class="toolbar-btn" :class="{ active: narrMode }" @click="toggleNarrMode">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round">
@@ -211,7 +249,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 const emit = defineEmits([
     'send', 'send-images', 'send-emoji', 'send-gift',
     'send-transfer', 'send-location', 'continue-reply',
-    'regenerate', 'multiselect','send-card'
+    'regenerate', 'multiselect', 'send-card', 'send-delivery'
 ])
 
 const text = ref('')
@@ -224,6 +262,28 @@ const pendingImages = ref([])
 const imagesCollapsed = ref(true)
 const emojiList = ref([])
 const cardHtml = ref('')
+const deliveryType = ref('food')
+const deliveryContent = ref('')
+const deliveryAddress = ref('')
+const deliveryNote = ref('')
+const deliveryExpected = ref('')
+
+function sendDelivery() {
+    if (!deliveryContent.value.trim()) return
+    emit('send-delivery', {
+        type: deliveryType.value,
+        content: deliveryContent.value.trim(),
+        address: deliveryAddress.value.trim(),
+        note: deliveryNote.value.trim(),
+        expectedAt: deliveryExpected.value || null,
+    })
+    deliveryContent.value = ''
+    deliveryAddress.value = ''
+    deliveryNote.value = ''
+    deliveryExpected.value = ''
+    activePanel.value = ''
+    showToolbar.value = false
+}
 
 function sendCard() {
     if (!cardHtml.value.trim()) return
@@ -235,6 +295,7 @@ function sendCard() {
 // 礼物
 const giftName = ref('')
 const giftContent = ref('')
+const giftMessage = ref('')
 const giftMethod = ref('in_person')
 const giftMethods = [
     { value: 'in_person', icon: '🤝', label: '当面' },
@@ -397,9 +458,8 @@ function sendLocation() {
             showToolbar.value = false
         },
         () => {
-            // 定位失败，发送模拟位置
-            emit('send-location', { lat: null, lng: null, manual: true })
-            showToolbar.value = false
+            // 定位失败，不自动发送，提示用户
+            alert('定位失败，请检查位置权限')
         }
     )
 }
@@ -822,5 +882,21 @@ textarea::placeholder {
     background: rgba(217, 163, 175, 0.15);
     color: #D9A3AF;
     border-color: rgba(217, 163, 175, 0.4);
+}
+
+.delivery-type-row {
+    display: flex;
+    gap: 8px;
+}
+
+.delivery-time-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.delivery-time-input {
+    width: 100%;
+    box-sizing: border-box;
 }
 </style>

@@ -280,23 +280,33 @@ async function handleChat(
   if (!opts.proactive) {
     let userMsgType = "text";
     let userMsgMeta = null;
-    if (userMessage.startsWith("[用户送了一份礼物:")) userMsgType = "gift";
-    else if (userMessage.startsWith("[用户转账了")) {
+    if (userMessage.startsWith("[用户送了一份礼物:")) {
+      userMsgType = "gift";
+    } else if (userMessage.startsWith("[用户转账了")) {
       userMsgType = "transfer";
       const match = userMessage.match(/¥([\d.]+)/);
       if (match) userMsgMeta = JSON.stringify({ amount: parseFloat(match[1]) });
-    } else if (userMessage.startsWith("[用户分享了位置"))
+    } else if (userMessage.startsWith("[用户分享了位置")) {
       userMsgType = "location";
-
-    await db.from(tableName).insert({
-      persona_id: pid,
-      session_id: pid,
-      role: "user",
-      content: userMessage,
-      timestamp: nowISO,
-      msg_type: userMsgType,
-      msg_meta: userMsgMeta,
-    });
+    } else if (userMessage.startsWith("[用户点了外卖")) {
+      userMsgType = "food";
+      const contentMatch = userMessage.match(/外卖：(.+?)(?:，|$)/);
+      const addressMatch = userMessage.match(/送到(.+?)(?:，|$)/);
+      const noteMatch = userMessage.match(/备注：(.+?)(?:，|$)/);
+      userMsgMeta = JSON.stringify({
+        content: contentMatch?.[1] || "",
+        address: addressMatch?.[1] || "",
+        note: noteMatch?.[1] || "",
+      });
+    } else if (userMessage.startsWith("[用户寄了快递")) {
+      userMsgType = "express";
+      const contentMatch = userMessage.match(/快递：(.+?)(?:，|$)/);
+      const noteMatch = userMessage.match(/备注：(.+?)(?:，|$)/);
+      userMsgMeta = JSON.stringify({
+        content: contentMatch?.[1] || "",
+        note: noteMatch?.[1] || "",
+      });
+    }
   }
 
   if (!isBeta) updateEmotionOnMessage(pid, userMessage).catch(() => {});
@@ -426,6 +436,26 @@ async function handleChat(
 - 格式必须严格遵守，不要随意修改
 - 一次回复最多一个特殊格式
 - 正常对话内容照常输出，特殊格式放在最后
+`;
+
+  const deliveryGuide = `
+[外卖/快递格式]
+在合适的时机，你可以给用户点外卖或寄快递，使用以下格式（放在回复末尾）：
+
+点外卖：[FOOD:{"content":"食物描述","address":"地址","note":"备注","expectedMinutes":预计分钟数}]
+寄快递：[EXPRESS:{"content":"物品描述","note":"备注","expectedDays":预计天数}]
+
+使用时机：
+- 外卖：用户说饿了、没时间吃饭、想吃什么，并且你想主动给他们点时
+- 快递：特殊节日、想送礼物但不方便当面送时
+
+规则：
+- 不要频繁使用，在真正合适的时机
+- 格式必须严格遵守
+- 一次回复最多一个格式
+- 正常对话照常输出，格式放最后
+- 【重要】如果用户消息里包含 [用户点了外卖] 或 [用户寄了快递]，说明是用户已经给你点了外卖或寄了快递，你只需要自然回应收到即可，绝对不要再用 [FOOD:...] 或 [EXPRESS:...] 格式重复点一份
+- 【重要】用户已经在给你点外卖/快递，你不需要反过来再给用户点一份，除非你真的想额外回赠
 `;
 
   const cardGuide = cardEnabled
@@ -594,6 +624,7 @@ async function handleChat(
   if (needWorldBook) systemContent += defaultWorldBook + "\n";
   systemContent += giftTransferGuide + "\n";
   if (cardGuide) systemContent += cardGuide + "\n";
+  systemContent += deliveryGuide + "\n";
 
   const emotionPrompt = isBeta ? "" : await buildEmotionPrompt(pid);
   if (emotionPrompt) systemContent += emotionPrompt + "\n";
@@ -813,6 +844,8 @@ async function handleChat(
   const giftMatch = aiReply.match(/\[GIFT:(\{.*?\})\]/s);
   const transferMatch = aiReply.match(/\[TRANSFER:(\{.*?\})\]/s);
   const locationMatch = aiReply.match(/\[LOCATION:(\{.*?\})\]/s);
+  const foodMatch = aiReply.match(/\[FOOD:(\{.*?\})\]/s);
+  const expressMatch = aiReply.match(/\[EXPRESS:(\{.*?\})\]/s);
 
   if (cardMatch) {
     try {
@@ -862,6 +895,55 @@ async function handleChat(
       aiReply = aiReply.replace(locationMatch[0], "").trim();
     } catch (e) {
       console.error("[位置] 解析失败:", e.message);
+    }
+  }
+
+  if (foodMatch) {
+    try {
+      const foodData = JSON.parse(foodMatch[1]);
+      specialPayload = { type: "food", data: foodData };
+      await db.from("delivery_orders").insert({
+        persona_id: pid,
+        direction: "ai_to_user",
+        sender: "ai",
+        type: "food",
+        content: foodData.content || "外卖",
+        address: foodData.address || "",
+        note: foodData.note || "",
+        status: "waiting",
+        expected_at: foodData.expectedMinutes
+          ? new Date(
+              Date.now() + foodData.expectedMinutes * 60000,
+            ).toISOString()
+          : null,
+      });
+      aiReply = aiReply.replace(foodMatch[0], "").trim();
+      console.log(`[外卖] ${pid} AI 点了外卖: ${foodData.content}`);
+    } catch (e) {
+      console.error("[外卖] 解析失败:", e.message);
+    }
+  } else if (expressMatch) {
+    try {
+      const expressData = JSON.parse(expressMatch[1]);
+      specialPayload = { type: "express", data: expressData };
+      await db.from("delivery_orders").insert({
+        persona_id: pid,
+        direction: "ai_to_user",
+        sender: "ai",
+        type: "express",
+        content: expressData.content || "快递",
+        note: expressData.note || "",
+        status: "waiting",
+        expected_at: expressData.expectedDays
+          ? new Date(
+              Date.now() + expressData.expectedDays * 86400000,
+            ).toISOString()
+          : null,
+      });
+      aiReply = aiReply.replace(expressMatch[0], "").trim();
+      console.log(`[快递] ${pid} AI 寄了快递: ${expressData.content}`);
+    } catch (e) {
+      console.error("[快递] 解析失败:", e.message);
     }
   }
 

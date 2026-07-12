@@ -121,7 +121,7 @@
         <ChatInput @send="handleSend" @send-images="handleSendImages" @send-emoji="handleSendEmoji"
             @send-gift="handleSendGift" @send-transfer="handleSendTransfer" @send-location="handleSendLocation"
             @continue-reply="handleContinueReply" @regenerate="handleRegenerateLatest" @multiselect="enterSelectMode"
-            @send-card="handleSendCard" />
+            @send-card="handleSendCard" @send-delivery="handleSendDelivery" />
     </div>
 </template>
 
@@ -383,6 +383,49 @@ function handleSendCard({ html }) {
     scrollToBottom()
 }
 
+async function handleSendDelivery({ type, content, address, note, expectedAt }) {
+    chatStore.addMessage({
+        role: 'user',
+        type: type === 'food' ? 'food' : 'express',
+        deliveryContent: content,
+        deliveryAddress: address,
+        deliveryNote: note,
+        deliveryExpectedAt: expectedAt,
+        content: type === 'food' ? `[外卖: ${content}]` : `[快递: ${content}]`,
+        timestamp: new Date().toISOString()
+    })
+
+    // 立即保存到缓存
+    if (chatStore.allMessages) {
+        setCache(`messages_${personaId.value}`, chatStore.allMessages)
+    }
+
+    try {
+        await api('/api/delivery', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                personaId: personaId.value,
+                direction: 'user_to_ai',
+                sender: 'user',
+                type,
+                content,
+                address,
+                note,
+                expectedAt,
+            })
+        })
+    } catch { }
+
+    const desc = type === 'food'
+        ? `[用户点了外卖：${content}${address ? `，送到${address}` : ''}${note ? `，备注：${note}` : ''}${expectedAt ? `，预计${new Date(expectedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}到` : ''}]`
+        : `[用户寄了快递：${content}${note ? `，备注：${note}` : ''}${expectedAt ? `，预计${new Date(expectedAt).toLocaleDateString('zh-CN')}到达` : ''}]`
+
+    send({ type: 'chat', content: desc, personaId: personaId.value })
+    isTyping.value = true
+    scrollToBottom()
+}
+
 async function handleSendTransfer({ amount, note }) {
     chatStore.addMessage({
         role: 'user',
@@ -512,6 +555,7 @@ function handleIncoming(data) {
             }, idx * 600)
         })
 
+
         if (data.specialPayload) {
             const sp = data.specialPayload
             const delay = final.length * 600 + 200
@@ -550,7 +594,44 @@ function handleIncoming(data) {
                     })
                     scrollToBottom()
                 }, delay)
+
+            } else if (sp.type === 'food') {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai', type: 'food',
+                        deliveryContent: sp.data.content,
+                        deliveryAddress: sp.data.address,
+                        deliveryNote: sp.data.note,
+                        deliveryExpectedAt: sp.data.expectedMinutes
+                            ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString()
+                            : null,
+                        content: `[外卖: ${sp.data.content}]`,
+                        timestamp: data.timestamp,
+                    })
+                    scrollToBottom()
+                    if (chatStore.allMessages) {
+                        setCache(`messages_${personaId.value}`, chatStore.allMessages)
+                    }
+                }, delay)
+            } else if (sp.type === 'express') {
+                setTimeout(() => {
+                    chatStore.addMessage({
+                        role: 'ai', type: 'express',
+                        deliveryContent: sp.data.content,
+                        deliveryNote: sp.data.note,
+                        deliveryExpectedAt: sp.data.expectedDays
+                            ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString()
+                            : null,
+                        content: `[快递: ${sp.data.content}]`,
+                        timestamp: data.timestamp,
+                    })
+                    scrollToBottom()
+                    if (chatStore.allMessages) {
+                        setCache(`messages_${personaId.value}`, chatStore.allMessages)
+                    }
+                }, delay)
             }
+
         }
 
         if (data.debug) debugInfo.value = data.debug

@@ -21,6 +21,19 @@
             </div>
         </div>
 
+        <!-- 搜索栏 -->
+        <div class="wb-search-wrap">
+            <div class="wb-search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.35-4.35" />
+                </svg>
+                <input v-model="searchQuery" class="wb-search-input" placeholder="搜索标题或内容..." />
+                <button v-if="searchQuery" class="search-clear" @click="searchQuery = ''">×</button>
+            </div>
+        </div>
+
         <!-- 注入位置说明 -->
         <div class="guide-toggle" @click="showGuide = !showGuide">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -59,6 +72,7 @@
                 '全选' }}</button>
             <button class="batch-btn batch-btn-primary" @click="showBindModal = true">绑定</button>
             <button class="batch-btn" @click="showCategoryModal = true">分类</button>
+            <button class="batch-btn" @click="exportSelected">导出</button>
             <span class="batch-count">已选 {{ selectedBooks.length }}</span>
         </div>
 
@@ -84,7 +98,16 @@
                 <div class="wb-card-body">
                     <div class="wb-card-title-row">
                         <span class="wb-card-title">{{ book.title }}</span>
-                        <button class="wb-delete-btn" @click.stop="deleteBook(book.id)">×</button>
+                        <div class="wb-card-actions">
+                            <button class="wb-preview-btn" @click.stop="previewBook(book)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                            </button>
+                            <button class="wb-delete-btn" @click.stop="deleteBook(book.id)">×</button>
+                        </div>
                     </div>
                     <div class="wb-tags">
                         <span class="wb-tag" :class="'wb-tag-' + positionColor(book.position)">
@@ -155,6 +178,32 @@
             <div class="modal-actions">
                 <SoftButton variant="secondary" @click="closeModal">取消</SoftButton>
                 <SoftButton variant="primary" @click="saveBook">保存</SoftButton>
+            </div>
+        </BlurModal>
+
+        <!-- 预览弹窗 -->
+        <BlurModal :visible="!!previewingBook" @close="previewingBook = null">
+            <div v-if="previewingBook" class="preview-modal">
+                <div class="preview-header">
+                    <h3>{{ previewingBook.title }}</h3>
+                    <div class="preview-tags">
+                        <span class="wb-tag" :class="'wb-tag-' + positionColor(previewingBook.position)">
+                            {{ positionLabel(previewingBook.position) }}
+                        </span>
+                        <span v-if="previewingBook.keyword_enabled" class="wb-tag wb-tag-warm">
+                            关键词: {{ previewingBook.keywords }}
+                        </span>
+                        <span v-if="previewingBook.category" class="wb-tag wb-tag-default">
+                            {{ previewingBook.category }}
+                        </span>
+                    </div>
+                </div>
+                <div class="preview-content">{{ previewingBook.content }}</div>
+                <div class="modal-actions">
+                    <SoftButton variant="secondary" @click="exportSingle(previewingBook)">导出</SoftButton>
+                    <SoftButton variant="primary" @click="editBook(previewingBook); previewingBook = null">编辑
+                    </SoftButton>
+                </div>
             </div>
         </BlurModal>
 
@@ -252,6 +301,8 @@ const importError = ref('')
 const compressing = ref(false)
 const compressMsg = ref('')
 const originalContent = ref('')
+const searchQuery = ref('')
+const previewingBook = ref(null)
 
 const guideItems = [
     { label: '最高覆盖', desc: '绝对核心，强规则、安全限制、禁止事项', color: '#E8C0C9' },
@@ -266,9 +317,25 @@ const existingCategories = computed(() => {
     return [...cats]
 })
 
+// 只保留这一个 filteredBooks
 const filteredBooks = computed(() => {
-    if (!filterCategory.value) return books.value
-    return books.value.filter(b => b.category === filterCategory.value)
+    let result = books.value
+
+    // 分类筛选
+    if (filterCategory.value) {
+        result = result.filter(b => b.category === filterCategory.value)
+    }
+
+    // 搜索筛选
+    if (searchQuery.value.trim()) {
+        const q = searchQuery.value.toLowerCase()
+        result = result.filter(b =>
+            b.title.toLowerCase().includes(q) ||
+            b.content.toLowerCase().includes(q)
+        )
+    }
+
+    return result
 })
 
 const bookForm = reactive({
@@ -302,6 +369,50 @@ async function loadPersonas() {
         const data = await res.json()
         personas.value = data.personas
     } catch { }
+}
+
+function previewBook(book) {
+    previewingBook.value = book
+}
+
+function exportSingle(book) {
+    const data = {
+        title: book.title,
+        content: book.content,
+        position: book.position,
+        keywords: book.keywords,
+        keyword_enabled: book.keyword_enabled,
+        category: book.category,
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${book.title || 'worldbook'}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+}
+
+function exportSelected() {
+    const selected = books.value.filter(b => selectedBooks.value.includes(b.id))
+    const data = selected.map(b => ({
+        title: b.title,
+        content: b.content,
+        position: b.position,
+        keywords: b.keywords,
+        keyword_enabled: b.keyword_enabled,
+        category: b.category,
+    }))
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `worldbooks-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+
+    selectMode.value = false
+    selectedBooks.value = []
 }
 
 async function compressContent() {
@@ -459,28 +570,19 @@ async function applyCategory() {
     await loadBooks()
 }
 
-// ===== 文件导入（兼容 GBK 编码 + docx）=====
 async function handleFileImport(event) {
     const file = event.target.files[0]
     if (!file) return
 
     importing.value = true
     importError.value = ''
-
-    // 重置 input，允许重复选同一个文件
     event.target.value = ''
 
     try {
         const ext = file.name.split('.').pop().toLowerCase()
-
-        if (ext === 'docx') {
-            await importDocx(file)
-        } else if (ext === 'json') {
-            await importJson(file)
-        } else {
-            // txt / md：先尝试 UTF-8，失败则用 GBK
-            await importText(file)
-        }
+        if (ext === 'docx') await importDocx(file)
+        else if (ext === 'json') await importJson(file)
+        else await importText(file)
 
         if (!bookForm.title) {
             bookForm.title = file.name.replace(/\.[^.]+$/, '')
@@ -493,19 +595,13 @@ async function handleFileImport(event) {
 }
 
 async function importText(file) {
-    // 先用 UTF-8 读
     const utfText = await readAsText(file, 'UTF-8')
-
-    // 检测乱码：UTF-8 正常的中文不会出现大量替换字符
     const hasGarbled = (utfText.match(/\uFFFD/g) || []).length > 5
-
     if (hasGarbled) {
-        // 回退到 GBK
         try {
             const gbkText = await readAsText(file, 'GBK')
             bookForm.content = gbkText
         } catch {
-            // GBK 也失败就用 UTF-8 结果
             bookForm.content = utfText
         }
     } else {
@@ -523,7 +619,6 @@ function readAsText(file, encoding) {
 }
 
 async function importDocx(file) {
-    // 动态加载 mammoth，不影响首屏体积
     const mammoth = await import('mammoth')
     const arrayBuffer = await file.arrayBuffer()
     const result = await mammoth.extractRawText({ arrayBuffer })
@@ -537,7 +632,6 @@ async function importJson(file) {
     const text = await readAsText(file, 'UTF-8')
     try {
         const obj = JSON.parse(text)
-        // 如果是数组或对象，格式化后导入；如果有 content 字段直接用
         if (typeof obj === 'object' && obj !== null) {
             if (typeof obj.content === 'string') {
                 bookForm.content = obj.content
@@ -549,7 +643,6 @@ async function importJson(file) {
             bookForm.content = text
         }
     } catch {
-        // 不是合法 JSON，当纯文本处理
         bookForm.content = text
     }
 }
@@ -1193,5 +1286,136 @@ onMounted(() => {
     margin-top: 8px;
     font-size: 11px;
     color: #9B89B4;
+}
+
+.wb-search-wrap {
+    padding: 8px 16px 12px;
+}
+
+.wb-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    border-radius: 16px;
+    padding: 0 14px;
+    height: 44px;
+}
+
+.search-icon {
+    width: 18px;
+    height: 18px;
+    stroke: #B8A9AC;
+    flex-shrink: 0;
+}
+
+.wb-search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: #4A3F41;
+    padding: 0 10px;
+    outline: none;
+    font-family: inherit;
+}
+
+.wb-search-input::placeholder {
+    color: #D4C8CA;
+}
+
+.search-clear {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(217, 163, 175, 0.15);
+    border: none;
+    font-size: 16px;
+    color: #B8A9AC;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.wb-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.wb-preview-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(152, 203, 234, 0.12);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.wb-preview-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: #98CBEA;
+}
+
+.wb-preview-btn:hover {
+    background: rgba(152, 203, 234, 0.2);
+}
+
+.preview-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 70vh;
+}
+
+.preview-header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.preview-header h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #4A3F41;
+}
+
+.preview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.preview-content {
+    flex: 1;
+    overflow-y: auto;
+    background: rgba(255, 251, 250, 0.6);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #4A3F41;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid rgba(217, 163, 175, 0.1);
+}
+
+.preview-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.preview-content::-webkit-scrollbar-thumb {
+    background: rgba(217, 163, 175, 0.3);
+    border-radius: 2px;
 }
 </style>

@@ -79,6 +79,24 @@ function parseFromMeta(msgType, msgMeta) {
       emojiName: meta.name || "",
     };
   }
+  if (msgType === "food") {
+    return {
+      type: "food",
+      deliveryContent: meta.content || "",
+      deliveryAddress: meta.address || "",
+      deliveryNote: meta.note || "",
+      deliveryExpectedAt: meta.expectedAt || null,
+    };
+  }
+  if (msgType === "express") {
+    return {
+      type: "express",
+      deliveryContent: meta.content || "",
+      deliveryNote: meta.note || "",
+      deliveryExpectedAt: meta.expectedAt || null,
+    };
+  }
+
   return {};
 }
 
@@ -119,6 +137,13 @@ export const useChatStore = defineStore("chat", () => {
     if (msg.emojiName !== undefined) newMsg.emojiName = msg.emojiName;
     if (msg.images !== undefined) newMsg.images = msg.images;
     if (msg.cardHtml !== undefined) newMsg.cardHtml = msg.cardHtml;
+    if (msg.deliveryContent !== undefined)
+      newMsg.deliveryContent = msg.deliveryContent;
+    if (msg.deliveryAddress !== undefined)
+      newMsg.deliveryAddress = msg.deliveryAddress;
+    if (msg.deliveryNote !== undefined) newMsg.deliveryNote = msg.deliveryNote;
+    if (msg.deliveryExpectedAt !== undefined)
+      newMsg.deliveryExpectedAt = msg.deliveryExpectedAt;
 
     // 去重：检查最近 5 条，防止同样内容在短时间内重复添加
     const recent = messages.value.slice(-5);

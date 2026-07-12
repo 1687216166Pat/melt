@@ -41,7 +41,7 @@ const isHomePage = computed(() => {
         'about', 'settings-memory-manage',
         'memory', 'logs',
         'diary',
-        'presence'
+        'presence','memo'
 
     ]
     return noPaddingRoutes.includes(route.name) || route.path === '/'

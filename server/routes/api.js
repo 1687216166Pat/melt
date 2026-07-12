@@ -1430,14 +1430,6 @@ router.post("/worldbooks/categorize", async (req, res) => {
   res.json({ success: true });
 });
 
-// 写日记到 Notion
-router.post("/diary/write", async (req, res) => {
-  const { writeToNotion } = require("../services/diary");
-  const { title, content, date } = req.body;
-  const result = await writeToNotion(title || "日记", content, date);
-  res.json({ success: !!result });
-});
-
 // 日记相关
 router.post("/diary/write", async (req, res) => {
   const { writeToNotion } = require("../services/diary");
@@ -1494,44 +1486,16 @@ router.post("/personas/builtin/:id/restore", async (req, res) => {
 });
 
 router.post("/sediment/:personaId/generate", async (req, res) => {
-  const personaId = req.params.personaId;
-  const isBeta = req.headers["x-beta-mode"] === "true";
+  const { generateDailySummary } = require("../services/sediment");
+  const { personaId } = req.params;
 
-  const taskResults = { summary: "success", sampler: "success" };
-
-  console.log(
-    `[手动触发] 正在强制更新 ${personaId} (${isBeta ? "Beta" : "正式"}) 的所有数据...`,
-  );
-
-  // 1. 尝试生成每日总结
   try {
-    const { generateDailySummary } = require("../services/sediment");
-    await generateDailySummary(personaId, isBeta);
-  } catch (err) {
-    taskResults.summary = err.message || "总结失败";
+    await generateDailySummary(personaId, false);
+    res.json({ success: true });
+  } catch (e) {
+    console.error("[沉淀] 生成失败:", e.message);
+    res.status(500).json({ success: false, error: e.message });
   }
-
-  // 2. 尝试提取语料采样
-  try {
-    const { autoExtractSamples } = require("../services/sampler");
-    const { getSessionMemory } = require("../services/memory");
-    const history = await getSessionMemory(personaId, 20, isBeta);
-    await autoExtractSamples(personaId, history, isBeta);
-  } catch (err) {
-    // 💡 宽容处理：如果由于对话中缺乏特色导致采样为空，不报 500，而是记录状态
-    taskResults.sampler = err.message || "没有提炼出新样本";
-  }
-
-  const allSuccess =
-    taskResults.summary === "success" && taskResults.sampler === "success";
-  const partialSuccess =
-    taskResults.summary === "success" || taskResults.sampler === "success";
-
-  res.json({
-    success: allSuccess,
-    partialSuccess: partialSuccess,
-    results: taskResults,
-  });
 });
 
 // 💡 现实同步桥：核心入口
@@ -2230,6 +2194,139 @@ router.delete("/calendar-events/:id", async (req, res) => {
   const db = getDB();
   await db.from("user_calendar_events").delete().eq("id", req.params.id);
   res.json({ success: true });
+});
+
+router.post("/focus/status", (req, res) => {
+  const { running } = req.body;
+  global.userFocusStatus = {
+    running,
+    lastUpdate: Date.now(),
+  };
+  res.json({ success: true });
+});
+
+// 创建外卖/快递订单
+router.post("/delivery", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const {
+    personaId,
+    direction,
+    sender,
+    type,
+    content,
+    address,
+    note,
+    expectedAt,
+  } = req.body;
+  const { data, error } = await db.from("delivery_orders").insert({
+    persona_id: personaId,
+    direction: direction || "user_to_ai",
+    sender: sender || "user",
+    type: type || "food",
+    content,
+    address: address || "",
+    note: note || "",
+    status: "waiting",
+    expected_at: expectedAt || null,
+  });
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// 获取订单列表
+router.get("/delivery/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { status } = req.query;
+  let query = db
+    .from("delivery_orders")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (status) query = query.eq("status", status);
+  const { data } = await query;
+  res.json(data || []);
+});
+
+// 更新订单状态（到达/确认）
+router.put("/delivery/:id/status", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { status } = req.body;
+  const payload = { status };
+  if (status === "arrived") payload.arrived_at = new Date().toISOString();
+  await db.from("delivery_orders").update(payload).eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// 删除订单
+router.delete("/delivery/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("delivery_orders").delete().eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+router.post("/memo/ai-generate/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const { callSubAI } = require("../services/subai");
+  const { getIdentityConfig } = require("../services/sediment");
+  const { getMemoryProfile } = require("../services/memory");
+  const db = getDB();
+  const { personaId } = req.params;
+
+  try {
+    const identity = await getIdentityConfig(personaId);
+    const profile = await getMemoryProfile(personaId);
+
+    const now = new Date();
+    const hour = now.getHours();
+    const timePhase =
+      hour < 5
+        ? "凌晨"
+        : hour < 9
+          ? "早上"
+          : hour < 12
+            ? "上午"
+            : hour < 14
+              ? "中午"
+              : hour < 18
+                ? "下午"
+                : hour < 22
+                  ? "晚上"
+                  : "深夜";
+
+    const prompt = `你是${identity.aiName}。现在是${timePhase}，你想在备忘录里写一条属于自己的碎片记录。
+
+用户档案：${profile || "暂无"}
+
+要求：
+- 这是你的私人备忘录，可以是日常碎片、想法、对${identity.userName}的感受、某个瞬间的记录
+- 不要太正式，像随手记下的东西
+- 可以有标题也可以没有
+- 如果有标签，用1-3个简短的词
+- 按以下 JSON 格式输出：
+{
+  "title": "标题（可选，没有则为空字符串）",
+  "content": "内容，不超过100字",
+  "tags": ["标签1", "标签2"],
+  "color": "颜色（从以下选一个：rgba(255,233,237,0.7) 或 rgba(216,205,234,0.7) 或 rgba(245,234,208,0.7) 或 rgba(184,212,200,0.6)）"
+}`;
+
+    const result = await callSubAI(prompt, 200);
+    if (!result) return res.json({ memo: null });
+
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.json({ memo: null });
+
+    const memo = JSON.parse(jsonMatch[0]);
+    res.json({ memo });
+  } catch (e) {
+    console.error("[备忘录] AI 生成失败:", e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

@@ -2,24 +2,21 @@ const { getDB } = require("../db/index");
 const { pushToAll } = require("../ws/socket");
 const { getMemoryProfile, getRecentMemories } = require("./memory");
 const { callSubAI } = require("./subai");
-const { tickEmotion } = require("./emotion");
+const { tickEmotion, getEmotionState } = require("./emotion");
 
 // ========== 欲望系统：8维驱动条 ==========
-// 每个 persona 独立维护一份状态
 const driveStates = {};
-
 const DRIVE_KEYS = [
-  "attachment", // 想念，想和主人说话
-  "curiosity", // 好奇，想聊点什么新鲜的
-  "reflection", // 想沉淀，想分享感受
-  "duty", // 记挂着什么没做完
-  "social", // 想热闹
-  "fatigue", // 疲惫（抑制项）
-  "libido", // 亲密驱动
-  "stress", // 压力
+  "attachment",
+  "curiosity",
+  "reflection",
+  "duty",
+  "social",
+  "fatigue",
+  "libido",
+  "stress",
 ];
 
-// 不应期计数器（tick）
 const refractoryCounters = {};
 
 function getDriveState(personaId) {
@@ -46,21 +43,17 @@ function getRefractory(personaId) {
   return refractoryCounters[personaId];
 }
 
-// 边际递减：同一条越高涨得越少
 function applyGain(current, delta) {
   const gain = delta * Math.sqrt(1 - current);
   return Math.min(1, Math.max(0, current + gain));
 }
 
-// 用户发消息时 pulse 驱动条
 function pulseOnUserMessage(personaId, userMessage) {
   const state = getDriveState(personaId);
 
-  // 用户说话 → attachment 下降（被满足），curiosity 轻微上升
   state.attachment = Math.max(0, state.attachment - 0.15);
   state.curiosity = applyGain(state.curiosity, 0.08);
 
-  // 情绪词检测
   const negativeWords = [
     "累",
     "烦",
@@ -90,25 +83,17 @@ function pulseOnUserMessage(personaId, userMessage) {
   state.lastTick = Date.now();
 }
 
-// idle 时驱动条自然增长（每次心跳调用）
 function tickDrives(personaId, idleHours) {
   const state = getDriveState(personaId);
   const refractory = getRefractory(personaId);
 
-  // attachment 随 idle 时间增长
   const attachmentGain = Math.min(0.3, idleHours * 0.02);
   state.attachment = applyGain(state.attachment, attachmentGain);
 
-  // curiosity 缓慢自增
   state.curiosity = applyGain(state.curiosity, 0.01);
-
-  // fatigue 随时间自然恢复
   state.fatigue = Math.max(0, state.fatigue - 0.02);
-
-  // stress 缓慢衰减
   state.stress = Math.max(0, state.stress - 0.01);
 
-  // 不应期递减
   Object.keys(refractory).forEach((key) => {
     if (refractory[key] > 0) refractory[key]--;
   });
@@ -116,23 +101,19 @@ function tickDrives(personaId, idleHours) {
   state.lastTick = Date.now();
 }
 
-// 计算召唤力（哪维最高就触发对应行为）
 function computeScores(personaId) {
   const state = getDriveState(personaId);
 
-  // fatigue 过高时抑制所有行为
   if (state.fatigue > 0.8) return null;
 
   const refractory = getRefractory(personaId);
   const scores = {};
 
   DRIVE_KEYS.filter((k) => k !== "fatigue").forEach((key) => {
-    // 不应期内的维度跳过
     if (refractory[key] && refractory[key] > 0) {
       scores[key] = 0;
       return;
     }
-    // 基础召唤力 = 驱动值，stress 额外加成 attachment
     let score = state[key];
     if (key === "attachment") score += state.stress * 0.1;
     scores[key] = score;
@@ -141,7 +122,6 @@ function computeScores(personaId) {
   return scores;
 }
 
-// 根据最高召唤力选择意图
 function pickIntent(personaId) {
   const scores = computeScores(personaId);
   if (!scores) return null;
@@ -150,7 +130,7 @@ function pickIntent(personaId) {
     scores[a] > scores[b] ? a : b,
   );
 
-  if (scores[topKey] < 0.5) return null; // 阈值，不够高就不触发
+  if (scores[topKey] < 0.5) return null;
 
   const intentMap = {
     attachment: { action: "idle_message", reason: "有点想说话" },
@@ -169,19 +149,15 @@ function pickIntent(personaId) {
   };
 }
 
-// 满足后乘性回落，进入不应期
 function satisfyDrive(personaId, driveKey) {
   const state = getDriveState(personaId);
   const refractory = getRefractory(personaId);
 
-  state[driveKey] = state[driveKey] * 0.4; // 主驱动明显降
-  state.fatigue = applyGain(state.fatigue, 0.08); // 发完消息略疲惫
-
-  // 不应期：该维度 5 个 tick 内不再触发
+  state[driveKey] = state[driveKey] * 0.4;
+  state.fatigue = applyGain(state.fatigue, 0.08);
   refractory[driveKey] = 5;
 }
 
-// ========== 设置读写 ==========
 async function getProactiveSettings(personaId) {
   const db = getDB();
   const key = personaId
@@ -232,8 +208,47 @@ async function setProactiveSettings(personaId, settings) {
   }
 }
 
-// ========== 主检查逻辑 ==========
+// ========== 新增：检测用户是否在专注 ==========
+function isUserFocusing() {
+  // 从 localStorage 读番茄钟状态（需要通过 API 暴露给后端）
+  // 这里先用简单的时间戳判断，前端需要配合上报
+  try {
+    const focusStatus = global.userFocusStatus || {};
+    const now = Date.now();
+    // 如果最近 3 分钟内有专注状态，认为用户在专注
+    return focusStatus.running && now - focusStatus.lastUpdate < 3 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
+// ========== 新增：获取当前时间场景 ==========
+function getTimeContext() {
+  const now = new Date();
+  const hour = now.getHours();
+  const day = now.getDay();
+
+  let timePhase = "白天";
+  if (hour >= 5 && hour < 8) timePhase = "清晨";
+  else if (hour >= 8 && hour < 12) timePhase = "上午";
+  else if (hour >= 12 && hour < 14) timePhase = "中午";
+  else if (hour >= 14 && hour < 18) timePhase = "下午";
+  else if (hour >= 18 && hour < 22) timePhase = "晚上";
+  else if (hour >= 22 || hour < 5) timePhase = "深夜";
+
+  const isWeekend = day === 0 || day === 6;
+
+  return { timePhase, hour, isWeekend };
+}
+
+// ========== 主检查逻辑（优化版）=========
 async function checkProactiveMessages() {
+  // 如果用户正在专注，跳过
+  if (isUserFocusing()) {
+    console.log("[欲望] 用户正在专注，暂不打扰");
+    return;
+  }
+
   const { getPersonaList } = require("./prompt");
   const allPersonas = getPersonaList();
 
@@ -245,7 +260,6 @@ async function checkProactiveMessages() {
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
 
-    // 获取最后用户消息时间，计算 idle
     const { data: lastMsg } = await db
       .from("messages")
       .select("timestamp")
@@ -258,16 +272,12 @@ async function checkProactiveMessages() {
       lastMsg && lastMsg.length > 0 ? new Date(lastMsg[0].timestamp) : null;
     const idleHours = lastTime ? (now - lastTime) / (1000 * 60 * 60) : Infinity;
 
-    // tick 驱动条
     tickDrives(persona.id, idleHours);
-
     await tickEmotion(persona.id);
 
-    // 欲望系统决策
     const intent = pickIntent(persona.id);
     if (!intent) continue;
 
-    // 基础限制：今日上限、最小间隔
     const { data: todayLogs } = await db
       .from("proactive_log")
       .select("id")
@@ -290,14 +300,11 @@ async function checkProactiveMessages() {
       if (hoursSince < minInterval) continue;
     }
 
-    // idle 时间门槛
     if (idleHours < (settings.idleHours || 4)) continue;
 
-    // 生成消息
     const message = await generateDrivenMessage(persona.id, intent);
     if (!message) continue;
 
-    // 记录并推送
     await db.from("proactive_log").insert({
       persona_id: persona.id,
       date: today,
@@ -315,18 +322,41 @@ async function checkProactiveMessages() {
       }),
     );
 
-    // 满足驱动，进入不应期
     satisfyDrive(persona.id, intent.driveKey);
 
     console.log(`[欲望] ${persona.id} [${intent.driveKey}] ${message}`);
   }
 }
 
-// ========== 根据驱动意图生成消息 ==========
+// ========== 根据驱动意图生成消息（优化版）==========
 async function generateDrivenMessage(personaId, intent) {
   const { getIdentityConfig } = require("./sediment");
   const identity = await getIdentityConfig(personaId);
   const profile = await getMemoryProfile(personaId);
+  const emotionState = await getEmotionState(personaId);
+  const timeContext = getTimeContext();
+
+  // 获取最近3条对话作为上下文
+  const db = getDB();
+  const { data: recentMsgs } = await db
+    .from("messages")
+    .select("role, content")
+    .eq("persona_id", personaId)
+    .order("id", { ascending: false })
+    .limit(6);
+
+  let recentContext = "";
+  if (recentMsgs && recentMsgs.length > 0) {
+    recentContext =
+      "\n最近的对话片段：\n" +
+      recentMsgs
+        .reverse()
+        .map(
+          (m) =>
+            `${m.role === "user" ? identity.userName : identity.aiName}: ${m.content.split("|||")[0].slice(0, 50)}`,
+        )
+        .join("\n");
+  }
 
   const reasonMap = {
     attachment: `你有点想和${identity.userName}说话，已经有一段时间没聊了`,
@@ -340,21 +370,41 @@ async function generateDrivenMessage(personaId, intent) {
 
   const reason = reasonMap[intent.driveKey] || "你突然想说点什么";
 
+  // 情绪状态描述
+  let emotionHint = "";
+  if (emotionState) {
+    const topEmotion = Object.entries(emotionState)
+      .filter(([k]) => k !== "lastTick")
+      .sort((a, b) => b[1] - a[1])[0];
+    if (topEmotion && topEmotion[1] > 0.3) {
+      const emotionLabels = {
+        joy: "心情不错",
+        sadness: "有点低落",
+        anxiety: "有点不安",
+        anger: "有点烦躁",
+        affection: "想念你",
+        trust: "很安心",
+      };
+      emotionHint = `，现在${emotionLabels[topEmotion[0]] || "平静"}`;
+    }
+  }
+
   const prompt = `你是${identity.aiName}，${identity.userName}的AI伴侣。
 
-现在${reason}，你要主动发一条消息。
+现在是${timeContext.timePhase}（${timeContext.hour}点${timeContext.isWeekend ? "，周末" : ""}），${reason}${emotionHint}，你要主动发一条消息。
 
 用户档案：${profile || "暂无"}
-角色设定：保持${identity.aiName}特有的说话方式
+角色设定：${identity.personaContent ? identity.personaContent.slice(0, 150) : `保持${identity.aiName}特有的说话方式`}${recentContext}
 
 要求：
 - 只输出消息内容，不超过30字
-- 自然真实，不要刻意
-- 不要用"主人"等称呼，用"${identity.userName}"
-- 禁止输出解释或括号内容`;
+- 结合当前时间和最近的对话，自然真实
+- 不要用"主人"等称呼
+- 禁止输出解释或括号内容
+- 语气要符合${identity.aiName}的性格和当前情绪`;
 
   try {
-    const result = await callSubAI(prompt, 60);
+    const result = await callSubAI(prompt, 80);
     return result || null;
   } catch (e) {
     console.error("[欲望] 消息生成失败:", e.message);

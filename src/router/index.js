@@ -93,6 +93,11 @@ const router = createRouter({
     },
     { path: "/wallet", name: "wallet", component: WalletView },
     { path: "/pomodoro", name: "pomodoro", component: PomodoroView },
+    {
+      path: "/memo",
+      name: "memo",
+      component: () => import("@/views/MemoView.vue"),
+    },
   ],
 });
 
