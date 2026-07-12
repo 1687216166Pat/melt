@@ -22,7 +22,19 @@ initDB();
 setTimeout(initCounters, 2000);
 
 // 每 30 秒检查一次定时消息
-setInterval(checkScheduledMessages, 30 * 1000);
+setInterval(() => {
+  checkScheduledMessages().catch((e) => console.error("[定时消息]", e.message));
+}, 30 * 1000);
+
+// 每分钟检查一次日程
+const { checkPersonaSchedules } = require("./services/scheduler_persona");
+setInterval(() => {
+  checkPersonaSchedules().catch((e) =>
+    console.error("[日程定时器]", e.message),
+  );
+}, 60 * 1000);
+
+console.log("[定时器] 定时消息和日程调度已启动");
 
 // 启动时从数据库加载 API 配置
 setTimeout(async () => {

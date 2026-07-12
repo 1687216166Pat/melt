@@ -287,6 +287,50 @@
                 </div>
             </div>
 
+            <!-- 日程管理 -->
+            <div class="section-label-sm">日程 / 作息</div>
+            <div class="settings-group">
+                <div v-for="(sch, idx) in schedules" :key="sch.id || idx" class="settings-group-item schedule-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">{{ sch.label }}</div>
+                        <div class="sgi-desc">
+                            {{ sch.cron_hour }}:{{ String(sch.cron_minute).padStart(2, '0') }}
+                            · {{ sch.prompt_hint?.slice(0, 20) }}...
+                        </div>
+                    </div>
+                    <div class="schedule-toggle">
+                        <input type="checkbox" v-model="sch.enabled" @change="saveSchedule(sch)" />
+                    </div>
+                    <button class="schedule-del" @click="deleteSchedule(idx, sch)">×</button>
+                </div>
+                <div v-if="schedules.length === 0" class="rec-empty">暂无日程，点击添加</div>
+                <div class="settings-group-item action-item" @click="showAddSchedule = true">
+                    <div class="sgi-label" style="color:#D9A3AF;">+ 添加日程</div>
+                </div>
+            </div>
+
+            <!-- 添加日程弹窗 -->
+            <Teleport to="body">
+                <div v-if="showAddSchedule" class="modal-mask" @click.self="showAddSchedule = false">
+                    <div class="modal-box">
+                        <div class="modal-title">添加日程</div>
+                        <input class="modal-input" v-model="newSchedule.label" placeholder="标签，如：起床、午睡、健身" />
+                        <div class="modal-row">
+                            <input class="modal-input half" type="number" v-model.number="newSchedule.cron_hour"
+                                placeholder="小时 0-23" min="0" max="23" />
+                            <input class="modal-input half" type="number" v-model.number="newSchedule.cron_minute"
+                                placeholder="分钟 0-59" min="0" max="59" />
+                        </div>
+                        <textarea class="modal-input" v-model="newSchedule.prompt_hint" rows="3"
+                            placeholder="提示词，如：你刚刚起床，可以跟用户说早安，或者抱怨一下睡眠质量" />
+                        <div class="modal-actions">
+                            <button class="modal-btn cancel" @click="showAddSchedule = false">取消</button>
+                            <button class="modal-btn confirm" @click="addSchedule">确定</button>
+                        </div>
+                    </div>
+                </div>
+            </Teleport>
+
             <!-- 当前状态 -->
             <div class="section-label-sm">当前状态</div>
             <div class="settings-group">
@@ -462,6 +506,9 @@ const showWorldBooks = ref(false)
 const customThemes = ref([])
 const customThemeCSS = ref('')
 const customThemeName = ref('')
+const schedules = ref([])
+const showAddSchedule = ref(false)
+const newSchedule = ref({ label: '', cron_hour: 8, cron_minute: 0, prompt_hint: '' })
 
 function loadCustomThemes() {
     const saved = localStorage.getItem(`chat_custom_themes_${personaId}`)
@@ -567,6 +614,47 @@ const currentStatusDesc = computed(() => {
     }
     return '忙碌中'
 })
+
+async function loadSchedules() {
+    try {
+        const res = await api(`/api/persona-schedules/${personaId}`)
+        schedules.value = await res.json()
+    } catch { }
+}
+
+async function addSchedule() {
+    if (!newSchedule.value.label || !newSchedule.value.prompt_hint) return
+    try {
+        await api(`/api/persona-schedules/${personaId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...newSchedule.value, personaId })
+        })
+        newSchedule.value = { label: '', cron_hour: 8, cron_minute: 0, prompt_hint: '' }
+        showAddSchedule.value = false
+        await loadSchedules()
+        saveMsg.value = '日程已添加 ✓'
+        setTimeout(() => { saveMsg.value = '' }, 2000)
+    } catch { }
+}
+
+async function saveSchedule(sch) {
+    try {
+        await api(`/api/persona-schedules/${sch.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: sch.enabled })
+        })
+    } catch { }
+}
+
+async function deleteSchedule(idx, sch) {
+    if (!confirm(`删除日程"${sch.label}"？`)) return
+    try {
+        if (sch.id) await api(`/api/persona-schedules/${sch.id}`, { method: 'DELETE' })
+        schedules.value.splice(idx, 1)
+    } catch { }
+}
 
 async function loadDetail() {
     try {
@@ -759,6 +847,7 @@ onMounted(() => {
     loadWorldBooks()
     loadCustomThemes()
     loadPersonaStatus()
+    loadSchedules()
 })
 </script>
 
@@ -1436,5 +1525,103 @@ onMounted(() => {
 
 .action-btn:active {
     transform: scale(0.97);
+}
+
+.schedule-item {
+    gap: 8px;
+}
+
+.schedule-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #D9A3AF;
+}
+
+.schedule-del {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(217, 163, 175, 0.15);
+    border: none;
+    color: #D9A3AF;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.modal-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-box {
+    background: #fffbfa;
+    border-radius: 22px;
+    padding: 24px 20px;
+    width: calc(100% - 48px);
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #4A3F41;
+}
+
+.modal-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(217, 163, 175, 0.3);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    color: #4A3F41;
+    box-sizing: border-box;
+    outline: none;
+    resize: none;
+}
+
+.modal-row {
+    display: flex;
+    gap: 8px;
+}
+
+.modal-input.half {
+    width: 50%;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.modal-btn {
+    padding: 8px 18px;
+    border-radius: 12px;
+    border: none;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.modal-btn.cancel {
+    background: rgba(217, 163, 175, 0.15);
+    color: #B8A9AC;
+}
+
+.modal-btn.confirm {
+    background: linear-gradient(135deg, #E8C0C9, #d4899e);
+    color: white;
 }
 </style>

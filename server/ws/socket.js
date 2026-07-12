@@ -30,7 +30,9 @@ function initWebSocket(server) {
       try {
         const msg = JSON.parse(data);
         if (msg.type === "chat") {
-          await handleChat(msg.content, ws, msg.personaId, msg.isBeta);
+          // 传 clients 而不是 ws，这样即使原来那个连接断了
+          // 还能通过其他活跃连接把结果送出去
+          await handleChat(msg.content, ws, msg.personaId, msg.isBeta, clients);
         }
       } catch (err) {
         console.error("消息处理错误:", err);

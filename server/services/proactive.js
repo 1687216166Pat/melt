@@ -362,10 +362,22 @@ async function generateDrivenMessage(personaId, intent) {
   }
 }
 
+async function handleProactiveMessage(personaId, hintContent) {
+  try {
+    const { handleChat } = require("./ai");
+    await handleChat(hintContent, null, personaId, false, null, {
+      proactive: true,
+    });
+  } catch (e) {
+    console.error("[主动消息] 触发失败:", e.message);
+  }
+}
+
 module.exports = {
   checkProactiveMessages,
   getProactiveSettings,
   setProactiveSettings,
   pulseOnUserMessage,
   getDriveState,
+  handleProactiveMessage,
 };

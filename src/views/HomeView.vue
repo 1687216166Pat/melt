@@ -574,7 +574,7 @@
                         <div class="slider-card-v8 stats-card focusable-card" @click="toggleChatStatLocal">
                             <span class="s-title">聊天统计 · {{ (recentPersona || currentAi).note || (recentPersona ||
                                 currentAi).name
-                                }}</span>
+                            }}</span>
                             <div class="s-value">{{ chatStatDisplay.v }}</div>
                             <span class="s-sub">{{ chatStatDisplay.l }}</span>
                             <div class="s-dots">
@@ -774,7 +774,7 @@
                             <span class="p-msg">{{ recentPersona?.lastMessage || leftBubbleText }}</span>
                         </div>
                         <span class="p-time">{{ recentPersona?.lastMessageTime ? formatLastTime(recentPersona) : '刚刚'
-                            }}</span>
+                        }}</span>
                     </div>
 
                 </div>
@@ -914,7 +914,7 @@
                                         <span v-else>{{ contextMenu.persona?.avatar || '💬' }}</span>
                                     </div>
                                     <span class="ctx-name">{{ contextMenu.persona?.note || contextMenu.persona?.name
-                                        }}</span>
+                                    }}</span>
                                 </div>
                                 <div class="ctx-divider"></div>
                                 <button class="ctx-item" @click="pinFromMenu(contextMenu.persona?.id)">
@@ -1097,7 +1097,7 @@
                                     class="dp-input dp-edit-input" @blur="saveEditEvent(selectedDay, i)"
                                     @keyup.enter="saveEditEvent(selectedDay, i)" />
                                 <span v-else class="dp-event-text" @click="startEditEvent(i, ev.text)">{{ ev.text
-                                    }}</span>
+                                }}</span>
                                 <button class="dp-event-del" @click="removeEvent(selectedDay, i)">×</button>
                             </div>
                         </template>
@@ -1803,7 +1803,7 @@ function setDayStatus(day, status) {
     setTimeout(() => { showSaveToast.value = false }, 1500)
 }
 
-function addEvent() {
+async function addEvent() {
     if (!newEventText.value.trim() || !selectedDay.value) return
     const key = getDayKey(selectedDay.value)
     const r = calViewMode.value
@@ -1811,6 +1811,23 @@ function addEvent() {
     if (!calendarData.value[key][r]) calendarData.value[key][r] = { events: [], status: null }
     calendarData.value[key][r].events.push({ id: Date.now(), text: newEventText.value.trim() })
     localStorage.setItem('calendar_data', JSON.stringify(calendarData.value))
+
+    // 同步到数据库（只同步 user 视角的日程供 AI 感知）
+    if (r === 'user') {
+        try {
+            const dateStr = `${calYear.value}-${String(calMonth.value + 1).padStart(2, '0')}-${String(selectedDay.value).padStart(2, '0')}`
+            await api('/api/calendar-events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: newEventText.value.trim(),
+                    start_time: dateStr + 'T00:00:00',
+                    source: 'manual'
+                })
+            })
+        } catch { }
+    }
+
     newEventText.value = ''
     showSaveToast.value = true
     setTimeout(() => { showSaveToast.value = false }, 1500)

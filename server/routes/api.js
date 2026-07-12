@@ -2155,4 +2155,94 @@ router.post("/pending-messages/:personaId/clear", async (req, res) => {
   res.json({ success: true });
 });
 
+// 获取日程
+router.get("/persona-schedules/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { data } = await db
+    .from("persona_schedules")
+    .select("*")
+    .eq("persona_id", req.params.personaId)
+    .order("cron_hour", { ascending: true });
+  res.json(data || []);
+});
+
+// 新增日程
+router.post("/persona-schedules/:personaId", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { label, cron_hour, cron_minute, prompt_hint, days_of_week } = req.body;
+  const { data, error } = await db
+    .from("persona_schedules")
+    .insert({
+      persona_id: req.params.personaId,
+      label,
+      cron_hour,
+      cron_minute: cron_minute || 0,
+      prompt_hint,
+      days_of_week: days_of_week || [0, 1, 2, 3, 4, 5, 6],
+      enabled: true,
+    })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
+});
+
+// 更新日程
+router.put("/persona-schedules/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { enabled, label, cron_hour, cron_minute, prompt_hint } = req.body;
+  const payload = {};
+  if (enabled !== undefined) payload.enabled = enabled;
+  if (label) payload.label = label;
+  if (cron_hour !== undefined) payload.cron_hour = cron_hour;
+  if (cron_minute !== undefined) payload.cron_minute = cron_minute;
+  if (prompt_hint) payload.prompt_hint = prompt_hint;
+  await db.from("persona_schedules").update(payload).eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+// 删除日程
+router.delete("/persona-schedules/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("persona_schedules").delete().eq("id", req.params.id);
+  res.json({ success: true });
+});
+
+router.post('/calendar-events', async (req, res) => {
+    const { getDB } = require('../db/index');
+    const db = getDB();
+    const { title, start_time, end_time, notes } = req.body;
+    const { data, error } = await db.from('user_calendar_events').insert({
+        title,
+        start_time: start_time || null,
+        end_time: end_time || null,
+        notes: notes || '',
+        source: 'manual',
+    }).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
+});
+
+router.get('/calendar-events', async (req, res) => {
+    const { getDB } = require('../db/index');
+    const db = getDB();
+    const { from, to } = req.query;
+    let query = db.from('user_calendar_events').select('*').order('start_time', { ascending: true });
+    if (from) query = query.gte('start_time', from);
+    if (to) query = query.lte('start_time', to);
+    const { data } = await query;
+    res.json(data || []);
+});
+
+router.delete('/calendar-events/:id', async (req, res) => {
+    const { getDB } = require('../db/index');
+    const db = getDB();
+    await db.from('user_calendar_events').delete().eq('id', req.params.id);
+    res.json({ success: true });
+});
+
 module.exports = router;
