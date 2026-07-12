@@ -162,7 +162,8 @@ onUnmounted(() => {
 <style scoped>
 .phone-screen {
     width: 100%;
-    height: 100vh;
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -171,7 +172,7 @@ onUnmounted(() => {
     box-sizing: border-box;
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    /* padding-bottom 去掉，让各页面自己处理 */
 }
 
 .phone-screen.morning {
