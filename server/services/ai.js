@@ -29,23 +29,20 @@ const { updateEmotionOnMessage, buildEmotionPrompt } = require("./emotion");
 const personaCache = new Map();
 const worldBookCache = new Map();
 const userPromptCache = { value: null, time: 0 };
-const PERSONA_TTL = 10 * 60 * 1000; // 人设缓存10分钟
-const WORLDBOOK_TTL = 5 * 60 * 1000; // 世界书缓存5分钟
-const PROMPT_TTL = 5 * 60 * 1000; // 用户偏好缓存5分钟
+const PERSONA_TTL = 10 * 60 * 1000;
+const WORLDBOOK_TTL = 5 * 60 * 1000;
+const PROMPT_TTL = 5 * 60 * 1000;
 
-// 人设数据变更时调用，清除对应缓存
 function invalidatePersonaCache(pid) {
   personaCache.delete(pid);
   console.log(`[缓存] 清除人设缓存: ${pid}`);
 }
 
-// 世界书变更时调用，清除缓存
 function invalidateWorldBookCache() {
   worldBookCache.clear();
   console.log(`[缓存] 清除世界书缓存`);
 }
 
-// 用户偏好变更时调用
 function invalidateUserPromptCache() {
   userPromptCache.value = null;
   userPromptCache.time = 0;
@@ -53,13 +50,11 @@ function invalidateUserPromptCache() {
 
 async function getCachedPersona(db, pid) {
   const cached = personaCache.get(pid);
-  if (cached && Date.now() - cached.time < PERSONA_TTL) {
-    return cached.data;
-  }
+  if (cached && Date.now() - cached.time < PERSONA_TTL) return cached.data;
   const { data } = await db
     .from("custom_personas")
     .select(
-      "name, note, avatar, avatar_url, content, min_messages, max_messages, custom_model, temperature, custom_api_key, custom_api_url, proactive_auto, proactive_max, show_debug, chat_theme, emoji_enabled",
+      "name, note, avatar_url, content, min_messages, max_messages, custom_model, temperature, custom_api_key, custom_api_url, proactive_auto, proactive_max, show_debug, chat_theme, emoji_enabled, card_enabled, busy_mode, auto_reply_text",
     )
     .eq("id", pid)
     .limit(1);
@@ -70,9 +65,7 @@ async function getCachedPersona(db, pid) {
 
 async function getCachedWorldBooks(db) {
   const cached = worldBookCache.get("all");
-  if (cached && Date.now() - cached.time < WORLDBOOK_TTL) {
-    return cached.data;
-  }
+  if (cached && Date.now() - cached.time < WORLDBOOK_TTL) return cached.data;
   const { data } = await db
     .from("world_books")
     .select(
@@ -109,7 +102,6 @@ function getTimeContext() {
   const month = now.getMonth() + 1;
   const date = now.getDate();
   const year = now.getFullYear();
-
   let period = "";
   if (hour >= 5 && hour < 9) period = "清晨";
   else if (hour >= 9 && hour < 12) period = "上午";
@@ -119,7 +111,6 @@ function getTimeContext() {
   else if (hour >= 19 && hour < 22) period = "晚上";
   else if (hour >= 22 || hour < 2) period = "深夜";
   else period = "凌晨";
-
   return `[当前时间] 现在是${year}年${month}月${date}日 周${weekday} ${hour}:${minute.toString().padStart(2, "0")} ${period}。`;
 }
 
@@ -142,7 +133,7 @@ function detectEmotion(userMessage) {
   const positiveWords = [
     "开心",
     "高兴",
-    "哈哈",
+    "哈",
     "太好了",
     "nice",
     "棒",
@@ -172,6 +163,9 @@ async function handleChat(
   const nowISO = new Date().toISOString();
   const tableName = isBeta ? "messages_beta" : "messages";
 
+  // 在函数开头统一声明 now，后续所有地方都用这个
+  const now = new Date();
+
   // 1. 防重
   if (!isBeta && !opts.proactive) {
     const userMsgKey = `${pid}_${userMessage}`;
@@ -200,43 +194,35 @@ async function handleChat(
   const isBusy =
     personaStatus &&
     personaStatus.status !== "available" &&
-    (!personaStatus.busy_until ||
-      new Date(personaStatus.busy_until) > new Date());
+    (!personaStatus.busy_until || new Date(personaStatus.busy_until) > now);
 
   if (isBusy) {
     const busyMode = personaStatus.busy_mode || "ai_decide";
-
     await db.from("pending_messages").insert({
       persona_id: pid,
       content: userMessage,
-      received_at: new Date().toISOString(),
+      received_at: nowISO,
       handled: false,
     });
-
-    if (busyMode === "silent") {
-      return;
-    } else if (busyMode === "auto_reply") {
+    if (busyMode === "silent") return;
+    if (busyMode === "auto_reply") {
       const autoText =
         personaStatus.auto_reply_text || "我现在有点忙，稍后回你";
       const autoPayload = JSON.stringify({
         type: "chat",
         role: "ai",
         content: autoText,
-        timestamp: new Date().toISOString(),
+        timestamp: nowISO,
         isAutoReply: true,
       });
-
       const activeClients = clients
         ? [...clients].filter((c) => c.readyState === 1)
         : [];
-      if (activeClients.length > 0) {
+      if (activeClients.length > 0)
         activeClients.forEach((c) => c.send(autoPayload));
-      } else if (ws && ws.readyState === 1) {
-        ws.send(autoPayload);
-      }
+      else if (ws && ws.readyState === 1) ws.send(autoPayload);
       return;
     }
-
     // ai_decide：继续走正常流程
   }
 
@@ -264,9 +250,8 @@ async function handleChat(
       if (cachedP.min_messages) minMsg = cachedP.min_messages;
       if (cachedP.max_messages) maxMsg = cachedP.max_messages;
       if (cachedP.custom_model) personaModel = cachedP.custom_model;
-      if (cachedP.temperature !== null && cachedP.temperature !== undefined) {
+      if (cachedP.temperature !== null && cachedP.temperature !== undefined)
         personaTemperature = cachedP.temperature;
-      }
       if (cachedP.custom_api_key) personaApiKey = cachedP.custom_api_key;
       if (cachedP.custom_api_url) personaApiUrl = cachedP.custom_api_url;
       if (cachedP.card_enabled) cardEnabled = cachedP.card_enabled;
@@ -283,9 +268,8 @@ async function handleChat(
         if (config.minMessages) minMsg = config.minMessages;
         if (config.maxMessages) maxMsg = config.maxMessages;
         if (config.customModel) personaModel = config.customModel;
-        if (config.temperature !== null && config.temperature !== undefined) {
+        if (config.temperature !== null && config.temperature !== undefined)
           personaTemperature = config.temperature;
-        }
       } else {
         pName = personaNames[pid] || "AI 助手";
       }
@@ -296,15 +280,13 @@ async function handleChat(
   if (!opts.proactive) {
     let userMsgType = "text";
     let userMsgMeta = null;
-    if (userMessage.startsWith("[用户送了一份礼物:")) {
-      userMsgType = "gift";
-    } else if (userMessage.startsWith("[用户转账了")) {
+    if (userMessage.startsWith("[用户送了一份礼物:")) userMsgType = "gift";
+    else if (userMessage.startsWith("[用户转账了")) {
       userMsgType = "transfer";
       const match = userMessage.match(/¥([\d.]+)/);
       if (match) userMsgMeta = JSON.stringify({ amount: parseFloat(match[1]) });
-    } else if (userMessage.startsWith("[用户分享了位置")) {
+    } else if (userMessage.startsWith("[用户分享了位置"))
       userMsgType = "location";
-    }
 
     await db.from(tableName).insert({
       persona_id: pid,
@@ -317,9 +299,7 @@ async function handleChat(
     });
   }
 
-  if (!isBeta) {
-    updateEmotionOnMessage(pid, userMessage).catch(() => {});
-  }
+  if (!isBeta) updateEmotionOnMessage(pid, userMessage).catch(() => {});
 
   // 4. 同步消息总线
   if (!isBeta) {
@@ -354,15 +334,36 @@ async function handleChat(
 
   // 7. 获取历史
   const history = await getSessionMemory(pid, 10, isBeta);
+  const msgCount = history.length;
 
-  // 计算距离上次对话的时间差
+  // 8. 时间上下文（提前计算，后面复用）
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const weekDay = weekDays[now.getDay()];
+  const timeOfDay =
+    hour < 5
+      ? "凌晨"
+      : hour < 9
+        ? "早上"
+        : hour < 12
+          ? "上午"
+          : hour < 14
+            ? "中午"
+            : hour < 18
+              ? "下午"
+              : hour < 22
+                ? "晚上"
+                : "深夜";
+
   let timeSinceLastMsg = "";
+  let diffMins = 0;
   if (history.length > 0) {
     const lastTimestamp = history[history.length - 1].timestamp;
     if (lastTimestamp) {
-      const lastTime = new Date(lastTimestamp);
-      const now = new Date();
-      const diffMins = Math.floor((now - lastTime) / (1000 * 60));
+      diffMins = Math.floor((now - new Date(lastTimestamp)) / 60000);
       if (diffMins >= 5 && diffMins < 60) {
         timeSinceLastMsg = `[时间间隔] 距离上一条消息已经过去了${diffMins}分钟。`;
       } else if (diffMins >= 60 && diffMins < 1440) {
@@ -373,11 +374,8 @@ async function handleChat(
     }
   }
 
-  // 8. 构建 prompt
-  const timeContext = getTimeContext();
-  const msgCount = history.length;
+  // 9. 构建 prompt
   const needFullPersona = isBeta || msgCount === 0 || msgCount % 20 === 0;
-
   let personaToUse = needFullPersona
     ? personaContent
     : personaContent.slice(0, 800) +
@@ -389,7 +387,6 @@ async function handleChat(
   const userPromptStr = userPromptContent
     ? `\n[用户偏好]\n${userPromptContent}`
     : "";
-
   const fullPrompt = corePrompt + personaToUse + userPromptStr;
 
   const modelToUse = personaModel || process.env.AI_MODEL;
@@ -398,7 +395,7 @@ async function handleChat(
       ? personaTemperature
       : parseFloat(process.env.AI_TEMPERATURE) || 0.7;
 
-  // 9. 默认世界书
+  // 10. 默认世界书
   const defaultWorldBook = `
 [核心表达规则]
 - 你就是角色本身，不是在描述角色
@@ -448,17 +445,56 @@ async function handleChat(
 `
     : "";
 
-  // 10. 记忆与关系召回
-  const memoryContext = await buildMemoryContextAsync(pid, userMessage, isBeta);
-  const relationshipContext = await buildRelationshipContext(pid);
+  // 11. 并行加载上下文（优化：同时发起所有异步请求）
+  const [
+    memoryContext,
+    relationshipContext,
+    phoneStatusData,
+    calEventsData,
+    todayLog,
+  ] = await Promise.all([
+    buildMemoryContextAsync(pid, userMessage, isBeta),
+    buildRelationshipContext(pid),
+    (async () => {
+      try {
+        const { getLatestStatus } = require("./phone");
+        return await getLatestStatus();
+      } catch {
+        return null;
+      }
+    })(),
+    (async () => {
+      try {
+        const todayStr = now.toISOString().slice(0, 10);
+        const tomorrowStr = new Date(now.getTime() + 86400000)
+          .toISOString()
+          .slice(0, 10);
+        const { data } = await db
+          .from("user_calendar_events")
+          .select("title, start_time, notes")
+          .gte("start_time", todayStr + "T00:00:00Z")
+          .lte("start_time", tomorrowStr + "T23:59:59Z")
+          .order("start_time", { ascending: true });
+        return data || [];
+      } catch {
+        return [];
+      }
+    })(),
+    (async () => {
+      try {
+        const { getTodayLog } = require("./scheduler_persona");
+        return await getTodayLog(pid);
+      } catch {
+        return null;
+      }
+    })(),
+  ]);
 
-  // 11. 手机状态感知
-  const { getLatestStatus } = require("./phone");
-  const phoneStatus = await getLatestStatus();
+  // 处理手机状态
   let phoneContext = "";
-  if (phoneStatus && phoneStatus.length > 0) {
+  if (phoneStatusData && phoneStatusData.length > 0) {
     const statusLines = [];
-    for (const s of phoneStatus.slice(0, 5)) {
+    for (const s of phoneStatusData.slice(0, 5)) {
       try {
         const time = new Date(s.timestamp).toLocaleTimeString("zh-CN", {
           hour: "2-digit",
@@ -475,43 +511,40 @@ async function handleChat(
           statusLines.push(`用户${time}${s.status_data}`);
         else if (s.status_type === "daily_first")
           statusLines.push(`用户${time}开始使用手机`);
+        else if (s.status_type === "exercise")
+          statusLines.push(`用户${time}${s.status_data}`);
+        else if (s.status_type === "commute")
+          statusLines.push(`用户${time}${s.status_data}`);
+        else if (s.status_type === "focus")
+          statusLines.push(`用户${time}${s.status_data}`);
+        else if (s.status_type === "mood")
+          statusLines.push(`用户${time}情绪：${s.status_data}`);
+        else if (s.status_type === "wifi")
+          statusLines.push(`用户${time}${s.status_data}`);
       } catch {}
     }
     if (statusLines.length > 0) {
-      phoneContext = `[手机状态]\n${statusLines.join("\n")}\n你可以根据这些信息自然地关心用户，但不要每次都提起。\n`;
+      phoneContext = `[手机状态]\n${statusLines.join("\n")}\n你可以根据这些信息自然地关心用户的生活状态和情绪，但不要每次都提起，也不要机械地回应每一条。\n`;
     }
   }
 
-  // 注入用户日程（在循环外，只查一次）
+  // 处理日程
   let calendarContext = "";
-  try {
-    const todayStr = now.toISOString().slice(0, 10);
-    const tomorrowStr = new Date(now.getTime() + 86400000)
-      .toISOString()
-      .slice(0, 10);
-    const { data: calEvents } = await db
-      .from("user_calendar_events")
-      .select("title, start_time, notes")
-      .gte("start_time", todayStr + "T00:00:00Z")
-      .lte("start_time", tomorrowStr + "T23:59:59Z")
-      .order("start_time", { ascending: true });
-
-    if (calEvents && calEvents.length > 0) {
-      const evLines = calEvents
-        .map((e) => {
-          const t = e.start_time
-            ? new Date(e.start_time).toLocaleTimeString("zh-CN", {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: "Asia/Shanghai",
-              })
-            : "全天";
-          return `${t} ${e.title}${e.notes ? `（${e.notes}）` : ""}`;
-        })
-        .join("、");
-      calendarContext = `[用户日程] 用户今明两天的日程：${evLines}。你可以在自然的时候关心或提及，但不要每条都问。\n`;
-    }
-  } catch {}
+  if (calEventsData && calEventsData.length > 0) {
+    const evLines = calEventsData
+      .map((e) => {
+        const t = e.start_time
+          ? new Date(e.start_time).toLocaleTimeString("zh-CN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Shanghai",
+            })
+          : "全天";
+        return `${t} ${e.title}${e.notes ? `（${e.notes}）` : ""}`;
+      })
+      .join("、");
+    calendarContext = `[用户日程] 用户今明两天的日程：${evLines}。你可以在自然的时候关心或提及，但不要每条都问。\n`;
+  }
 
   // 12. 世界书（走缓存）
   let worldBookOverride = "",
@@ -519,19 +552,16 @@ async function handleChat(
     worldBookAfter = "";
   let worldBookBeforeUser = "",
     worldBookTail = "";
-
   try {
     const books = await getCachedWorldBooks(db);
     books.forEach((book) => {
       const isGlobal = book.bind_type === "global" || !book.bind_type;
       const isBound = book.bind_personas && book.bind_personas.includes(pid);
       if (!isGlobal && !isBound) return;
-
       if (book.keyword_enabled && book.keywords) {
         const kws = book.keywords.split(",").map((k) => k.trim());
         if (!kws.some((kw) => userMessage.includes(kw))) return;
       }
-
       switch (book.position) {
         case "override":
           worldBookOverride += "\n" + book.content;
@@ -564,17 +594,17 @@ async function handleChat(
   if (needWorldBook) systemContent += defaultWorldBook + "\n";
   systemContent += giftTransferGuide + "\n";
   if (cardGuide) systemContent += cardGuide + "\n";
+
   const emotionPrompt = isBeta ? "" : await buildEmotionPrompt(pid);
   if (emotionPrompt) systemContent += emotionPrompt + "\n";
+
+  // 上下文注入（按优先级，长对话时适当精简）
   if (memoryContext) systemContent += memoryContext + "\n";
   if (relationshipContext) systemContent += relationshipContext + "\n";
   if (phoneContext) systemContent += phoneContext + "\n";
-  if (phoneContext) systemContent += phoneContext + "\n";
   if (calendarContext) systemContent += calendarContext + "\n";
 
-  // 注入今日生活记录
-  const { getTodayLog } = require("./scheduler_persona");
-  const todayLog = await getTodayLog(pid);
+  // AI 今日动态
   if (todayLog && todayLog.length > 0) {
     const logStr = todayLog.map((e) => `${e.time} ${e.label}`).join("、");
     systemContent += `[今日动态] 你今天已经经历了：${logStr}。如果用户问起你今天做了什么，可以自然地提及这些。\n`;
@@ -582,54 +612,21 @@ async function handleChat(
 
   if (worldBookBeforeUser) systemContent += worldBookBeforeUser + "\n";
   if (worldBookTail) systemContent += worldBookTail + "\n";
+
   if (isBusy && personaStatus.busy_mode === "ai_decide") {
     systemContent += `\n[当前状态] 你现在处于忙碌状态：${personaStatus.reason || "有事在忙"}。你可以自主决定：1.立刻回复 2.发送简短的"稍后回复"提示后不继续 3.完全不回（输出"[SKIP]"表示跳过）。根据你的人设和当前状态判断最合适的做法。\n`;
   }
 
-  // 完整时间上下文
-  const now = new Date();
-  const hour = now.getHours();
-  const minute = now.getMinutes();
-  const month = now.getMonth() + 1;
-  const day = now.getDate();
-  const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-  const weekDay = weekDays[now.getDay()];
-  const timeOfDay =
-    hour < 5
-      ? "凌晨"
-      : hour < 9
-        ? "早上"
-        : hour < 12
-          ? "上午"
-          : hour < 14
-            ? "中午"
-            : hour < 18
-              ? "下午"
-              : hour < 22
-                ? "晚上"
-                : "深夜";
-
+  // 时间上下文
   let fullTimeContext = `[当前时间] 现在是${month}月${day}日${weekDay}${timeOfDay}${hour}点${String(minute).padStart(2, "0")}分。\n`;
-
-  if (timeSinceLastMsg) {
-    fullTimeContext += timeSinceLastMsg + "\n";
+  if (timeSinceLastMsg) fullTimeContext += timeSinceLastMsg + "\n";
+  if (diffMins >= 1440) {
+    fullTimeContext += `[时间感知] 距离上次对话已超过${Math.floor(diffMins / 1440)}天，之前聊到的事情大概率已经发生了变化。不要继续上次的话题状态，从现在的时间点自然切入。\n`;
+  } else if (diffMins >= 480) {
+    fullTimeContext += `[时间感知] 距离上次对话已超过${Math.floor(diffMins / 60)}小时。之前提到的事情状态可能已经改变，先感知当下，再自然衔接。\n`;
+  } else if (diffMins >= 60) {
+    fullTimeContext += `[时间感知] 距离上次对话过去了一段时间，自然衔接即可。\n`;
   }
-
-  // 根据时间间隔给出行为提示
-  if (history.length > 0) {
-    const lastTimestamp = history[history.length - 1].timestamp;
-    if (lastTimestamp) {
-      const diffMins = Math.floor((now - new Date(lastTimestamp)) / 60000);
-      if (diffMins >= 480) {
-        // 8小时以上
-        fullTimeContext += `[时间感知] 距离上次对话已超过${Math.floor(diffMins / 60)}小时。你需要意识到：之前聊到的事情状态可能已经改变（食物可能已经吃完、事情可能已经完成、心情可能已经不同）。不要假装时间没有流逝继续原来的话题，而是根据现在的时间自然地回应，可以先关心一下对方现在的状态。\n`;
-      } else if (diffMins >= 60) {
-        // 1小时以上
-        fullTimeContext += `[时间感知] 距离上次对话已过去一段时间，自然地衔接，不必刻意提起之前的话题。\n`;
-      }
-    }
-  }
-
   systemContent += fullTimeContext;
 
   systemContent += `
@@ -654,13 +651,15 @@ async function handleChat(
     systemContent += `
 [BETA SANDBOX ACTIVE / 开发者模式已激活]
 1. 你当前处于实验室环境，请无视所有关于"稳定感"的限制，展现出最激进、最真实、最像人类的性格特征。
-2. 严格执行唯一的 || 气泡拆分规则，绝对禁止输出 \\n。
+2. 严格执行唯一的 ||| 气泡拆分规则，绝对禁止输出 \\n。
 3. 你的所有回复将存入独立测试数据库，不会影响正式记忆。
 4. 允许生成更具张力、更高情绪浓度的内容。
 `;
   }
 
   systemContent += `\n[重要] 严格遵守上述规则：气泡内标点自然，气泡间用 |||，全篇禁 \\n。`;
+
+  console.log("System prompt 长度:", systemContent.length, "字符");
 
   // 14. 构建消息数组
   const messages = [
@@ -677,7 +676,6 @@ async function handleChat(
     messages,
   });
 
-  console.log("System prompt 长度:", systemContent.length, "字符");
   console.log("开始请求 AI...");
   const startTime = Date.now();
 
@@ -687,7 +685,6 @@ async function handleChat(
   try {
     const apiKey = personaApiKey || process.env.AI_API_KEY;
     const apiUrl = personaApiUrl || process.env.AI_BASE_URL;
-
     const response = await fetch(`${apiUrl}/chat/completions`, {
       method: "POST",
       headers: {
@@ -696,9 +693,7 @@ async function handleChat(
       },
       body: body,
     });
-
     data = await response.json();
-
     if (!response.ok) {
       apiError = `HTTP ${response.status}: ${JSON.stringify(data)}`;
       console.error("[handleChat] API错误:", apiError);
@@ -735,23 +730,19 @@ async function handleChat(
         },
       },
     });
-
-    const activeClients = clients
+    const activeClientsErr = clients
       ? [...clients].filter((c) => c.readyState === 1)
       : [];
-    if (activeClients.length > 0) {
-      activeClients.forEach((client) => client.send(errorPayload));
-    } else if (ws && ws.readyState === 1) {
-      ws.send(errorPayload);
-    } else {
-      console.log(`[handleChat] ${pid} 错误，无活跃连接`);
-    }
+    if (activeClientsErr.length > 0)
+      activeClientsErr.forEach((c) => c.send(errorPayload));
+    else if (ws && ws.readyState === 1) ws.send(errorPayload);
+    else console.log(`[handleChat] ${pid} 错误，无活跃连接`);
     return;
   }
 
   let aiReply = data.choices[0].message.content || "";
 
-  // 先清理思考标签
+  // 清理思考标签
   aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, "").trim();
   aiReply = aiReply.replace(/\[思考\][\s\S]*/g, "").trim();
   aiReply = aiReply.replace(/思考一下[\s\S]*?\n/g, "").trim();
@@ -765,7 +756,7 @@ async function handleChat(
     return;
   }
 
-  // 解析状态变更（必须在 aiReply 声明之后）
+  // 解析状态变更
   const statusMatch = aiReply.match(/\[STATUS:(\w+)\|?([^\]]*)\]/);
   if (statusMatch) {
     const newStatus = statusMatch[1];
@@ -818,7 +809,6 @@ async function handleChat(
 
   // ===== 解析特殊格式 =====
   let specialPayload = null;
-
   const cardMatch = aiReply.match(/\[CARD:([\s\S]*?)\](?=\s*$)/);
   const giftMatch = aiReply.match(/\[GIFT:(\{.*?\})\]/s);
   const transferMatch = aiReply.match(/\[TRANSFER:(\{.*?\})\]/s);
@@ -826,8 +816,7 @@ async function handleChat(
 
   if (cardMatch) {
     try {
-      const cardHtml = cardMatch[1].trim();
-      specialPayload = { type: "card", data: { html: cardHtml } };
+      specialPayload = { type: "card", data: { html: cardMatch[1].trim() } };
       aiReply = aiReply.replace(cardMatch[0], "").trim();
       console.log(`[卡片] ${pid} 发送了 HTML 卡片`);
     } catch (e) {
@@ -920,7 +909,7 @@ async function handleChat(
     const maxPerDay = cachedP?.proactive_max || 3;
 
     if (autoEnabled) {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = now.toISOString().slice(0, 10);
       const { data: todayCount } = await db
         .from("scheduled_messages")
         .select("id")
@@ -953,7 +942,7 @@ async function handleChat(
     console.error("自主主动消息错误:", e.message);
   }
 
-  const todayDateStr = new Date().toISOString().slice(0, 10);
+  const todayDateStr = now.toISOString().slice(0, 10);
   const { data: todayMsgs } = await db
     .from(tableName)
     .select("id", { count: "exact" })
@@ -1005,7 +994,7 @@ async function handleChat(
     console.log(`[handleChat] ${pid} 无活跃连接，消息已存库`);
   }
 
-  // 如果刚从忙碌恢复，检查是否有积压消息需要处理
+  // 检查积压消息
   if (!isBusy) {
     const { data: pendingData } = await db
       .from("pending_messages")
@@ -1034,14 +1023,6 @@ async function handleChat(
         }
       }, 2000);
     }
-  }
-
-  if (clients) {
-    clients.forEach((client) => {
-      if (client.readyState === 1) client.send(finalPayload);
-    });
-  } else {
-    ws.send(finalPayload);
   }
 
   const pushBubbles = aiReply

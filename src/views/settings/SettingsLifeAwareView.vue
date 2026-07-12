@@ -105,11 +105,30 @@ function formatTime(ts) {
 }
 
 const triggers = [
-    { type: 'sleep', emoji: '🌙', label: '睡觉时', desc: '上报入睡状态', body: 'type:sleep', color: 'rgba(216,205,234,0.3)' },
-    { type: 'wake', emoji: '☀️', label: '起床时', desc: '上报起床状态', body: 'type:wake', color: 'rgba(245,234,208,0.3)' },
-    { type: 'low_battery', emoji: '🔋', label: '电量低于20%', desc: '上报低电量', body: 'type:low_battery', color: 'rgba(232,192,201,0.3)' },
-    { type: 'app_open', emoji: '📱', label: '打开某个App', desc: '上报当前活动', body: 'type:app_open', color: 'rgba(152,203,234,0.3)' },
-    { type: 'wifi', emoji: '📶', label: '连接WiFi', desc: '上报位置变化', body: 'type:wifi', color: 'rgba(152,203,234,0.2)' },
+    { type: 'sleep', emoji: '🌙', label: '睡觉时', desc: '上报入睡状态', body: 'type:sleep, data:入睡', color: 'rgba(216,205,234,0.3)' },
+    { type: 'wake', emoji: '☀️', label: '起床时', desc: '上报起床状态', body: 'type:wake, data:醒来', color: 'rgba(245,234,208,0.3)' },
+    { type: 'low_battery', emoji: '🔋', label: '电量低于20%', desc: '上报低电量', body: 'type:battery, data:低电量', color: 'rgba(232,192,201,0.3)' },
+    { type: 'app_open', emoji: '📱', label: '打开某个App', desc: '上报当前活动', body: 'type:app, data:打开微信', color: 'rgba(152,203,234,0.3)' },
+    { type: 'wifi', emoji: '📶', label: '连接WiFi', desc: '上报位置变化', body: 'type:wifi, data:连接到家里WiFi', color: 'rgba(152,203,234,0.2)' },
+
+    // 新增：运动
+    { type: 'exercise_start', emoji: '🏃', label: '开始运动', desc: '开始跑步、健身', body: 'type:exercise, data:开始跑步', color: 'rgba(168,213,162,0.3)' },
+    { type: 'exercise_end', emoji: '💪', label: '运动结束', desc: '完成锻炼', body: 'type:exercise, data:跑步结束', color: 'rgba(168,213,162,0.25)' },
+
+    // 新增：通勤
+    { type: 'commute_leave', emoji: '🚶', label: '出门上班/上学', desc: '离开家', body: 'type:commute, data:出门上班', color: 'rgba(245,193,122,0.3)' },
+    { type: 'commute_arrive', emoji: '🏢', label: '到达公司/学校', desc: '到达目的地', body: 'type:commute, data:到公司了', color: 'rgba(245,193,122,0.25)' },
+    { type: 'commute_home', emoji: '🏠', label: '下班回家', desc: '结束工作', body: 'type:commute, data:下班回家', color: 'rgba(245,193,122,0.2)' },
+
+    // 新增：工作/学习
+    { type: 'focus_start', emoji: '💻', label: '开始专注', desc: '进入工作/学习状态', body: 'type:focus, data:开始工作', color: 'rgba(184,160,200,0.3)' },
+    { type: 'focus_break', emoji: '☕', label: '休息时间', desc: '暂时休息', body: 'type:focus, data:休息一下', color: 'rgba(184,160,200,0.2)' },
+    { type: 'focus_end', emoji: '✅', label: '结束工作', desc: '完成今天的任务', body: 'type:focus, data:工作结束', color: 'rgba(184,160,200,0.25)' },
+
+    // 新增：情绪
+    { type: 'mood_good', emoji: '😊', label: '心情不错', desc: '感觉开心', body: 'type:mood, data:心情不错', color: 'rgba(255,233,237,0.4)' },
+    { type: 'mood_tired', emoji: '😴', label: '累了', desc: '感到疲惫', body: 'type:mood, data:好累', color: 'rgba(212,200,202,0.3)' },
+    { type: 'mood_stress', emoji: '😓', label: '压力大', desc: '感到压力', body: 'type:mood, data:压力有点大', color: 'rgba(232,192,201,0.25)' },
 ]
 
 const steps = [

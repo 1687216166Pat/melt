@@ -1945,39 +1945,19 @@ router.get("/map-paths/:mapId", async (req, res) => {
 
 // AI 生成地图图片
 router.post("/map-generate", async (req, res) => {
+  console.log("[API] /api/map-generate 收到请求:", req.body);
   const { prompt, style } = req.body;
-  const apiKey = process.env.AI_API_KEY;
-  const baseUrl = process.env.AI_BASE_URL || "https://api.openai.com/v1";
+  if (!prompt) return res.status(400).json({ error: "缺少 prompt" });
 
-  const styleGuide =
-    style === "fantasy"
-      ? "fantasy map style, hand-drawn, parchment texture"
-      : style === "cute"
-        ? "cute pastel illustrated map, kawaii style, soft colors"
-        : "simple clean 2D map illustration, minimal style";
+  const { generateMapSVG } = require("../services/map_gen");
+  const url = await generateMapSVG(prompt, style);
 
-  try {
-    const response = await fetch(`${baseUrl}/images/generations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt: `A top-down 2D map illustration. ${prompt}. ${styleGuide}. No text labels, no compass rose, suitable as a background map.`,
-        n: 1,
-        size: "1024x1024",
-      }),
-    });
-    const data = await response.json();
-    if (data.data && data.data[0]) {
-      res.json({ url: data.data[0].url });
-    } else {
-      res.status(500).json({ error: "生成失败", detail: data });
-    }
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  if (url) {
+    console.log("[API] 地图生成成功");
+    res.json({ url });
+  } else {
+    console.log("[API] 地图生成失败");
+    res.json({ error: "AI 生成失败，请重试或换个描述" });
   }
 });
 
@@ -2212,37 +2192,44 @@ router.delete("/persona-schedules/:id", async (req, res) => {
   res.json({ success: true });
 });
 
-router.post('/calendar-events', async (req, res) => {
-    const { getDB } = require('../db/index');
-    const db = getDB();
-    const { title, start_time, end_time, notes } = req.body;
-    const { data, error } = await db.from('user_calendar_events').insert({
-        title,
-        start_time: start_time || null,
-        end_time: end_time || null,
-        notes: notes || '',
-        source: 'manual',
-    }).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json(data);
+router.post("/calendar-events", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { title, start_time, end_time, notes } = req.body;
+  const { data, error } = await db
+    .from("user_calendar_events")
+    .insert({
+      title,
+      start_time: start_time || null,
+      end_time: end_time || null,
+      notes: notes || "",
+      source: "manual",
+    })
+    .select()
+    .single();
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data);
 });
 
-router.get('/calendar-events', async (req, res) => {
-    const { getDB } = require('../db/index');
-    const db = getDB();
-    const { from, to } = req.query;
-    let query = db.from('user_calendar_events').select('*').order('start_time', { ascending: true });
-    if (from) query = query.gte('start_time', from);
-    if (to) query = query.lte('start_time', to);
-    const { data } = await query;
-    res.json(data || []);
+router.get("/calendar-events", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  const { from, to } = req.query;
+  let query = db
+    .from("user_calendar_events")
+    .select("*")
+    .order("start_time", { ascending: true });
+  if (from) query = query.gte("start_time", from);
+  if (to) query = query.lte("start_time", to);
+  const { data } = await query;
+  res.json(data || []);
 });
 
-router.delete('/calendar-events/:id', async (req, res) => {
-    const { getDB } = require('../db/index');
-    const db = getDB();
-    await db.from('user_calendar_events').delete().eq('id', req.params.id);
-    res.json({ success: true });
+router.delete("/calendar-events/:id", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+  await db.from("user_calendar_events").delete().eq("id", req.params.id);
+  res.json({ success: true });
 });
 
 module.exports = router;

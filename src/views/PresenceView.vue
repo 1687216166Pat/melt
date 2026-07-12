@@ -692,6 +692,7 @@ async function generateCharMap() {
     if (!aiMapPrompt.value.trim()) { aiError.value = '请描述地图场景'; return }
     aiGenerating.value = true
     aiError.value = ''
+    console.log('[地图生成] 开始生成 Char 地图，prompt:', aiMapPrompt.value)
     try {
         const res = await api('/api/map-generate', {
             method: 'POST',
@@ -704,17 +705,19 @@ async function generateCharMap() {
         } else {
             aiError.value = data.error || '生成失败，请重试'
         }
-    } catch {
+    } catch (e) {
+        console.error('[地图生成] Char 地图请求失败:', e)
         aiError.value = '网络错误，请重试'
     } finally {
         aiGenerating.value = false
     }
 }
 
-async function generateUserMap() {
+async function generateUserMap() {  // 改这里
     if (!aiMapPrompt.value.trim()) { aiError.value = '请描述地图场景'; return }
     aiGenerating.value = true
     aiError.value = ''
+    console.log('[地图生成] 开始生成 User 地图，prompt:', aiMapPrompt.value)
     try {
         const res = await api('/api/map-generate', {
             method: 'POST',
@@ -727,7 +730,8 @@ async function generateUserMap() {
         } else {
             aiError.value = data.error || '生成失败，请重试'
         }
-    } catch {
+    } catch (e) {
+        console.error('[地图生成] User 地图请求失败:', e)
         aiError.value = '网络错误，请重试'
     } finally {
         aiGenerating.value = false
