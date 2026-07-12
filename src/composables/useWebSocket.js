@@ -1,7 +1,7 @@
 import { ref } from "vue";
 
-const MODE = import.meta.env.VITE_APP_MODE || 'personal'
-export const isLocalMode = MODE === 'local' || MODE === 'lite'
+const MODE = import.meta.env.VITE_APP_MODE || "personal";
+export const isLocalMode = MODE === "local" || MODE === "lite";
 
 let socket = null;
 const isConnected = ref(false);
@@ -11,7 +11,7 @@ let lastReceivedTime = 0;
 
 function getWsUrl() {
   if (import.meta.env.PROD) {
-    return "wss://gpt1-production-ba3b.up.railway.app";
+    return "wss://melt-8niy.onrender.com";
   }
   return `ws://${window.location.hostname}:3001`;
 }
