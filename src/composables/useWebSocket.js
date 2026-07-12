@@ -1,7 +1,7 @@
 import { ref } from "vue";
 
-const MODE = typeof __APP_MODE__ !== "undefined" ? __APP_MODE__ : "personal";
-const isLocalMode = MODE === "local" || MODE === "lite";
+const MODE = import.meta.env.VITE_APP_MODE || 'personal'
+export const isLocalMode = MODE === 'local' || MODE === 'lite'
 
 let socket = null;
 const isConnected = ref(false);
