@@ -9,153 +9,200 @@
                     <path d="M19 12H5M12 19l-7-7 7-7" />
                 </svg>
             </button>
-            <span class="settings-title">蓝牙 · API</span>
+            <span class="settings-title">{{ isLocalMode ? 'API 配置' : '蓝牙 · API' }}</span>
             <div style="width:36px;"></div>
         </div>
 
         <div class="sub-content">
 
-            <!-- 主 API -->
-            <div class="section-label-sm">主 API</div>
-            <div class="settings-group">
-                <div v-if="savedConfigs.length > 0" class="config-pills">
-                    <div v-for="(c, idx) in savedConfigs" :key="idx" class="config-pill"
-                        :class="{ active: currentConfigIdx === idx }" @click="selectConfig(idx)">
-                        <span>{{ c.name || c.model || '未命名' }}</span>
-                        <button @click.stop="deleteConfig(idx)">×</button>
+            <!-- 本地模式：简化配置 -->
+            <template v-if="isLocalMode">
+                <div class="section-label-sm">API 配置</div>
+                <div class="settings-group">
+                    <div class="settings-group-item">
+                        <div class="sgi-label">API Key</div>
+                        <input class="sgi-input" v-model="localConfig.apiKey" type="password" placeholder="sk-..." />
                     </div>
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">配置名称</div>
-                    <input class="sgi-input" v-model="apiConfig.name" placeholder="例：主力模型" />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">API Key</div>
-                    <input class="sgi-input" v-model="apiConfig.key" type="password" placeholder="sk-..." />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">API 地址</div>
-                    <input class="sgi-input" v-model="apiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label-wrap">
+                    <div class="settings-group-item">
+                        <div class="sgi-label">API 地址</div>
+                        <input class="sgi-input" v-model="localConfig.apiUrl" placeholder="https://api.openai.com/v1" />
+                    </div>
+                    <div class="settings-group-item">
                         <div class="sgi-label">模型</div>
-                        <div class="sgi-desc">支持任意模型名，含前缀的会自动清理</div>
+                        <input class="sgi-input" v-model="localConfig.model" placeholder="gpt-4o-mini" />
                     </div>
-                    <input class="sgi-input" v-model="apiConfig.model" placeholder="gpt-4o / gemini-pro / ..." />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">温度</div>
-                    <input class="sgi-input" v-model.number="apiConfig.temperature" type="number" min="0" max="2"
-                        step="0.1" placeholder="0.7" style="max-width:80px;" />
-                </div>
-            </div>
-
-            <div class="btn-row">
-                <button class="action-btn primary" @click="saveApiConfig">保存并使用</button>
-                <button class="action-btn ghost" @click="saveAsNewConfig">另存为新配置</button>
-            </div>
-            <div class="btn-row">
-                <button class="action-btn ghost" @click="fetchModels" :disabled="fetchingModels">
-                    {{ fetchingModels ? '获取中...' : '获取模型列表' }}
-                </button>
-                <button class="action-btn ghost" @click="testApiConnection" :disabled="testingApi">
-                    {{ testingApi ? '测试中...' : '测试连接' }}
-                </button>
-            </div>
-
-            <!-- 模型列表 -->
-            <div v-if="modelList.length > 0" class="model-panel">
-                <div class="model-panel-header">
-                    <span class="model-panel-title">{{ modelList.length }} 个可用模型 · 点击选择并保存</span>
-                    <input class="model-search" v-model="modelSearch" placeholder="搜索..." />
-                </div>
-                <div class="model-scroll">
-                    <div v-for="m in filteredModelList" :key="m" class="model-chip"
-                        :class="{ active: apiConfig.model === m }" @click="selectModel(m)">
-                        {{ m }}
+                    <div class="settings-group-item">
+                        <div class="sgi-label">温度</div>
+                        <input class="sgi-input" v-model.number="localConfig.temperature" type="number" min="0" max="2"
+                            step="0.1" placeholder="0.7" style="max-width:80px;" />
                     </div>
                 </div>
-            </div>
 
-            <Transition name="toast-fade">
-                <div v-if="apiTestResult" class="result-bar" :class="apiTestResult.success ? 'success' : 'error'">
-                    {{ apiTestResult.message }}
+                <div class="btn-row">
+                    <button class="action-btn primary" @click="saveLocalConfig">保存</button>
+                    <button class="action-btn ghost" @click="testLocalApi" :disabled="testingApi">
+                        {{ testingApi ? '测试中...' : '测试连接' }}
+                    </button>
                 </div>
-            </Transition>
-            <div v-if="apiSaved" class="save-toast">已保存 ✓</div>
 
-            <!-- 副 API -->
-            <div class="section-label-sm" style="margin-top:28px;">
-                副 API
-                <span class="section-sub-hint">记忆 / 时间线 / 主动消息</span>
-            </div>
-            <div class="settings-group">
-                <div v-if="savedSubConfigs.length > 0" class="config-pills">
-                    <div v-for="(c, idx) in savedSubConfigs" :key="idx" class="config-pill"
-                        :class="{ active: currentSubConfigIdx === idx }" @click="selectSubConfig(idx)">
-                        <span>{{ c.name || c.model || '未命名' }}</span>
-                        <button @click.stop="deleteSubConfig(idx)">×</button>
+                <Transition name="toast-fade">
+                    <div v-if="apiTestResult" class="result-bar" :class="apiTestResult.success ? 'success' : 'error'">
+                        {{ apiTestResult.message }}
+                    </div>
+                </Transition>
+                <div v-if="apiSaved" class="save-toast">已保存 ✓</div>
+
+                <div class="local-hint">
+                    <p>本地模式下，AI 对话直接从你的设备发送到 API，不经过服务器。</p>
+                    <p>支持 OpenAI、Claude、Gemini 等任何兼容 OpenAI 格式的 API。</p>
+                </div>
+            </template>
+
+            <!-- Personal 模式：完整配置 -->
+            <template v-else>
+                <!-- 主 API -->
+                <div class="section-label-sm">主 API</div>
+                <div class="settings-group">
+                    <div v-if="savedConfigs.length > 0" class="config-pills">
+                        <div v-for="(c, idx) in savedConfigs" :key="idx" class="config-pill"
+                            :class="{ active: currentConfigIdx === idx }" @click="selectConfig(idx)">
+                            <span>{{ c.name || c.model || '未命名' }}</span>
+                            <button @click.stop="deleteConfig(idx)">×</button>
+                        </div>
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">配置名称</div>
+                        <input class="sgi-input" v-model="apiConfig.name" placeholder="例：主力模型" />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">API Key</div>
+                        <input class="sgi-input" v-model="apiConfig.key" type="password" placeholder="sk-..." />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">API 地址</div>
+                        <input class="sgi-input" v-model="apiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label-wrap">
+                            <div class="sgi-label">模型</div>
+                            <div class="sgi-desc">支持任意模型名，含前缀的会自动清理</div>
+                        </div>
+                        <input class="sgi-input" v-model="apiConfig.model" placeholder="gpt-4o / gemini-pro / ..." />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">温度</div>
+                        <input class="sgi-input" v-model.number="apiConfig.temperature" type="number" min="0" max="2"
+                            step="0.1" placeholder="0.7" style="max-width:80px;" />
                     </div>
                 </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">配置名称</div>
-                    <input class="sgi-input" v-model="subApiConfig.name" placeholder="例：副模型" />
+
+                <div class="btn-row">
+                    <button class="action-btn primary" @click="saveApiConfig">保存并使用</button>
+                    <button class="action-btn ghost" @click="saveAsNewConfig">另存为新配置</button>
                 </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">API Key</div>
-                    <input class="sgi-input" v-model="subApiConfig.key" type="password" placeholder="sk-..." />
+                <div class="btn-row">
+                    <button class="action-btn ghost" @click="fetchModels" :disabled="fetchingModels">
+                        {{ fetchingModels ? '获取中...' : '获取模型列表' }}
+                    </button>
+                    <button class="action-btn ghost" @click="testApiConnection" :disabled="testingApi">
+                        {{ testingApi ? '测试中...' : '测试连接' }}
+                    </button>
                 </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">API 地址</div>
-                    <input class="sgi-input" v-model="subApiConfig.baseUrl" placeholder="https://api.openai.com/v1" />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label-wrap">
-                        <div class="sgi-label">模型</div>
-                        <div class="sgi-desc">支持任意模型名，含前缀的会自动清理</div>
+
+                <div v-if="modelList.length > 0" class="model-panel">
+                    <div class="model-panel-header">
+                        <span class="model-panel-title">{{ modelList.length }} 个可用模型 · 点击选择并保存</span>
+                        <input class="model-search" v-model="modelSearch" placeholder="搜索..." />
                     </div>
-                    <input class="sgi-input" v-model="subApiConfig.model" placeholder="gpt-4o / gemini-pro / ..." />
-                </div>
-                <div class="settings-group-item">
-                    <div class="sgi-label">温度</div>
-                    <input class="sgi-input" v-model.number="subApiConfig.temperature" type="number" min="0" max="2"
-                        step="0.1" placeholder="0.7" style="max-width:80px;" />
-                </div>
-            </div>
-
-            <div class="btn-row">
-                <button class="action-btn primary" @click="saveSubApiConfig">保存并使用</button>
-                <button class="action-btn ghost" @click="saveAsNewSubConfig">另存为新配置</button>
-            </div>
-            <div class="btn-row">
-                <button class="action-btn ghost" @click="fetchSubModels" :disabled="fetchingSubModels">
-                    {{ fetchingSubModels ? '获取中...' : '获取模型列表' }}
-                </button>
-                <button class="action-btn ghost" @click="testSubApiConnection" :disabled="testingSubApi">
-                    {{ testingSubApi ? '测试中...' : '测试连接' }}
-                </button>
-            </div>
-
-            <div v-if="subModelList.length > 0" class="model-panel">
-                <div class="model-panel-header">
-                    <span class="model-panel-title">{{ subModelList.length }} 个可用模型 · 点击选择并保存</span>
-                    <input class="model-search" v-model="subModelSearch" placeholder="搜索..." />
-                </div>
-                <div class="model-scroll">
-                    <div v-for="m in filteredSubModelList" :key="m" class="model-chip"
-                        :class="{ active: subApiConfig.model === m }" @click="selectSubModel(m)">
-                        {{ m }}
+                    <div class="model-scroll">
+                        <div v-for="m in filteredModelList" :key="m" class="model-chip"
+                            :class="{ active: apiConfig.model === m }" @click="selectModel(m)">
+                            {{ m }}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <Transition name="toast-fade">
-                <div v-if="subApiTestResult" class="result-bar" :class="subApiTestResult.success ? 'success' : 'error'">
-                    {{ subApiTestResult.message }}
+                <Transition name="toast-fade">
+                    <div v-if="apiTestResult" class="result-bar" :class="apiTestResult.success ? 'success' : 'error'">
+                        {{ apiTestResult.message }}
+                    </div>
+                </Transition>
+                <div v-if="apiSaved" class="save-toast">已保存 ✓</div>
+
+                <!-- 副 API -->
+                <div class="section-label-sm" style="margin-top:28px;">
+                    副 API
+                    <span class="section-sub-hint">记忆 / 时间线 / 主动消息</span>
                 </div>
-            </Transition>
-            <div v-if="subApiSaved" class="save-toast">已保存 ✓</div>
+                <div class="settings-group">
+                    <div v-if="savedSubConfigs.length > 0" class="config-pills">
+                        <div v-for="(c, idx) in savedSubConfigs" :key="idx" class="config-pill"
+                            :class="{ active: currentSubConfigIdx === idx }" @click="selectSubConfig(idx)">
+                            <span>{{ c.name || c.model || '未命名' }}</span>
+                            <button @click.stop="deleteSubConfig(idx)">×</button>
+                        </div>
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">配置名称</div>
+                        <input class="sgi-input" v-model="subApiConfig.name" placeholder="例：副模型" />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">API Key</div>
+                        <input class="sgi-input" v-model="subApiConfig.key" type="password" placeholder="sk-..." />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">API 地址</div>
+                        <input class="sgi-input" v-model="subApiConfig.baseUrl"
+                            placeholder="https://api.openai.com/v1" />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label-wrap">
+                            <div class="sgi-label">模型</div>
+                            <div class="sgi-desc">支持任意模型名，含前缀的会自动清理</div>
+                        </div>
+                        <input class="sgi-input" v-model="subApiConfig.model" placeholder="gpt-4o / gemini-pro / ..." />
+                    </div>
+                    <div class="settings-group-item">
+                        <div class="sgi-label">温度</div>
+                        <input class="sgi-input" v-model.number="subApiConfig.temperature" type="number" min="0" max="2"
+                            step="0.1" placeholder="0.7" style="max-width:80px;" />
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button class="action-btn primary" @click="saveSubApiConfig">保存并使用</button>
+                    <button class="action-btn ghost" @click="saveAsNewSubConfig">另存为新配置</button>
+                </div>
+                <div class="btn-row">
+                    <button class="action-btn ghost" @click="fetchSubModels" :disabled="fetchingSubModels">
+                        {{ fetchingSubModels ? '获取中...' : '获取模型列表' }}
+                    </button>
+                    <button class="action-btn ghost" @click="testSubApiConnection" :disabled="testingSubApi">
+                        {{ testingSubApi ? '测试中...' : '测试连接' }}
+                    </button>
+                </div>
+
+                <div v-if="subModelList.length > 0" class="model-panel">
+                    <div class="model-panel-header">
+                        <span class="model-panel-title">{{ subModelList.length }} 个可用模型 · 点击选择并保存</span>
+                        <input class="model-search" v-model="subModelSearch" placeholder="搜索..." />
+                    </div>
+                    <div class="model-scroll">
+                        <div v-for="m in filteredSubModelList" :key="m" class="model-chip"
+                            :class="{ active: subApiConfig.model === m }" @click="selectSubModel(m)">
+                            {{ m }}
+                        </div>
+                    </div>
+                </div>
+
+                <Transition name="toast-fade">
+                    <div v-if="subApiTestResult" class="result-bar"
+                        :class="subApiTestResult.success ? 'success' : 'error'">
+                        {{ subApiTestResult.message }}
+                    </div>
+                </Transition>
+                <div v-if="subApiSaved" class="save-toast">已保存 ✓</div>
+            </template>
 
         </div>
     </div>
@@ -163,12 +210,61 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { api } from '@/utils/api'
+import { api, isLocalMode } from '@/utils/api'
+import { storage } from '@/utils/storage'
 
-// 清理模型名中的前缀标记，如 [按次]、[个人次cli] 等
+// 本地模式配置
+const localConfig = reactive({
+    apiKey: '',
+    apiUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    temperature: 0.7,
+})
+
+function saveLocalConfig() {
+    storage.saveApiConfig({
+        apiKey: localConfig.apiKey,
+        apiUrl: localConfig.apiUrl,
+        model: localConfig.model,
+        temperature: localConfig.temperature,
+    })
+    apiSaved.value = true
+    setTimeout(() => { apiSaved.value = false }, 2000)
+}
+
+async function testLocalApi() {
+    apiTestResult.value = null
+    testingApi.value = true
+    try {
+        const response = await fetch(`${localConfig.apiUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localConfig.apiKey}`,
+            },
+            body: JSON.stringify({
+                model: localConfig.model,
+                temperature: localConfig.temperature,
+                messages: [{ role: 'user', content: 'Hi' }],
+                max_tokens: 5,
+            })
+        })
+        const data = await response.json()
+        if (data.choices?.[0]) {
+            apiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${localConfig.model}` }
+        } else {
+            apiTestResult.value = { success: false, message: data.error?.message || '返回格式异常' }
+        }
+    } catch (e) {
+        apiTestResult.value = { success: false, message: e.message }
+    } finally {
+        testingApi.value = false
+    }
+}
+
 function cleanModelName(model) {
     if (!model) return model
-    return model.replace(/^$$.*?$$/g, '').trim()
+    return model.replace(/^\[.*?\]/g, '').trim()
 }
 
 const apiConfig = reactive({ name: '', key: '', baseUrl: '', model: '', temperature: 0.7 })
@@ -204,6 +300,17 @@ const filteredSubModelList = computed(() => {
 })
 
 onMounted(async () => {
+    if (isLocalMode) {
+        const cfg = storage.getApiConfig()
+        Object.assign(localConfig, {
+            apiKey: cfg.apiKey || '',
+            apiUrl: cfg.apiUrl || 'https://api.openai.com/v1',
+            model: cfg.model || 'gpt-4o-mini',
+            temperature: cfg.temperature || 0.7,
+        })
+        return
+    }
+
     const c = localStorage.getItem('api_config')
     if (c) Object.assign(apiConfig, JSON.parse(c))
     const cs = localStorage.getItem('api_configs')
@@ -218,7 +325,6 @@ onMounted(async () => {
     const sidx = localStorage.getItem('active_sub_config_idx')
     if (sidx !== null) currentSubConfigIdx.value = parseInt(sidx)
 
-    // 从数据库同步当前配置
     try {
         const res = await api('/api/settings/api')
         const data = await res.json()
@@ -229,16 +335,8 @@ onMounted(async () => {
     } catch { }
 })
 
-// 点击模型列表时直接选中并保存
-function selectModel(m) {
-    apiConfig.model = m
-    saveApiConfig()
-}
-
-function selectSubModel(m) {
-    subApiConfig.model = m
-    saveSubApiConfig()
-}
+function selectModel(m) { apiConfig.model = m; saveApiConfig() }
+function selectSubModel(m) { subApiConfig.model = m; saveSubApiConfig() }
 
 function selectConfig(idx) {
     currentConfigIdx.value = idx
@@ -263,10 +361,8 @@ function saveAsNewConfig() {
 }
 
 async function saveApiConfig() {
-    // 保存时清理模型名前缀
     const cleanedModel = cleanModelName(apiConfig.model)
     apiConfig.model = cleanedModel
-
     localStorage.setItem('api_config', JSON.stringify(apiConfig))
     if (currentConfigIdx.value >= 0 && savedConfigs.value[currentConfigIdx.value]) {
         savedConfigs.value[currentConfigIdx.value] = { ...apiConfig }
@@ -275,28 +371,16 @@ async function saveApiConfig() {
     await api('/api/settings/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            key: apiConfig.key,
-            baseUrl: apiConfig.baseUrl,
-            model: cleanedModel,
-            temperature: apiConfig.temperature
-        })
+        body: JSON.stringify({ key: apiConfig.key, baseUrl: apiConfig.baseUrl, model: cleanedModel, temperature: apiConfig.temperature })
     })
     apiSaved.value = true
     setTimeout(() => { apiSaved.value = false }, 2000)
 }
 
 async function fetchModels() {
-    apiTestResult.value = null
-    modelList.value = []
-    modelSearch.value = ''
-    fetchingModels.value = true
+    apiTestResult.value = null; modelList.value = []; modelSearch.value = ''; fetchingModels.value = true
     try {
-        const res = await api('/api/test/models', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ baseUrl: apiConfig.baseUrl, key: apiConfig.key })
-        })
+        const res = await api('/api/test/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl: apiConfig.baseUrl, key: apiConfig.key }) })
         const data = await res.json()
         if (data.data && Array.isArray(data.data)) {
             modelList.value = data.data.map(m => m.id).sort()
@@ -304,39 +388,23 @@ async function fetchModels() {
         } else {
             apiTestResult.value = { success: false, message: data.error || '返回格式异常' }
         }
-    } catch (e) {
-        apiTestResult.value = { success: false, message: e.message }
-    } finally {
-        fetchingModels.value = false
-    }
+    } catch (e) { apiTestResult.value = { success: false, message: e.message } }
+    finally { fetchingModels.value = false }
 }
 
 async function testApiConnection() {
-    apiTestResult.value = null
-    testingApi.value = true
+    apiTestResult.value = null; testingApi.value = true
     const cleanedModel = cleanModelName(apiConfig.model)
     try {
-        const res = await api('/api/test/connection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                baseUrl: apiConfig.baseUrl,
-                key: apiConfig.key,
-                model: cleanedModel
-            })
-        })
+        const res = await api('/api/test/connection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl: apiConfig.baseUrl, key: apiConfig.key, model: cleanedModel }) })
         const data = await res.json()
         if (data.ok && data.data?.choices?.[0]) {
             apiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${cleanedModel}` }
         } else {
-            const errMsg = data.error || data.data?.error?.message || '未知错误'
-            apiTestResult.value = { success: false, message: errMsg }
+            apiTestResult.value = { success: false, message: data.error || data.data?.error?.message || '未知错误' }
         }
-    } catch (e) {
-        apiTestResult.value = { success: false, message: e.message }
-    } finally {
-        testingApi.value = false
-    }
+    } catch (e) { apiTestResult.value = { success: false, message: e.message } }
+    finally { testingApi.value = false }
 }
 
 function selectSubConfig(idx) {
@@ -364,7 +432,6 @@ function saveAsNewSubConfig() {
 async function saveSubApiConfig() {
     const cleanedModel = cleanModelName(subApiConfig.model)
     subApiConfig.model = cleanedModel
-
     localStorage.setItem('sub_api_config', JSON.stringify(subApiConfig))
     if (currentSubConfigIdx.value >= 0 && savedSubConfigs.value[currentSubConfigIdx.value]) {
         savedSubConfigs.value[currentSubConfigIdx.value] = { ...subApiConfig }
@@ -373,28 +440,16 @@ async function saveSubApiConfig() {
     await api('/api/settings/sub-api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            key: subApiConfig.key,
-            baseUrl: subApiConfig.baseUrl,
-            model: cleanedModel,
-            temperature: subApiConfig.temperature
-        })
+        body: JSON.stringify({ key: subApiConfig.key, baseUrl: subApiConfig.baseUrl, model: cleanedModel, temperature: subApiConfig.temperature })
     })
     subApiSaved.value = true
     setTimeout(() => { subApiSaved.value = false }, 2000)
 }
 
 async function fetchSubModels() {
-    subApiTestResult.value = null
-    subModelList.value = []
-    subModelSearch.value = ''
-    fetchingSubModels.value = true
+    subApiTestResult.value = null; subModelList.value = []; subModelSearch.value = ''; fetchingSubModels.value = true
     try {
-        const res = await api('/api/test/models', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ baseUrl: subApiConfig.baseUrl, key: subApiConfig.key })
-        })
+        const res = await api('/api/test/models', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl: subApiConfig.baseUrl, key: subApiConfig.key }) })
         const data = await res.json()
         if (data.data && Array.isArray(data.data)) {
             subModelList.value = data.data.map(m => m.id).sort()
@@ -402,39 +457,23 @@ async function fetchSubModels() {
         } else {
             subApiTestResult.value = { success: false, message: data.error || '返回格式异常' }
         }
-    } catch (e) {
-        subApiTestResult.value = { success: false, message: e.message }
-    } finally {
-        fetchingSubModels.value = false
-    }
+    } catch (e) { subApiTestResult.value = { success: false, message: e.message } }
+    finally { fetchingSubModels.value = false }
 }
 
 async function testSubApiConnection() {
-    subApiTestResult.value = null
-    testingSubApi.value = true
+    subApiTestResult.value = null; testingSubApi.value = true
     const cleanedModel = cleanModelName(subApiConfig.model)
     try {
-        const res = await api('/api/test/connection', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                baseUrl: subApiConfig.baseUrl,
-                key: subApiConfig.key,
-                model: cleanedModel
-            })
-        })
+        const res = await api('/api/test/connection', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseUrl: subApiConfig.baseUrl, key: subApiConfig.key, model: cleanedModel }) })
         const data = await res.json()
         if (data.ok && data.data?.choices?.[0]) {
             subApiTestResult.value = { success: true, message: `连接成功 ✓ 模型: ${cleanedModel}` }
         } else {
-            const errMsg = data.error || data.data?.error?.message || '未知错误'
-            subApiTestResult.value = { success: false, message: errMsg }
+            subApiTestResult.value = { success: false, message: data.error || data.data?.error?.message || '未知错误' }
         }
-    } catch (e) {
-        subApiTestResult.value = { success: false, message: e.message }
-    } finally {
-        testingSubApi.value = false
-    }
+    } catch (e) { subApiTestResult.value = { success: false, message: e.message } }
+    finally { testingSubApi.value = false }
 }
 </script>
 
@@ -806,5 +845,24 @@ async function testSubApiConnection() {
 .toast-fade-enter-from,
 .toast-fade-leave-to {
     opacity: 0;
+}
+
+.local-hint {
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-top: 8px;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+}
+
+.local-hint p {
+    font-size: 12px;
+    color: #8A7880;
+    line-height: 1.6;
+    margin: 0 0 6px;
+}
+
+.local-hint p:last-child {
+    margin-bottom: 0;
 }
 </style>

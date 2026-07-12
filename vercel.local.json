@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build:local",
+  "outputDirectory": "dist-local",
+  "installCommand": "npm install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

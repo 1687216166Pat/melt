@@ -1,18 +1,18 @@
-// src/utils/api.js
+import { isLocalMode } from "./storage";
+
 const BASE = import.meta.env.VITE_API_URL || "";
 
-export function api(path, options = {}) {
-  // 从本地存储获取最新的模式状态
-  const isBeta = localStorage.getItem("is_beta_mode") === "true";
+export { isLocalMode };
 
-  // 创建 Headers 对象
+export async function api(path, options = {}) {
+  if (isLocalMode) {
+    const { localApiHandler } = await import("./localApi");
+    return localApiHandler(path, options);
+  }
+
+  const isBeta = localStorage.getItem("is_beta_mode") === "true";
   const headers = new Headers(options.headers || {});
   headers.set("x-beta-mode", isBeta ? "true" : "false");
 
-  const fetchOptions = {
-    ...options,
-    headers: headers,
-  };
-
-  return fetch(`${BASE}${path}`, fetchOptions);
+  return fetch(`${BASE}${path}`, { ...options, headers });
 }

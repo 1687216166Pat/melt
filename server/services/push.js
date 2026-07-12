@@ -69,20 +69,41 @@ function removeSubscription(endpoint) {
   saveSubscriptions();
 }
 
-async function pushNotification(title, body) {
+async function pushNotification(title, body, options = {}) {
   if (subscriptions.length === 0) return [];
 
-  const payload = JSON.stringify({ title, body, url: "/chat" });
+  const payload = JSON.stringify({
+    title,
+    body,
+    url: options.personaId ? `/chat/${options.personaId}` : "/",
+    personaId: options.personaId || "",
+    icon: options.icon || "/app-icon.png",
+    badge: "/app-icon.png",
+    tag: options.personaId || "melt-notification",
+    renotify: true,
+  });
+
+  const toRemove = [];
 
   const results = await Promise.allSettled(
-    subscriptions.map((sub) =>
-      webPush.sendNotification(sub, payload).catch((err) => {
-        if (err.statusCode === 410) {
-          removeSubscription(sub.endpoint);
+    subscriptions.map(async (sub) => {
+      try {
+        await webPush.sendNotification(sub, payload);
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          toRemove.push(sub.endpoint);
         }
-      }),
-    ),
+        console.error("[Push] 推送失败:", err.statusCode || err.message);
+      }
+    }),
   );
+
+  // 批量清理失效订阅
+  if (toRemove.length > 0) {
+    subscriptions = subscriptions.filter((s) => !toRemove.includes(s.endpoint));
+    await saveSubscriptions();
+    console.log(`[Push] 清理了 ${toRemove.length} 个失效订阅`);
+  }
 
   return results;
 }

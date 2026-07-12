@@ -88,7 +88,7 @@
                             stroke-linecap="round">
                             <rect x="3" y="3" width="18" height="18" rx="2" />
                             <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path d="M21 15l-5L5 21" />
+                            <path d="M21 15l-5-5L5 21" />
                         </svg>
                         截图
                     </button>
@@ -110,7 +110,8 @@
                     :show-avatar="shouldShowAvatar(item, idx)" :persona-avatar="personaAvatar"
                     :persona-avatar-url="personaAvatarUrl" :user-avatar="userAvatar" :select-mode="selectMode"
                     :selected="selectedIds.includes(item.id)" @edit="handleEdit" @delete="handleDelete"
-                    @regenerate="handleRegenerate" @bookmark="handleBookmark" @select="toggleSelect" />
+                    @regenerate="handleRegenerate" @bookmark="handleBookmark" @select="toggleSelect"
+                    @quote="handleQuote" />
             </template>
 
             <TypingIndicator :visible="isTyping" />
@@ -121,7 +122,8 @@
         <ChatInput @send="handleSend" @send-images="handleSendImages" @send-emoji="handleSendEmoji"
             @send-gift="handleSendGift" @send-transfer="handleSendTransfer" @send-location="handleSendLocation"
             @continue-reply="handleContinueReply" @regenerate="handleRegenerateLatest" @multiselect="enterSelectMode"
-            @send-card="handleSendCard" @send-delivery="handleSendDelivery" />
+            @send-card="handleSendCard" @send-delivery="handleSendDelivery" :quote-msg="quotingMsg"
+            @clear-quote="quotingMsg = null" />
     </div>
 </template>
 
@@ -140,7 +142,7 @@ import { setCache } from '@/utils/cache'
 const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
-const { send, onMessage, removeHandler, clearHandlers, isConnected } = useWebSocket()
+const { send, onMessage, removeHandler, clearHandlers } = useWebSocket()
 
 const messagesContainer = ref(null)
 const isTyping = ref(false)
@@ -157,24 +159,21 @@ const userAvatar = ref(localStorage.getItem('home_user_avatar') || '')
 const lastHandledContent = ref('')
 const lastHandledTime = ref(0)
 const personaStatus = ref({ status: 'available', reason: '' })
+const quotingMsg = ref(null)
 
 const isBusyStatus = computed(() => personaStatus.value.status !== 'available')
-
 const selectMode = ref(false)
 const selectedIds = ref([])
-
 const personaId = computed(() => route.params.personaId)
 
 const messagesWithTimestamp = computed(() => {
     const msgs = chatStore.messages
     const result = []
     let lastTime = null
-
     msgs.forEach((msg, idx) => {
         const ts = msg.timestamp ? new Date(msg.timestamp) : null
         let showTime = false
         let timeLabel = ''
-
         if (ts) {
             if (!lastTime || (ts - lastTime) > 5 * 60 * 1000) {
                 showTime = true
@@ -182,35 +181,25 @@ const messagesWithTimestamp = computed(() => {
                 lastTime = ts
             }
         }
-
         const isMerged = bubbleMerge.value && idx > 0
             && msgs[idx - 1].role === msg.role
             && !showTime
             && !msg.type
-
         result.push({ ...msg, showTime, timeLabel, isMerged })
     })
-
     return result
 })
 
 function formatTimeLabel(date) {
     const now = new Date()
     const days = Math.floor((now - date) / 86400000)
-
-    if (days === 0) {
-        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-    } else if (days === 1) {
-        return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-    } else {
-        return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
-    }
+    if (days === 0) return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    if (days === 1) return `昨天 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
 }
 
 function shouldShowAvatar(item, idx) {
-    if (chatTheme.value === 'default' || chatTheme.value === 'minimal' || chatTheme.value === 'liquid') {
-        return false
-    }
+    if (chatTheme.value === 'default' || chatTheme.value === 'minimal' || chatTheme.value === 'liquid') return false
     const msgs = messagesWithTimestamp.value
     const next = msgs[idx + 1]
     if (!next || next.role !== item.role) return true
@@ -227,11 +216,7 @@ async function loadPersonaName() {
         showDebug.value = data.show_debug || false
         chatTheme.value = data.chat_theme || 'default'
         bubbleMerge.value = data.bubble_merge || false
-
-        if (data.max_messages || data.maxMessages) {
-            maxBubbles.value = data.max_messages || data.maxMessages
-        }
-
+        if (data.max_messages || data.maxMessages) maxBubbles.value = data.max_messages || data.maxMessages
         if (data.chat_wallpaper) {
             const chatPage = document.querySelector('.chat-page')
             if (chatPage) {
@@ -240,7 +225,6 @@ async function loadPersonaName() {
                 chatPage.style.backgroundPosition = 'center'
             }
         }
-
         if (data.chat_theme && data.chat_theme.startsWith('custom_')) {
             const saved = localStorage.getItem(`chat_custom_themes_${personaId.value}`)
             if (saved) {
@@ -256,9 +240,7 @@ async function loadPersonaName() {
                 }
             }
         }
-    } catch (e) { }
-
-    // 加载状态
+    } catch { }
     try {
         const sRes = await api(`/api/persona-status/${personaId.value}`)
         personaStatus.value = await sRes.json()
@@ -267,117 +249,69 @@ async function loadPersonaName() {
 
 function scrollToBottom() {
     nextTick(() => {
-        if (messagesContainer.value) {
-            messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-        }
+        if (messagesContainer.value) messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
     })
+}
+
+function handleQuote(quoteData) {
+    quotingMsg.value = quoteData
 }
 
 function handleSend(text, opts = {}) {
     if (!text || !personaId.value) return
-    chatStore.addMessage({ role: 'user', content: text })
+    chatStore.addMessage({
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString(),
+        quoteContent: opts.quote?.content || null,
+        quoteRole: opts.quote?.role || null,
+    })
     if (personaId.value === 'wechat_sync') return
-
     if (opts.autoReply !== false) {
         send({ type: 'chat', content: text, personaId: personaId.value })
         isTyping.value = true
         setTimeout(() => { isTyping.value = false }, 30000)
     }
     scrollToBottom()
-    if (chatStore.allMessages) {
-        setCache(`messages_${personaId.value}`, chatStore.allMessages)
-    }
+    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
 }
 
 function handleSendImages({ images, text }) {
-    chatStore.addMessage({
-        role: 'user',
-        type: 'images',
-        images,
-        content: text,
-        timestamp: new Date().toISOString()
-    })
-    const desc = text
-        ? `[用户发送了 ${images.length} 张图片] ${text}`
-        : `[用户发送了 ${images.length} 张图片]`
+    chatStore.addMessage({ role: 'user', type: 'images', images, content: text, timestamp: new Date().toISOString() })
+    const desc = text ? `[用户发送了 ${images.length} 张图片] ${text}` : `[用户发送了 ${images.length} 张图片]`
     send({ type: 'chat', content: desc, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
 
 function handleSendEmoji(emoji) {
-    chatStore.addMessage({
-        role: 'user',
-        type: 'emoji',
-        emojiUrl: emoji.url,
-        emojiName: emoji.name,
-        content: `[表情包: ${emoji.name || ''}]`,
-        timestamp: new Date().toISOString()
-    })
+    chatStore.addMessage({ role: 'user', type: 'emoji', emojiUrl: emoji.url, emojiName: emoji.name, content: `[表情包: ${emoji.name || ''}]`, timestamp: new Date().toISOString() })
     send({ type: 'chat', content: `[用户发了一个表情包: ${emoji.name || ''}]`, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
 
 async function handleSendGift({ name, content, message, method, methodDesc }) {
-    chatStore.addMessage({
-        role: 'user',
-        type: 'gift',
-        giftName: name,
-        giftContent: content,
-        giftMessage: message,
-        giftMethod: method,
-        content: `[礼物: ${name}]`,
-        timestamp: new Date().toISOString()
-    })
-
+    chatStore.addMessage({ role: 'user', type: 'gift', giftName: name, giftContent: content, giftMessage: message, giftMethod: method, content: `[礼物: ${name}]`, timestamp: new Date().toISOString() })
     try {
-        await api(`/api/gifts/${personaId.value}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                direction: 'user_to_ai',
-                giftName: name,
-                giftContent: content || '',
-                giftMessage: message || ''
-            })
-        })
+        await api(`/api/gifts/${personaId.value}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ direction: 'user_to_ai', giftName: name, giftContent: content || '', giftMessage: message || '' }) })
     } catch { }
-
     let desc = `[用户${methodDesc}一份礼物: ${name}`
     if (content) desc += `，里面有：${content}`
     if (message) desc += `，附言：${message}`
     desc += `]`
-
     send({ type: 'chat', content: desc, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
-
     setTimeout(async () => {
         try {
-            await api('/api/messages/update-meta', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    personaId: personaId.value,
-                    role: 'user',
-                    contentPrefix: `[礼物: ${name}]`,
-                    msgType: 'gift',
-                    msgMeta: JSON.stringify({ name, content, message, method })
-                })
-            })
+            await api('/api/messages/update-meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personaId: personaId.value, role: 'user', contentPrefix: `[礼物: ${name}]`, msgType: 'gift', msgMeta: JSON.stringify({ name, content, message, method }) }) })
         } catch { }
     }, 1000)
 }
 
 function handleSendCard({ html }) {
-    chatStore.addMessage({
-        role: 'user',
-        type: 'card',
-        cardHtml: html,
-        content: '[HTML卡片]',
-        timestamp: new Date().toISOString()
-    })
+    chatStore.addMessage({ role: 'user', type: 'card', cardHtml: html, content: '[HTML卡片]', timestamp: new Date().toISOString() })
     send({ type: 'chat', content: '[用户发送了一张 HTML 小卡片]', personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
@@ -385,99 +319,39 @@ function handleSendCard({ html }) {
 
 async function handleSendDelivery({ type, content, address, note, expectedAt }) {
     chatStore.addMessage({
-        role: 'user',
-        type: type === 'food' ? 'food' : 'express',
-        deliveryContent: content,
-        deliveryAddress: address,
-        deliveryNote: note,
-        deliveryExpectedAt: expectedAt,
-        content: type === 'food' ? `[外卖: ${content}]` : `[快递: ${content}]`,
-        timestamp: new Date().toISOString()
+        role: 'user', type: type === 'food' ? 'food' : 'express',
+        deliveryContent: content, deliveryAddress: address, deliveryNote: note, deliveryExpectedAt: expectedAt,
+        content: type === 'food' ? `[外卖: ${content}]` : `[快递: ${content}]`, timestamp: new Date().toISOString()
     })
-
-    // 立即保存到缓存
-    if (chatStore.allMessages) {
-        setCache(`messages_${personaId.value}`, chatStore.allMessages)
-    }
-
+    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
     try {
-        await api('/api/delivery', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                personaId: personaId.value,
-                direction: 'user_to_ai',
-                sender: 'user',
-                type,
-                content,
-                address,
-                note,
-                expectedAt,
-            })
-        })
+        await api('/api/delivery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personaId: personaId.value, direction: 'user_to_ai', sender: 'user', type, content, address, note, expectedAt }) })
     } catch { }
-
     const desc = type === 'food'
         ? `[用户点了外卖：${content}${address ? `，送到${address}` : ''}${note ? `，备注：${note}` : ''}${expectedAt ? `，预计${new Date(expectedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}到` : ''}]`
         : `[用户寄了快递：${content}${note ? `，备注：${note}` : ''}${expectedAt ? `，预计${new Date(expectedAt).toLocaleDateString('zh-CN')}到达` : ''}]`
-
     send({ type: 'chat', content: desc, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
 }
 
 async function handleSendTransfer({ amount, note }) {
-    chatStore.addMessage({
-        role: 'user',
-        type: 'transfer',
-        amount,
-        note,
-        content: `[转账: ¥${amount.toFixed(2)}]`,
-        timestamp: new Date().toISOString()
-    })
-
+    chatStore.addMessage({ role: 'user', type: 'transfer', amount, note, content: `[转账: ¥${amount.toFixed(2)}]`, timestamp: new Date().toISOString() })
     try {
-        await api(`/api/transfers/${personaId.value}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                direction: 'user_to_ai',
-                amount: parseFloat(amount),
-                note: note || ''
-            })
-        })
+        await api(`/api/transfers/${personaId.value}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ direction: 'user_to_ai', amount: parseFloat(amount), note: note || '' }) })
     } catch { }
-
     send({ type: 'chat', content: `[用户转账了 ¥${amount.toFixed(2)}${note ? `，备注：${note}` : ''}]`, personaId: personaId.value })
     isTyping.value = true
     scrollToBottom()
-
     setTimeout(async () => {
         try {
-            await api('/api/messages/update-meta', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    personaId: personaId.value,
-                    role: 'user',
-                    contentPrefix: `[转账: ¥${parseFloat(amount).toFixed(2)}]`,
-                    msgType: 'transfer',
-                    msgMeta: JSON.stringify({ amount: parseFloat(amount), note: note || '' })
-                })
-            })
+            await api('/api/messages/update-meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ personaId: personaId.value, role: 'user', contentPrefix: `[转账: ¥${parseFloat(amount).toFixed(2)}]`, msgType: 'transfer', msgMeta: JSON.stringify({ amount: parseFloat(amount), note: note || '' }) }) })
         } catch { }
     }, 1000)
 }
 
 function handleSendLocation({ lat, lng, manual }) {
-    chatStore.addMessage({
-        role: 'user',
-        type: 'location',
-        lat, lng,
-        locationName: manual ? '我的位置' : '当前位置',
-        content: `[位置]`,
-        timestamp: new Date().toISOString()
-    })
+    chatStore.addMessage({ role: 'user', type: 'location', lat, lng, locationName: manual ? '我的位置' : '当前位置', content: `[位置]`, timestamp: new Date().toISOString() })
     const desc = lat ? `[用户分享了位置: ${lat.toFixed(4)}, ${lng.toFixed(4)}]` : `[用户分享了当前位置]`
     send({ type: 'chat', content: desc, personaId: personaId.value })
     isTyping.value = true
@@ -510,20 +384,10 @@ function handleIncoming(data) {
         if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) return
         lastHandledContent.value = key
         lastHandledTime.value = now
-
         isTyping.value = false
+        api(`/api/persona-status/${personaId.value}`).then(r => r.json()).then(s => { personaStatus.value = s }).catch(() => { })
 
-        // 收到回复后刷新状态
-        api(`/api/persona-status/${personaId.value}`)
-            .then(r => r.json())
-            .then(s => { personaStatus.value = s })
-            .catch(() => { })
-
-        let cleanContent = data.content
-            .replace(/\[思考\][\s\S]*?\[思考\]/g, '')
-            .replace(/[\s\S]*?<\/think>/g, '')
-            .trim()
-
+        let cleanContent = data.content.replace(/\[思考\][\s\S]*?\[思考\]/g, '').replace(/[\s\S]*?<\/think>/g, '').trim()
         const bubbles = cleanContent.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
         let final = bubbles
         const limit = maxBubbles.value || 3
@@ -534,106 +398,42 @@ function handleIncoming(data) {
                 final.push(bubbles.slice(i, i + chunkSize).join(' '))
             }
         }
-
-        if (final.length === 0) {
-            isTyping.value = false
-            return
-        }
+        if (final.length === 0) { isTyping.value = false; return }
 
         final.forEach((line, idx) => {
             setTimeout(() => {
                 if (idx === final.length - 1) isTyping.value = false
-                chatStore.addMessage({
-                    role: 'ai',
-                    content: line,
-                    timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString()
-                })
+                chatStore.addMessage({ role: 'ai', content: line, timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString() })
                 scrollToBottom()
-                if (idx === final.length - 1 && chatStore.allMessages) {
-                    setCache(`messages_${personaId.value}`, chatStore.allMessages)
-                }
+                if (idx === final.length - 1 && chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
             }, idx * 600)
         })
-
 
         if (data.specialPayload) {
             const sp = data.specialPayload
             const delay = final.length * 600 + 200
             if (sp.type === 'gift') {
-                setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai', type: 'gift',
-                        giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message,
-                        content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp,
-                    })
-                    scrollToBottom()
-                }, delay)
+                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'gift', giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message, content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp }); scrollToBottom() }, delay)
             } else if (sp.type === 'transfer') {
-                setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai', type: 'transfer',
-                        amount: sp.data.amount, note: sp.data.note,
-                        content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp,
-                    })
-                    scrollToBottom()
-                }, delay)
+                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'transfer', amount: sp.data.amount, note: sp.data.note, content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp }); scrollToBottom() }, delay)
             } else if (sp.type === 'location') {
-                setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai', type: 'location',
-                        lat: null, lng: null, locationName: sp.data.name,
-                        content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp,
-                    })
-                    scrollToBottom()
-                }, delay)
+                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'location', lat: null, lng: null, locationName: sp.data.name, content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp }); scrollToBottom() }, delay)
             } else if (sp.type === 'card') {
-                setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai', type: 'card',
-                        cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp,
-                    })
-                    scrollToBottom()
-                }, delay)
-
+                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'card', cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp }); scrollToBottom() }, delay)
             } else if (sp.type === 'food') {
                 setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai', type: 'food',
-                        deliveryContent: sp.data.content,
-                        deliveryAddress: sp.data.address,
-                        deliveryNote: sp.data.note,
-                        deliveryExpectedAt: sp.data.expectedMinutes
-                            ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString()
-                            : null,
-                        content: `[外卖: ${sp.data.content}]`,
-                        timestamp: data.timestamp,
-                    })
+                    chatStore.addMessage({ role: 'ai', type: 'food', deliveryContent: sp.data.content, deliveryAddress: sp.data.address, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedMinutes ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString() : null, content: `[外卖: ${sp.data.content}]`, timestamp: data.timestamp })
                     scrollToBottom()
-                    if (chatStore.allMessages) {
-                        setCache(`messages_${personaId.value}`, chatStore.allMessages)
-                    }
+                    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
                 }, delay)
             } else if (sp.type === 'express') {
                 setTimeout(() => {
-                    chatStore.addMessage({
-                        role: 'ai', type: 'express',
-                        deliveryContent: sp.data.content,
-                        deliveryNote: sp.data.note,
-                        deliveryExpectedAt: sp.data.expectedDays
-                            ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString()
-                            : null,
-                        content: `[快递: ${sp.data.content}]`,
-                        timestamp: data.timestamp,
-                    })
+                    chatStore.addMessage({ role: 'ai', type: 'express', deliveryContent: sp.data.content, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedDays ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString() : null, content: `[快递: ${sp.data.content}]`, timestamp: data.timestamp })
                     scrollToBottom()
-                    if (chatStore.allMessages) {
-                        setCache(`messages_${personaId.value}`, chatStore.allMessages)
-                    }
+                    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
                 }, delay)
             }
-
         }
-
         if (data.debug) debugInfo.value = data.debug
     }
 }
@@ -670,27 +470,54 @@ async function screenshotSelected() {
         const html2canvas = (await import('html2canvas')).default
         const container = messagesContainer.value
         if (!container) return
-        const screenshotDiv = document.createElement('div')
-        screenshotDiv.style.cssText = `position:fixed;left:-9999px;top:0;width:${container.offsetWidth}px;background:#fdf6f8;padding:20px 16px;font-family:inherit;`
         const allBubbles = container.querySelectorAll('.bubble-wrapper')
-        let clonedCount = 0
+        const selectedBubbles = []
         allBubbles.forEach(bubble => {
             const msgId = bubble.dataset.msgId
-            if (selectedIds.value.some(id => String(id) === String(msgId))) {
-                const clone = bubble.cloneNode(true)
-                clone.classList.remove('selected', 'select-mode')
-                clone.style.marginBottom = '12px'
-                screenshotDiv.appendChild(clone)
-                clonedCount++
-            }
+            if (selectedIds.value.some(id => String(id) === String(msgId))) selectedBubbles.push(bubble)
         })
-        if (clonedCount === 0) { cancelSelect(); return }
+        if (selectedBubbles.length === 0) { cancelSelect(); return }
+        const first = selectedBubbles[0].getBoundingClientRect()
+        const last = selectedBubbles[selectedBubbles.length - 1].getBoundingClientRect()
+        const totalHeight = last.bottom - first.top + 40
+        const screenshotDiv = document.createElement('div')
+        screenshotDiv.style.cssText = `position:fixed;left:-9999px;top:0;width:${container.offsetWidth}px;min-height:${totalHeight}px;background:linear-gradient(180deg,#FFFBFA 0%,#FFF0F2 60%,#FFE9ED 100%);padding:20px 16px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;`
+        selectedBubbles.forEach(bubble => {
+            const clone = bubble.cloneNode(true)
+            clone.classList.remove('selected', 'select-mode')
+            clone.style.marginBottom = '16px'
+            clone.style.paddingLeft = '0'
+            const checkbox = clone.querySelector('.select-checkbox')
+            if (checkbox) checkbox.style.display = 'none'
+            const actionBar = clone.querySelector('.inline-action-bar')
+            if (actionBar) actionBar.style.display = 'none'
+            const bubbleEl = clone.querySelector('.bubble')
+            if (bubbleEl) {
+                const original = bubble.querySelector('.bubble')
+                if (original) {
+                    const cs = window.getComputedStyle(original)
+                    bubbleEl.style.background = cs.background
+                    bubbleEl.style.color = cs.color
+                    bubbleEl.style.borderRadius = cs.borderRadius
+                    bubbleEl.style.padding = cs.padding
+                    bubbleEl.style.fontSize = cs.fontSize
+                    bubbleEl.style.lineHeight = cs.lineHeight
+                    bubbleEl.style.boxShadow = cs.boxShadow
+                }
+            }
+            screenshotDiv.appendChild(clone)
+        })
         document.body.appendChild(screenshotDiv)
-        const canvas = await html2canvas(screenshotDiv, { backgroundColor: '#fdf6f8', scale: 2, useCORS: true, logging: false })
+        const images = screenshotDiv.querySelectorAll('img')
+        await Promise.all([...images].map(img => {
+            if (img.complete) return Promise.resolve()
+            return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; setTimeout(resolve, 2000) })
+        }))
+        const canvas = await html2canvas(screenshotDiv, { backgroundColor: null, scale: 2, useCORS: true, allowTaint: true, logging: false, windowWidth: container.offsetWidth + 32 })
         document.body.removeChild(screenshotDiv)
         const link = document.createElement('a')
         link.download = `聊天记录_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '')}.png`
-        link.href = canvas.toDataURL('image/png')
+        link.href = canvas.toDataURL('image/png', 0.95)
         link.click()
         cancelSelect()
     } catch (e) { console.error('截图失败:', e); cancelSelect() }
@@ -698,22 +525,14 @@ async function screenshotSelected() {
 
 async function handleBookmark(msg) {
     try {
-        await api(`/api/bookmarks/${personaId.value}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: msg.type || 'message', content: msg.content, source_id: msg.id })
-        })
+        await api(`/api/bookmarks/${personaId.value}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: msg.type || 'message', content: msg.content, source_id: msg.id }) })
     } catch { }
 }
 
 async function handleEdit(msgId, newContent) {
     const msg = chatStore.messages.find(m => m.id === msgId)
     if (msg) msg.content = newContent
-    await api(`/api/message/${msgId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newContent })
-    })
+    await api(`/api/message/${msgId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newContent }) })
 }
 
 async function handleDelete(msgId) {

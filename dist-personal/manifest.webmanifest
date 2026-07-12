@@ -1,0 +1,1 @@
+{"name":"Melt","short_name":"Melt","description":"我们的小屋","start_url":"/","display":"standalone","background_color":"#fdf6f0","theme_color":"#fdf6f0","lang":"en","scope":"/","orientation":"portrait","icons":[{"src":"/app-icon.png","sizes":"192x192","type":"image/png"},{"src":"/app-icon.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}

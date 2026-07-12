@@ -94,6 +94,36 @@
                 </template>
             </div>
 
+            <!-- 后台保活 -->
+            <div class="section-label-sm">后台保活</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">后台保活</div>
+                        <div class="sgi-desc">防止 iOS/Android 杀后台，保持消息接收</div>
+                    </div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" :checked="keepAliveActive" @change="toggleKeepAlive" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">屏幕常亮</div>
+                        <div class="sgi-desc">配合保活使用，防止屏幕休眠中断</div>
+                    </div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" :checked="wakeLockActive" @change="toggleWakeLock" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label" style="color: #B8A9AC; font-size: 12px;">
+                        {{ keepAliveActive ? '✓ 保活运行中，可切换到后台' : '未启用，切换后台可能断开连接' }}
+                    </div>
+                </div>
+            </div>
+
             <!-- 测试工具 -->
             <div class="section-label-sm">测试</div>
             <div class="settings-group">
@@ -134,6 +164,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api } from '@/utils/api'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { startKeepAlive, stopKeepAlive, requestWakeLock, isKeepAliveActive } from '@/composables/useBackgroundKeepAlive'
 
 const { registerPushSubscription } = useWebSocket()
 
@@ -149,6 +180,46 @@ const proactive = reactive({
 const personas = ref([])
 const resultMsg = ref('')
 const resultSuccess = ref(true)
+
+const keepAliveActive = ref(false)
+const wakeLockActive = ref(false)
+let wakeLockHandle = null
+
+function toggleKeepAlive() {
+    if (keepAliveActive.value) {
+        stopKeepAlive()
+        keepAliveActive.value = false
+        localStorage.setItem('keep_alive_enabled', 'false')
+        showResult('后台保活已关闭')
+    } else {
+        startKeepAlive()
+        keepAliveActive.value = true
+        localStorage.setItem('keep_alive_enabled', 'true')
+        showResult('后台保活已启动 ✓')
+    }
+}
+
+async function toggleWakeLock() {
+    if (wakeLockActive.value) {
+        if (wakeLockHandle) { await wakeLockHandle.release(); wakeLockHandle = null }
+        wakeLockActive.value = false
+        localStorage.setItem('wake_lock_enabled', 'false')
+        showResult('屏幕常亮已关闭')
+    } else {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLockHandle = await navigator.wakeLock.request('screen')
+                wakeLockActive.value = true
+                localStorage.setItem('wake_lock_enabled', 'true')
+                showResult('屏幕常亮已启动 ✓')
+            } catch (e) {
+                showResult('屏幕常亮不可用: ' + e.message, false)
+            }
+        } else {
+            showResult('当前设备不支持屏幕常亮', false)
+        }
+    }
+}
 
 function showResult(msg, success = true) {
     resultMsg.value = msg
@@ -213,6 +284,11 @@ onMounted(async () => {
         const proData = await proRes.json()
         Object.assign(proactive, proData)
     } catch { }
+
+    // 恢复保活状态
+keepAliveActive.value = isKeepAliveActive()
+wakeLockActive.value = localStorage.getItem('wake_lock_enabled') === 'true'
+
 })
 </script>
 

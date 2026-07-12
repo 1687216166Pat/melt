@@ -1,5 +1,6 @@
 const { getDB } = require("../db/index");
-const { pushToAll } = require("../ws/socket");
+const { getClients } = require("../ws/socket");
+const { pushNotification } = require("../services/push");
 const { getMemoryProfile, getRecentMemories } = require("./memory");
 const { callSubAI } = require("./subai");
 const { tickEmotion, getEmotionState } = require("./emotion");
@@ -313,15 +314,23 @@ async function checkProactiveMessages() {
       drive_key: intent.driveKey,
     });
 
-    pushToAll(
-      JSON.stringify({
-        type: "push",
-        content: message,
-        personaId: persona.id,
-        timestamp: now.toISOString(),
-      }),
-    );
+    const clients = getClients();
+    const payload = JSON.stringify({
+      type: "push",
+      role: "ai",
+      content: message,
+      personaId: persona.id,
+      timestamp: now.toISOString(),
+    });
+    clients.forEach((c) => {
+      if (c.readyState === 1) c.send(payload);
+    });
 
+    // 发完消息后
+    const preview =
+      message.length > 60 ? message.slice(0, 60) + "..." : message;
+    pushNotification("AI 助手", preview, { personaId: persona.id });
+    
     satisfyDrive(persona.id, intent.driveKey);
 
     console.log(`[欲望] ${persona.id} [${intent.driveKey}] ${message}`);

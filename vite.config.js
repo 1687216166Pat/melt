@@ -4,6 +4,9 @@ import vue from "@vitejs/plugin-vue";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  define: {
+    __APP_MODE__: JSON.stringify(process.env.VITE_APP_MODE || "personal"),
+  },
   plugins: [
     vue(),
     VitePWA({

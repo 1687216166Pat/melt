@@ -27,6 +27,13 @@ import { useTime } from '@/composables/useTime'
 import { useDeviceStatus } from '@/composables/useDeviceStatus'
 import { api } from '@/utils/api'
 import SplashScreen from '@/components/SplashScreen.vue'
+import { startKeepAlive, stopKeepAlive, requestWakeLock } from '@/composables/useBackgroundKeepAlive'
+import { isLocalMode } from '@/utils/api'
+
+function handleFirstInteraction() {
+    startKeepAlive()
+    requestWakeLock()
+}
 
 const route = useRoute()
 const isHomePage = computed(() => {
@@ -40,7 +47,7 @@ const isHomePage = computed(() => {
         'worldbook', 'chat',
         'about', 'settings-memory-manage',
         'memory', 'logs',
-        'diary','memory-graph',
+        'diary', 'memory-graph',
         'presence', 'memo', 'persona-cards'
 
     ]
@@ -79,6 +86,7 @@ const envStyle = computed(() => {
 })
 
 async function loadEnvironment() {
+    if (isLocalMode) return  // 本地模式不加载环境数据
     try {
         const pRes = await api('/api/prompts/personas')
         const pData = await pRes.json()
@@ -102,12 +110,23 @@ async function loadEnvironment() {
 let envInterval = null
 
 onMounted(() => {
-    connect()
-    requestNotificationPermission()
-    registerPushSubscription()
+    // 本地模式跳过云端相关初始化
+    if (!isLocalMode) {
+        connect()
+        requestNotificationPermission()
+        registerPushSubscription()
+        startReporting()
+    } else {
+        // 本地模式也要 connect（走本地处理）
+        connect()
+    }
+
     startClock()
-    startReporting()
     loadEnvironment()
+
+    document.addEventListener('touchstart', handleFirstInteraction, { once: true })
+    document.addEventListener('click', handleFirstInteraction, { once: true })
+
     envInterval = setInterval(loadEnvironment, 10 * 60 * 1000)
 
     const savedWallpaper = localStorage.getItem('custom_wallpaper')

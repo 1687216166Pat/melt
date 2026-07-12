@@ -1,3 +1,4 @@
+```vue
 <template>
     <div class="chat-input-wrapper">
 
@@ -14,6 +15,19 @@
                 {{ imagesCollapsed ? `查看全部 ${pendingImages.length} 张` : '收起' }}
             </button>
         </div>
+
+        <!-- 引用预览 -->
+        <Transition name="fade-up">
+            <div v-if="quoteMsg" class="quote-bar">
+                <div class="quote-bar-line"></div>
+                <div class="quote-bar-content">
+                    <span class="quote-bar-role">{{ quoteMsg.role === 'ai' ? 'TA' : '我' }}</span>
+                    <span class="quote-bar-text">{{ quoteMsg.content.slice(0, 40) }}{{ quoteMsg.content.length > 40 ?
+                        '...' : '' }}</span>
+                </div>
+                <button class="quote-bar-close" @click="clearQuote">×</button>
+            </div>
+        </Transition>
 
         <!-- 功能栏 -->
         <Transition name="toolbar-slide">
@@ -37,8 +51,6 @@
                         <textarea v-model="giftContent" placeholder="礼物内容（可选）：花束里有钻戒和小纸条..." class="gift-textarea"
                             rows="2"></textarea>
                         <input v-model="giftMessage" placeholder="附言（可选）" class="gift-input" />
-
-                        <!-- 送出方式 -->
                         <div class="gift-method-row">
                             <span class="gift-method-label">送出方式</span>
                             <div class="gift-method-opts">
@@ -48,7 +60,6 @@
                                 </button>
                             </div>
                         </div>
-
                         <button class="send-gift-btn" @click="sendGift" :disabled="!giftName.trim()">
                             送出礼物 🎁
                         </button>
@@ -195,7 +206,6 @@
                         </svg>
                         <span>外卖</span>
                     </button>
-
                     <button class="toolbar-btn" :class="{ active: narrMode }" @click="toggleNarrMode">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round">
@@ -246,10 +256,15 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 
+const props = defineProps({
+    quoteMsg: { type: Object, default: null }
+})
+
 const emit = defineEmits([
     'send', 'send-images', 'send-emoji', 'send-gift',
     'send-transfer', 'send-location', 'continue-reply',
-    'regenerate', 'multiselect', 'send-card', 'send-delivery'
+    'regenerate', 'multiselect', 'send-card', 'send-delivery',
+    'clear-quote'
 ])
 
 const text = ref('')
@@ -267,6 +282,10 @@ const deliveryContent = ref('')
 const deliveryAddress = ref('')
 const deliveryNote = ref('')
 const deliveryExpected = ref('')
+
+function clearQuote() {
+    emit('clear-quote')
+}
 
 function sendDelivery() {
     if (!deliveryContent.value.trim()) return
@@ -292,7 +311,6 @@ function sendCard() {
     activePanel.value = null
 }
 
-// 礼物
 const giftName = ref('')
 const giftContent = ref('')
 const giftMessage = ref('')
@@ -303,25 +321,19 @@ const giftMethods = [
     { value: 'takeout', icon: '🛵', label: '外卖' },
 ]
 
-// 转账
 const transferAmount = ref('')
 const transferNote = ref('')
 
-// 自动回复配置
 const autoReply = computed(() => {
     const prefs = localStorage.getItem('output_prefs')
     if (!prefs) return true
     return JSON.parse(prefs).autoReply !== false
 })
 
-const canSend = computed(() => {
-    return text.value.trim() || pendingImages.value.length > 0
-})
+const canSend = computed(() => text.value.trim() || pendingImages.value.length > 0)
 
 const displayedImages = computed(() => {
-    if (!imagesCollapsed.value || pendingImages.value.length <= 2) {
-        return pendingImages.value
-    }
+    if (!imagesCollapsed.value || pendingImages.value.length <= 2) return pendingImages.value
     return pendingImages.value.slice(0, 2)
 })
 
@@ -334,43 +346,30 @@ let sending = false
 
 function sendMessage(e) {
     if (e && e.type === 'keydown') e.preventDefault()
-
-    // 有待发图片先发图片
     if (pendingImages.value.length > 0) {
-        emit('send-images', {
-            images: pendingImages.value,
-            text: text.value.trim(),
-            narr: narrMode.value
-        })
+        emit('send-images', { images: pendingImages.value, text: text.value.trim(), narr: narrMode.value })
         pendingImages.value = []
         text.value = ''
         nextTick(() => autoResize())
         return
     }
-
     if (!text.value.trim()) return
     if (sending) return
     sending = true
-
-    const content = narrMode.value
-        ? `[旁白] ${text.value.trim()}`
-        : text.value.trim()
-
-    emit('send', content, { narr: narrMode.value, autoReply: autoReply.value })
-    text.value = ''
-    nextTick(() => {
-        autoResize()
-        sending = false
+    const content = narrMode.value ? `[旁白] ${text.value.trim()}` : text.value.trim()
+    emit('send', content, {
+        narr: narrMode.value,
+        autoReply: autoReply.value,
+        quote: props.quoteMsg || null
     })
+    emit('clear-quote')
+    text.value = ''
+    nextTick(() => { autoResize(); sending = false })
 }
 
 function togglePanel(name) {
-    if (activePanel.value === name) {
-        activePanel.value = ''
-    } else {
-        activePanel.value = name
-        showToolbar.value = true
-    }
+    if (activePanel.value === name) activePanel.value = ''
+    else { activePanel.value = name; showToolbar.value = true }
 }
 
 function toggleNarrMode() {
@@ -378,89 +377,44 @@ function toggleNarrMode() {
     if (narrMode.value) showToolbar.value = false
 }
 
-function triggerImageUpload() {
-    imageInput.value?.click()
-}
+function triggerImageUpload() { imageInput.value?.click() }
 
 function handleImageUpload(event) {
     const files = Array.from(event.target.files)
     files.forEach(file => {
         const reader = new FileReader()
-        reader.onload = (e) => {
-            pendingImages.value.push({
-                url: e.target.result,
-                name: file.name,
-                type: file.type
-            })
-        }
+        reader.onload = (e) => { pendingImages.value.push({ url: e.target.result, name: file.name, type: file.type }) }
         reader.readAsDataURL(file)
     })
     event.target.value = ''
     showToolbar.value = false
 }
 
-function removeImage(idx) {
-    pendingImages.value.splice(idx, 1)
-}
+function removeImage(idx) { pendingImages.value.splice(idx, 1) }
 
-function sendEmoji(emoji) {
-    emit('send-emoji', emoji)
-    activePanel.value = ''
-}
+function sendEmoji(emoji) { emit('send-emoji', emoji); activePanel.value = '' }
 
 function sendGift() {
     if (!giftName.value.trim()) return
-    const methodMap = {
-        in_person: '当面送出',
-        delivery: '通过快递寄出',
-        takeout: '通过外卖送达',
-    }
+    const methodMap = { in_person: '当面送出', delivery: '通过快递寄出', takeout: '通过外卖送达' }
     const methodDesc = methodMap[giftMethod.value] || '送出'
-    emit('send-gift', {
-        name: giftName.value.trim(),
-        content: giftContent.value.trim(),
-        message: giftMessage.value.trim(),
-        method: giftMethod.value,
-        methodDesc,
-    })
-    giftName.value = ''
-    giftContent.value = ''
-    giftMessage.value = ''
-    giftMethod.value = 'in_person'
+    emit('send-gift', { name: giftName.value.trim(), content: giftContent.value.trim(), message: giftMessage.value.trim(), method: giftMethod.value, methodDesc })
+    giftName.value = ''; giftContent.value = ''; giftMessage.value = ''; giftMethod.value = 'in_person'
     activePanel.value = null
 }
 
 function sendTransfer() {
     const amount = parseFloat(transferAmount.value)
     if (!amount || amount <= 0) return
-    emit('send-transfer', {
-        amount,
-        note: transferNote.value.trim()
-    })
-    transferAmount.value = ''
-    transferNote.value = ''
-    activePanel.value = ''
-    showToolbar.value = false
+    emit('send-transfer', { amount, note: transferNote.value.trim() })
+    transferAmount.value = ''; transferNote.value = ''; activePanel.value = ''; showToolbar.value = false
 }
 
 function sendLocation() {
-    if (!navigator.geolocation) {
-        alert('您的设备不支持定位')
-        return
-    }
+    if (!navigator.geolocation) { alert('您的设备不支持定位'); return }
     navigator.geolocation.getCurrentPosition(
-        (pos) => {
-            emit('send-location', {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-                accuracy: pos.coords.accuracy
-            })
-            showToolbar.value = false
-        },
-        () => {
-            // 定位失败，不自动发送，提示用户
-            alert('定位失败，请检查位置权限')
-        }
+        (pos) => { emit('send-location', { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }); showToolbar.value = false },
+        () => { alert('定位失败，请检查位置权限') }
     )
 }
 
@@ -471,9 +425,7 @@ function autoResize() {
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
 
-onMounted(() => {
-    loadEmojiList()
-})
+onMounted(() => { loadEmojiList() })
 </script>
 
 <style scoped>
@@ -487,7 +439,6 @@ onMounted(() => {
     border-top: 1px solid rgba(217, 163, 175, 0.1);
 }
 
-/* 图片预览 */
 .image-preview-bar {
     padding: 8px 16px 0;
 }
@@ -546,7 +497,59 @@ onMounted(() => {
     opacity: 0.7;
 }
 
-/* 功能栏 */
+/* 引用预览 */
+.quote-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px 0;
+}
+
+.quote-bar-line {
+    width: 3px;
+    height: 32px;
+    border-radius: 2px;
+    background: rgba(217, 163, 175, 0.5);
+    flex-shrink: 0;
+}
+
+.quote-bar-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.quote-bar-role {
+    font-size: 10px;
+    color: #D9A3AF;
+    font-weight: 600;
+}
+
+.quote-bar-text {
+    font-size: 12px;
+    color: #8A7880;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quote-bar-close {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(217, 163, 175, 0.15);
+    border: none;
+    font-size: 14px;
+    color: #B8A9AC;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
 .chat-toolbar {
     border-top: 1px solid rgba(217, 163, 175, 0.1);
 }
@@ -565,7 +568,6 @@ onMounted(() => {
     transform: translateY(8px);
 }
 
-/* 面板 */
 .toolbar-panel {
     padding: 12px 16px;
     border-bottom: 1px solid rgba(217, 163, 175, 0.08);
@@ -599,7 +601,6 @@ onMounted(() => {
     transform: scale(0.9);
 }
 
-/* 礼物转账面板 */
 .gift-input-area,
 .transfer-input-area {
     display: flex;
@@ -680,7 +681,6 @@ onMounted(() => {
     cursor: not-allowed;
 }
 
-/* 功能按钮行 */
 .toolbar-btns {
     display: flex;
     gap: 0;
@@ -728,7 +728,6 @@ onMounted(() => {
     transform: scale(0.93);
 }
 
-/* 旁白提示 */
 .narr-indicator {
     display: flex;
     align-items: center;
@@ -753,7 +752,6 @@ onMounted(() => {
     padding: 0;
 }
 
-/* 输入行 */
 .chat-input-area {
     display: flex;
     gap: 8px;
@@ -898,5 +896,23 @@ textarea::placeholder {
 .delivery-time-input {
     width: 100%;
     box-sizing: border-box;
+}
+
+.fade-up-enter-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-up-leave-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-up-enter-from {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.fade-up-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
 }
 </style>

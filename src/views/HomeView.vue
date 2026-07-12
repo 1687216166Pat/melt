@@ -1192,6 +1192,7 @@ import BlurModal from '@/components/ui/BlurModal.vue'
 import DreamInput from '@/components/ui/DreamInput.vue'
 import SoftButton from '@/components/ui/SoftButton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import { isLocalMode } from '@/utils/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -2450,15 +2451,75 @@ onMounted(async () => {
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
-    await loadHomeData()
-    await loadAllPersonas()
-    await loadTogetherData()
-    await loadPersonaInsights()
-    await loadBookmarks()
-    await loadContactGroups()
-    await loadHabitatStats()
-    await loadMonthlyStats()
-    await loadRecentPersona()
+    if (!isLocalMode) {
+        // personal 模式：从云端加载所有数据
+        await loadHomeData()
+        await loadAllPersonas()
+        await loadTogetherData()
+        await loadPersonaInsights()
+        await loadBookmarks()
+        await loadContactGroups()
+        await loadHabitatStats()
+        await loadMonthlyStats()
+        await loadRecentPersona()
+    } else {
+        // local/lite 模式：从本地 storage 加载
+        const { storage } = await import('@/utils/storage')
+        const localPersonas = storage.getPersonas() || []
+
+        // 内置人设
+        const builtinPersonas = [
+            { id: 'xiaorou', name: '小柔', note: '小柔', avatar: '🌸', avatarUrl: '', custom: false, lastMessage: '', lastMessageTime: null },
+            { id: 'cool', name: '阿冷', note: '阿冷', avatar: '🌙', avatarUrl: '', custom: false, lastMessage: '', lastMessageTime: null },
+        ]
+
+        const hidden = JSON.parse(localStorage.getItem('hidden_personas') || '[]')
+        const pinned = JSON.parse(localStorage.getItem('pinned_personas') || '[]')
+
+        allPersonas.value = [
+            ...builtinPersonas.filter(p => !hidden.includes(p.id)),
+            ...localPersonas
+        ].map(p => ({ ...p, pinned: pinned.includes(p.id) }))
+
+        // 加载每个角色的最后一条消息
+        allPersonas.value = allPersonas.value.map(p => {
+            const msgs = storage.getMessages(p.id) || []
+            if (msgs.length > 0) {
+                const last = msgs[msgs.length - 1]
+                const prefix = last.role === 'ai' ? '' : '我: '
+                const content = (last.content || '').split('|||')[0].replace(/\n/g, ' ')
+                return {
+                    ...p,
+                    lastMessage: prefix + (content.length > 20 ? content.slice(0, 20) + '...' : content),
+                    lastMessageTime: last.timestamp || null
+                }
+            }
+            return p
+        })
+
+        // 设置当前 AI
+        const savedCharId = localStorage.getItem('home_char_id')
+        const firstPersona = allPersonas.value.find(p => p.id === savedCharId) || allPersonas.value[0]
+        if (firstPersona) {
+            Object.assign(currentAi.value, { ...firstPersona, personaId: firstPersona.id })
+        }
+
+        // 设置最近聊天预览
+        if (allPersonas.value.length > 0) {
+            recentPersona.value = allPersonas.value[0]
+            leftBubbleText.value = allPersonas.value[0].lastMessage || '在想你'
+        }
+
+        // 统计数据置为本地计算
+        const pid = currentAi.value.personaId
+        if (pid) {
+            const msgs = storage.getMessages(pid) || []
+            totalMessages.value = msgs.length
+            habitatTotalMessages.value = msgs.length
+            streak.value = 0
+            habitatStreak.value = 0
+        }
+    }
 
     setTimeout(setupScrollFocus, 300)
 })

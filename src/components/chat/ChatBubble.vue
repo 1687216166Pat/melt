@@ -27,6 +27,16 @@
 
         <div class="bubble-content">
 
+            <!-- 引用消息显示 -->
+            <div v-if="msg.quoteContent" class="quote-preview" @click.stop>
+                <div class="quote-line"></div>
+                <div class="quote-body">
+                    <span class="quote-role">{{ msg.quoteRole === 'ai' ? personaAvatar : '我' }}</span>
+                    <span class="quote-text">{{ msg.quoteContent.slice(0, 50) }}{{ msg.quoteContent.length > 50 ? '...'
+                        : '' }}</span>
+                </div>
+            </div>
+
             <div v-if="msg.type === 'narr'" class="narr-bubble">
                 <p>{{ msg.content }}</p>
             </div>
@@ -160,17 +170,46 @@
         </div>
         <div v-else-if="showAvatar && msg.role === 'user'" class="avatar-placeholder"></div>
 
-        <transition name="panel">
-            <div v-if="showActions && !selectMode" class="bubble-actions" @click.self="showActions = false">
-                <div class="action-menu">
-                    <button v-if="!msg.type || msg.type === 'narr'" @click="editMsg">编辑</button>
-                    <button v-if="msg.role === 'ai'" @click="regenerate">重新生成</button>
-                    <button @click="bookmarkMsg">收藏</button>
-                    <button @click="deleteMsg" class="danger">删除</button>
-                    <button @click="showActions = false">取消</button>
-                </div>
+        <!-- 内联操作栏（长按后显示在气泡上方）-->
+        <Transition name="action-bar">
+            <div v-if="showActions && !selectMode" class="inline-action-bar"
+                :class="msg.role === 'user' ? 'action-bar-user' : 'action-bar-ai'">
+                <button class="action-pill" @click="quoteMsg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>引用</span>
+                </button>
+                <button v-if="!msg.type || msg.type === 'narr'" class="action-pill" @click="editMsg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>编辑</span>
+                </button>
+                <button v-if="msg.role === 'ai'" class="action-pill" @click="regenerate">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                    </svg>
+                    <span>重生成</span>
+                </button>
+                <button class="action-pill" @click="bookmarkMsg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span>收藏</span>
+                </button>
+                <button class="action-pill action-pill-danger" @click="deleteMsg">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                    </svg>
+                    <span>删除</span>
+                </button>
+                <button class="action-pill action-pill-close" @click="showActions = false">×</button>
             </div>
-        </transition>
+        </Transition>
 
         <Teleport to="body">
             <div v-if="previewImage" class="image-preview-overlay" @click="previewImage = null">
@@ -403,7 +442,7 @@ const props = defineProps({
     selected: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['edit', 'delete', 'regenerate', 'bookmark', 'select'])
+const emit = defineEmits(['edit', 'delete', 'regenerate', 'bookmark', 'select', 'quote'])
 
 const showActions = ref(false)
 const previewImage = ref(null)
@@ -467,16 +506,14 @@ function handleTouchStart(e) {
     longPressTimer = setTimeout(() => { showActions.value = true }, 500)
 }
 
-function handleTouchEnd() {
-    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+function quoteMsg() {
+    showActions.value = false
+    emit('quote', {
+        id: props.msg.id,
+        content: props.msg.content,
+        role: props.msg.role,
+    })
 }
-
-function displayImages(msg) {
-    if (msg._expanded || msg.images.length <= 4) return msg.images
-    return msg.images.slice(0, 4)
-}
-
-function openImage(url) { previewImage.value = url }
 
 function editMsg() {
     showActions.value = false
@@ -500,6 +537,17 @@ function bookmarkMsg() {
     showActions.value = false
     emit('bookmark', props.msg)
 }
+
+function handleTouchEnd() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null }
+}
+
+function displayImages(msg) {
+    if (msg._expanded || msg.images.length <= 4) return msg.images
+    return msg.images.slice(0, 4)
+}
+
+function openImage(url) { previewImage.value = url }
 
 // 收下状态，用消息 id 存
 function isAccepted(msgId) {
@@ -1296,25 +1344,129 @@ function acceptMsg(msgId) {
     border-radius: 8px;
 }
 
-/* 操作菜单 */
-.bubble-actions {
-    position: fixed;
-    inset: 0;
-    background: rgba(50, 30, 40, 0.2);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    z-index: 200;
+/* 内联操作栏 */
+.inline-action-bar {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 4px;
+    padding: 4px 2px;
+    flex-wrap: wrap;
+    animation: action-bar-appear 0.15s ease;
 }
 
-.action-menu {
-    background: var(--color-bg);
-    border-radius: 20px;
-    padding: 8px;
-    min-width: 160px;
-    box-shadow: 0 8px 32px rgba(200, 130, 160, 0.12);
+.action-bar-user {
+    justify-content: flex-end;
+}
+
+.action-bar-ai {
+    justify-content: flex-start;
+}
+
+@keyframes action-bar-appear {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.action-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 12px;
+    border: none;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-size: 11px;
+    color: #4A3F41;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.action-pill svg {
+    width: 13px;
+    height: 13px;
+    stroke: #6B5B5E;
+    flex-shrink: 0;
+}
+
+.action-pill:active {
+    transform: scale(0.93);
+    background: rgba(217, 163, 175, 0.15);
+}
+
+.action-pill-danger {
+    color: #C070;
+}
+
+.action-pill-danger svg {
+    stroke: #C07070;
+}
+
+.action-pill-close {
+    padding: 5px 8px;
+    font-size: 14px;
+    color: #B8A9AC;
+}
+
+.action-bar-enter-active {
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.action-bar-leave-active {
+    transition: opacity 0.1s ease;
+}
+
+.action-bar-enter-from {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+
+.action-bar-leave-to {
+    opacity: 0;
+}
+
+/* 引用消息 */
+.quote-preview {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+    cursor: default;
+}
+
+.quote-line {
+    width: 3px;
+    border-radius: 2px;
+    background: rgba(217, 163, 175, 0.5);
+    flex-shrink: 0;
+}
+
+.quote-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.quote-role {
+    font-size: 10px;
+    color: #D9A3AF;
+    font-weight: 600;
+}
+
+.quote-text {
+    font-size: 12px;
+    color: #8A7880;
+    line-height: 1.4;
 }
 
 .action-menu button {
@@ -1507,5 +1659,123 @@ function acceptMsg(msgId) {
 
 .status-arrived {
     color: #6BAF7A;
+}
+
+/* 内联操作栏 */
+.inline-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 2px 6px;
+    flex-wrap: wrap;
+}
+
+.action-bar-user {
+    justify-content: flex-end;
+}
+
+.action-bar-ai {
+    justify-content: flex-start;
+}
+
+.action-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 12px;
+    border: none;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    font-size: 11px;
+    color: #4A3F41;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.action-pill svg {
+    width: 13px;
+    height: 13px;
+    stroke: #6B5B5E;
+    flex-shrink: 0;
+}
+
+.action-pill:active {
+    transform: scale(0.93);
+    background: rgba(217, 163, 175, 0.15);
+}
+
+.action-pill-danger {
+    color: #C07070;
+}
+
+.action-pill-danger svg {
+    stroke: #C07070;
+}
+
+.action-pill-close {
+    padding: 5px 8px;
+    font-size: 14px;
+    color: #B8A9AC;
+}
+
+.action-bar-enter-active {
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.action-bar-leave-active {
+    transition: opacity 0.1s ease;
+}
+
+.action-bar-enter-from {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+
+.action-bar-leave-to {
+    opacity: 0;
+}
+
+/* 引用消息 */
+.quote-preview {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+    padding: 6px 10px;
+    background: rgba(217, 163, 175, 0.08);
+    border-radius: 10px;
+}
+
+.quote-line {
+    width: 3px;
+    border-radius: 2px;
+    background: rgba(217, 163, 175, 0.5);
+    flex-shrink: 0;
+}
+
+.quote-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.quote-role {
+    font-size: 10px;
+    color: #D9A3AF;
+    font-weight: 600;
+}
+
+.quote-text {
+    font-size: 12px;
+    color: #8A7880;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 </style>

@@ -1,9 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { api } from "@/utils/api";
+import { api, isLocalMode } from "@/utils/api";
 import { getCache, setCache } from "@/utils/cache";
-
-// 解析消息内容里的特殊类型
 
 function parseSpecialContent(content) {
   if (!content) return {};
@@ -123,7 +121,6 @@ export const useChatStore = defineStore("chat", () => {
       timestamp: msg.timestamp || new Date().toISOString(),
     };
 
-    // 保留特殊消息字段
     if (msg.type) newMsg.type = msg.type;
     if (msg.giftName !== undefined) newMsg.giftName = msg.giftName;
     if (msg.giftContent !== undefined) newMsg.giftContent = msg.giftContent;
@@ -144,8 +141,9 @@ export const useChatStore = defineStore("chat", () => {
     if (msg.deliveryNote !== undefined) newMsg.deliveryNote = msg.deliveryNote;
     if (msg.deliveryExpectedAt !== undefined)
       newMsg.deliveryExpectedAt = msg.deliveryExpectedAt;
+    if (msg.quoteContent !== undefined) newMsg.quoteContent = msg.quoteContent;
+    if (msg.quoteRole !== undefined) newMsg.quoteRole = msg.quoteRole;
 
-    // 去重：检查最近 5 条，防止同样内容在短时间内重复添加
     const recent = messages.value.slice(-5);
     const isDuplicate = recent.some(
       (m) =>
@@ -171,7 +169,6 @@ export const useChatStore = defineStore("chat", () => {
     }
     isLoading = true;
 
-    // 同一个 persona 本次 session 已加载过，走缓存
     if (allMessages.value.length > 0 && currentLoadedPersona === personaId) {
       if (allMessages.value.length > pageSize) {
         messages.value = allMessages.value.slice(-pageSize);
@@ -185,8 +182,15 @@ export const useChatStore = defineStore("chat", () => {
     }
 
     try {
-      const res = await api(`/api/messages/${personaId}`);
-      const data = await res.json();
+      let data = [];
+
+      if (isLocalMode) {
+        const { storage } = await import("@/utils/storage");
+        data = storage.getMessages(personaId) || [];
+      } else {
+        const res = await api(`/api/messages/${personaId}`);
+        data = await res.json();
+      }
 
       const processed = [];
 

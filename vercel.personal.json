@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build:personal",
+  "outputDirectory": "dist-personal",
+  "installCommand": "npm install",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

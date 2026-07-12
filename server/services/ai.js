@@ -1114,7 +1114,7 @@ async function handleChat(
   if (pushBubbles.length > 1) {
     pushBubbles.forEach((line, idx) => {
       setTimeout(() => {
-        pushNotification(pName, line);
+        pushNotification(pName, line, { personaId: pid });
       }, idx * 800);
     });
   } else {
@@ -1125,8 +1125,19 @@ async function handleChat(
     pushNotification(
       pName,
       cleanPush.length > 60 ? cleanPush.slice(0, 60) + "..." : cleanPush,
+      { personaId: pid },
     );
   }
+}
+
+function isFeatureEnabled(feature) {
+  const mode = global.APP_MODE || "personal";
+  const map = {
+    supabase: { personal: true, local: false, lite: false },
+    diary_notion: { personal: true, local: false, lite: false },
+    push_notif: { personal: true, local: false, lite: false },
+  };
+  return map[feature]?.[mode] ?? true; // 默认都开启
 }
 
 module.exports = {
@@ -1134,4 +1145,5 @@ module.exports = {
   invalidatePersonaCache,
   invalidateWorldBookCache,
   invalidateUserPromptCache,
+  isFeatureEnabled,
 };
