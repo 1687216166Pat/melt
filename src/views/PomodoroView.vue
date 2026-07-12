@@ -60,6 +60,26 @@
                 <div class="pomodoro-count">
                     第 {{ pomodoroCount }} 个番茄 · 今日完成 {{ todayCount }}
                 </div>
+
+                <!-- 任务输入 -->
+                <Transition name="fade-up">
+                    <div v-if="showTaskInput" class="task-input-wrap">
+                        <input class="task-input" v-model="currentTask" placeholder="要专注做什么？（可跳过）"
+                            @keyup.enter="startTimer" autofocus />
+                        <div class="task-input-btns">
+                            <button class="task-btn-skip" @click="startTimer">跳过</button>
+                            <button class="task-btn-start" @click="startTimer">开始专注</button>
+                        </div>
+                    </div>
+                </Transition>
+
+                <!-- AI 消息 -->
+                <Transition name="fade-up">
+                    <div v-if="aiMessage" class="pomo-ai-msg">
+                        {{ aiMessage }}
+                    </div>
+                </Transition>
+
             </div>
 
             <!-- 时长设置 -->
@@ -105,7 +125,11 @@
                 <div v-if="todayHistory.length === 0" class="wish-empty">今天还没有完成的番茄</div>
                 <div v-for="(record, idx) in todayHistory" :key="idx" class="pomo-record">
                     <div class="pomo-record-dot" :style="{ background: record.isBreak ? '#98CBEA' : '#E8C0C9' }"></div>
-                    <span class="pomo-record-text">{{ record.isBreak ? '休息' : '专注' }} {{ record.duration }} 分钟</span>
+                    <div class="pomo-record-info">
+                        <span class="pomo-record-text">{{ record.isBreak ? '休息' : '专注' }} {{ record.duration }}
+                            分钟</span>
+                        <span v-if="record.task" class="pomo-record-task">{{ record.task }}</span>
+                    </div>
                     <span class="pomo-record-time">{{ record.endTime }}</span>
                 </div>
             </div>
@@ -115,7 +139,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { api } from '@/utils/api'
 
 const focusDuration = ref(parseInt(localStorage.getItem('pomo_focus') || '25'))
 const shortBreak = ref(parseInt(localStorage.getItem('pomo_short') || '5'))
@@ -125,12 +150,29 @@ const longBreakInterval = ref(parseInt(localStorage.getItem('pomo_interval') || 
 const running = ref(false)
 const isBreak = ref(false)
 const pomodoroCount = ref(0)
-const todayCount = ref(parseInt(localStorage.getItem('pomo_today_count') || '0'))
-const todayHistory = ref(JSON.parse(localStorage.getItem('pomo_today_history') || '[]'))
+const todayCount = ref(0)
+const todayHistory = ref([])
+const currentTask = ref('')
+const showTaskInput = ref(false)
+const aiMessage = ref('')
+
+function checkDayReset() {
+    const lastDate = localStorage.getItem('pomo_last_date')
+    const today = new Date().toISOString().slice(0, 10)
+    if (lastDate !== today) {
+        todayCount.value = 0
+        todayHistory.value = []
+        localStorage.setItem('pomo_today_count', '0')
+        localStorage.setItem('pomo_today_history', '[]')
+        localStorage.setItem('pomo_last_date', today)
+    } else {
+        todayCount.value = parseInt(localStorage.getItem('pomo_today_count') || '0')
+        todayHistory.value = JSON.parse(localStorage.getItem('pomo_today_history') || '[]')
+    }
+}
 
 const totalSeconds = ref(focusDuration.value * 60)
 const remaining = ref(totalSeconds.value)
-
 let timer = null
 
 const timeDisplay = computed(() => {
@@ -140,31 +182,54 @@ const timeDisplay = computed(() => {
 })
 
 const ringCircumference = computed(() => 2 * Math.PI * 52)
-
 const ringOffset = computed(() => {
     const progress = remaining.value / totalSeconds.value
     return ringCircumference.value * (1 - progress)
 })
 
-function toggleTimer() {
-    if (running.value) {
-        clearInterval(timer)
-        running.value = false
-    } else {
-        running.value = true
-        timer = setInterval(() => {
-            if (remaining.value <= 0) {
-                clearInterval(timer)
-                running.value = false
-                onTimerEnd()
-            } else {
-                remaining.value--
-            }
-        }, 1000)
-    }
+async function reportStatus(type, data) {
+    try {
+        await api('/api/phone/status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                type: 'focus', 
+                data,
+                timestamp: new Date().toISOString()
+            })
+        })
+    } catch { }
 }
 
-function onTimerEnd() {
+async function sendAiMessage(message) {
+    aiMessage.value = message
+    setTimeout(() => { aiMessage.value = '' }, 5000)
+}
+
+function startTimer() {
+    showTaskInput.value = false
+    running.value = true
+
+    const taskDesc = currentTask.value ? `（任务：${currentTask.value}）` : ''
+    if (!isBreak.value) {
+        reportStatus('focus', `开始专注${focusDuration.value}分钟${taskDesc}`)
+    } else {
+        const breakMin = pomodoroCount.value % longBreakInterval.value === 0 ? longBreak.value : shortBreak.value
+        reportStatus('focus', `开始休息${breakMin}分钟`)
+    }
+
+    timer = setInterval(() => {
+        if (remaining.value <= 0) {
+            clearInterval(timer)
+            running.value = false
+            onTimerEnd()
+        } else {
+            remaining.value--
+        }
+    }, 1000)
+}
+
+async function onTimerEnd() {
     const duration = isBreak.value
         ? (pomodoroCount.value % longBreakInterval.value === 0 ? longBreak.value : shortBreak.value)
         : focusDuration.value
@@ -172,6 +237,7 @@ function onTimerEnd() {
     todayHistory.value.unshift({
         isBreak: isBreak.value,
         duration,
+        task: currentTask.value,
         endTime: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     })
     localStorage.setItem('pomo_today_history', JSON.stringify(todayHistory.value))
@@ -180,6 +246,13 @@ function onTimerEnd() {
         pomodoroCount.value++
         todayCount.value++
         localStorage.setItem('pomo_today_count', String(todayCount.value))
+
+        const taskDesc = currentTask.value ? `（任务：${currentTask.value}）` : ''
+        reportStatus('focus', `完成专注${focusDuration.value}分钟${taskDesc}，这是今天第${todayCount.value}个番茄钟`)
+        sendAiMessage('专注完成了，休息一下吧 ✿')
+    } else {
+        reportStatus('focus', `休息${duration}分钟结束`)
+        sendAiMessage('休息结束，准备好继续了吗')
     }
 
     isBreak.value = !isBreak.value
@@ -191,12 +264,37 @@ function onTimerEnd() {
         totalSeconds.value = focusDuration.value * 60
     }
     remaining.value = totalSeconds.value
+
+    setTimeout(() => { startTimer() }, 1500)
+}
+
+function toggleTimer() {
+    if (running.value) {
+        clearInterval(timer)
+        running.value = false
+        const elapsed = Math.floor((totalSeconds.value - remaining.value) / 60)
+        const taskDesc = currentTask.value ? `（任务：${currentTask.value}）` : ''
+        reportStatus('focus', `暂停专注${taskDesc}，已进行${elapsed}分钟`)
+    } else {
+        if (!isBreak.value && pomodoroCount.value === 0 && remaining.value === totalSeconds.value) {
+            showTaskInput.value = true
+            return
+        }
+        startTimer()
+    }
 }
 
 function reset() {
     clearInterval(timer)
     running.value = false
+    const elapsed = Math.floor((totalSeconds.value - remaining.value) / 60)
+    if (elapsed > 0) {
+        const taskDesc = currentTask.value ? `（任务：${currentTask.value}）` : ''
+        reportStatus('focus', `中断专注${taskDesc}，已进行${elapsed}分钟`)
+    }
     isBreak.value = false
+    pomodoroCount.value = 0
+    currentTask.value = ''
     totalSeconds.value = focusDuration.value * 60
     remaining.value = totalSeconds.value
 }
@@ -227,6 +325,7 @@ function adjustDuration(type, delta) {
     }
 }
 
+onMounted(() => { checkDayReset() })
 onUnmounted(() => { clearInterval(timer) })
 </script>
 
@@ -535,5 +634,99 @@ onUnmounted(() => { clearInterval(timer) })
     color: #B8A9AC;
     text-align: center;
     padding: 16px 0;
+}
+
+.task-input-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 8px;
+}
+
+.task-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border: 1px solid rgba(217, 163, 175, 0.25);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 14px;
+    color: #4A3F41;
+    font-family: inherit;
+    outline: none;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.task-input-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.task-btn-skip {
+    flex: 1;
+    height: 40px;
+    border-radius: 14px;
+    border: 1px solid rgba(217, 163, 175, 0.2);
+    background: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    color: #B8A9AC;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.task-btn-start {
+    flex: 2;
+    height: 40px;
+    border-radius: 14px;
+    border: none;
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    font-size: 13px;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.pomo-ai-msg {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #4A3F41;
+    border: 1px solid rgba(255, 240, 242, 0.5);
+    text-align: center;
+}
+
+.pomo-record-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pomo-record-task {
+    font-size: 11px;
+    color: #B8A9AC;
+}
+
+.fade-up-enter-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-up-leave-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-up-enter-from {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.fade-up-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
 }
 </style>
