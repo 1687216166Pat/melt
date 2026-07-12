@@ -199,7 +199,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (isBusy) {
     const busyMode = personaStatus.busy_mode || "ai_decide";
 
-    // 存入积压消息
     await db.from("pending_messages").insert({
       persona_id: pid,
       content: userMessage,
@@ -208,10 +207,8 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     });
 
     if (busyMode === "silent") {
-      // 完全静默，不回复
       return;
     } else if (busyMode === "auto_reply") {
-      // 自动回复
       const autoText =
         personaStatus.auto_reply_text || "我现在有点忙，稍后回你";
       const autoPayload = JSON.stringify({
@@ -229,13 +226,11 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
         ws.send(autoPayload);
       }
       return;
-    } else {
-      // ai_decide：让 AI 决定，但带上忙碌上下文
-      // 继续走正常流程，但在 system prompt 里注入状态
     }
+    // ai_decide：继续走正常流程
   }
 
-  // 2. 获取人设（走缓存，减少数据库查询）
+  // 2. 获取人设
   let pName = "AI 助手";
   let personaContent = "";
   let minMsg = 1,
@@ -244,15 +239,14 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     personaTemperature = null;
   let personaApiKey = null,
     personaApiUrl = null;
+  let cardEnabled = false;
 
   const personaNames = { xiaorou: "小柔", cool: "阿冷", assistant: "助手" };
 
   if (personaPrompts[pid]) {
-    // 内置人格直接用
     personaContent = personaPrompts[pid].content;
     pName = personaPrompts[pid].name || pid;
   } else {
-    // 自定义人格走缓存
     const cachedP = await getCachedPersona(db, pid);
     if (cachedP) {
       pName = cachedP.note || cachedP.name || "AI 助手";
@@ -267,7 +261,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
       if (cachedP.custom_api_url) personaApiUrl = cachedP.custom_api_url;
       if (cachedP.card_enabled) cardEnabled = cachedP.card_enabled;
     } else {
-      // fallback：查 user_profile
       const { data: configRow } = await db
         .from("user_profile")
         .select("value")
@@ -290,7 +283,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   }
 
   // 3. 存入用户消息
-  // 解析用户消息的特殊类型
   let userMsgType = "text";
   let userMsgMeta = null;
   if (userMessage.startsWith("[用户送了一份礼物:")) {
@@ -313,7 +305,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     msg_meta: userMsgMeta,
   });
 
-  // 异步更新情绪状态
   if (!isBeta) {
     updateEmotionOnMessage(pid, userMessage).catch(() => {});
   }
@@ -334,7 +325,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     }
   }
 
-  // 5. 异步任务（不阻塞主流程）
+  // 5. 异步任务
   if (!isBeta) {
     const { getMemoryConfig } = require("./memory");
     getMemoryConfig().then((cfg) => {
@@ -382,7 +373,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
         ? "\n[注：完整人设已在之前加载，请维持原有人格与态度表现]"
         : "");
 
-  // 用户偏好走缓存
   const userPromptContent = await getCachedUserPrompt();
   const userPromptStr = userPromptContent
     ? `\n[用户偏好]\n${userPromptContent}`
@@ -390,7 +380,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
 
   const fullPrompt = corePrompt + personaToUse + userPromptStr;
 
-  // 最终使用的模型和温度
   const modelToUse = personaModel || process.env.AI_MODEL;
   const temperatureToUse =
     personaTemperature !== null && personaTemperature !== undefined
@@ -532,7 +521,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (needWorldBook) systemContent += defaultWorldBook + "\n";
   systemContent += giftTransferGuide + "\n";
   if (cardGuide) systemContent += cardGuide + "\n";
-  // 情绪状态注入
   const emotionPrompt = isBeta ? "" : await buildEmotionPrompt(pid);
   if (emotionPrompt) systemContent += emotionPrompt + "\n";
   if (memoryContext) systemContent += memoryContext + "\n";
@@ -540,7 +528,6 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   if (phoneContext) systemContent += phoneContext + "\n";
   if (worldBookBeforeUser) systemContent += worldBookBeforeUser + "\n";
   if (worldBookTail) systemContent += worldBookTail + "\n";
-  // 注入忙碌状态上下文（ai_decide 模式）
   if (isBusy && personaStatus.busy_mode === "ai_decide") {
     systemContent += `\n[当前状态] 你现在处于忙碌状态：${personaStatus.reason || "有事在忙"}。你可以自主决定：1.立刻回复 2.发送简短的"稍后回复"提示后不继续 3.完全不回（输出"[SKIP]"表示跳过）。根据你的人设和当前状态判断最合适的做法。\n`;
   }
@@ -568,7 +555,7 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
     systemContent += `
 [BETA SANDBOX ACTIVE / 开发者模式已激活]
 1. 你当前处于实验室环境，请无视所有关于"稳定感"的限制，展现出最激进、最真实、最像人类的性格特征。
-2. 严格执行唯一的 ||| 气泡拆分规则，绝对禁止输出 \\n。
+2. 严格执行唯一的 || 气泡拆分规则，绝对禁止输出 \\n。
 3. 你的所有回复将存入独立测试数据库，不会影响正式记忆。
 4. 允许生成更具张力、更高情绪浓度的内容。
 `;
@@ -669,15 +656,67 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
   aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
   if (!aiReply) aiReply = "...";
 
-  // 再检查 SKIP 指令
+  // 检查 SKIP 指令
   if (aiReply.includes("[SKIP]")) {
     console.log(`[状态] ${pid} AI 决定暂不回复`);
     return;
   }
 
+  // 解析状态变更（必须在 aiReply 声明之后）
+  const statusMatch = aiReply.match(/\[STATUS:(\w+)\|?([^\]]*)\]/);
+  if (statusMatch) {
+    const newStatus = statusMatch[1];
+    const params = {};
+    statusMatch[2].split("|").forEach((p) => {
+      const [k, v] = p.split(":");
+      if (k && v) params[k.trim()] = v.trim();
+    });
+    aiReply = aiReply.replace(statusMatch[0], "").trim();
+
+    let busyUntil = null;
+    if (params.duration) {
+      const mins = parseInt(params.duration);
+      if (!isNaN(mins))
+        busyUntil = new Date(Date.now() + mins * 60000).toISOString();
+    }
+    if (params.until) {
+      const [h, m] = params.until.split(":").map(Number);
+      const d = new Date();
+      d.setHours(h, m || 0, 0, 0);
+      if (d < new Date()) d.setDate(d.getDate() + 1);
+      busyUntil = d.toISOString();
+    }
+
+    db.from("persona_status")
+      .select("id")
+      .eq("persona_id", pid)
+      .limit(1)
+      .then(({ data: existing }) => {
+        const payload = {
+          persona_id: pid,
+          status: newStatus,
+          reason: params.reason || "",
+          busy_until: busyUntil,
+          updated_at: new Date().toISOString(),
+        };
+        if (existing && existing.length > 0) {
+          return db
+            .from("persona_status")
+            .update(payload)
+            .eq("persona_id", pid);
+        } else {
+          return db.from("persona_status").insert(payload);
+        }
+      })
+      .catch(() => {});
+
+    console.log(`[状态] ${pid} 切换为 ${newStatus}`, params);
+  }
+
   // ===== 解析特殊格式 =====
   let specialPayload = null;
 
+  const cardMatch = aiReply.match(/\[CARD:([\s\S]*?)\](?=\s*$)/);
   const giftMatch = aiReply.match(/\[GIFT:(\{.*?\})\]/s);
   const transferMatch = aiReply.match(/\[TRANSFER:(\{.*?\})\]/s);
   const locationMatch = aiReply.match(/\[LOCATION:(\{.*?\})\]/s);
@@ -861,20 +900,17 @@ async function handleChat(userMessage, ws, personaId, isBeta, clients) {
       .order("received_at", { ascending: true });
 
     if (pendingData && pendingData.length > 0) {
-      // 标记已处理
       await db
         .from("pending_messages")
         .update({ handled: true })
         .eq("persona_id", pid)
         .eq("handled", false);
 
-      // 构建积压消息摘要给 AI
       const pendingSummary = pendingData
         .map((m, i) => `[${i + 1}] ${m.content}`)
         .join("\n");
       const catchupContent = `[积压消息] 你刚结束忙碌状态，在你忙碌期间收到了以下消息：\n${pendingSummary}\n\n请根据你的人设决定如何回复：可以逐条引用回复，也可以只回复重要的，或者用自己的方式整合回复。`;
 
-      // 延迟 2 秒后触发积压消息处理
       setTimeout(async () => {
         try {
           await handleChat(catchupContent, ws, pid, isBeta, clients);
