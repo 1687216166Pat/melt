@@ -40,8 +40,8 @@ const isHomePage = computed(() => {
         'worldbook', 'chat',
         'about', 'settings-memory-manage',
         'memory', 'logs',
-        'diary',
-        'presence','memo'
+        'diary','memory-graph',
+        'presence', 'memo', 'persona-cards'
 
     ]
     return noPaddingRoutes.includes(route.name) || route.path === '/'

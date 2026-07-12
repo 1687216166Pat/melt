@@ -2329,4 +2329,37 @@ router.post("/memo/ai-generate/:personaId", async (req, res) => {
   }
 });
 
+router.get("/emotion/:personaId", async (req, res) => {
+  const { getEmotionStatus } = require("../services/emotion");
+  const state = await getEmotionStatus(req.params.personaId);
+  res.json(state || {});
+});
+
+// 记忆星图
+router.post("/memory-graph/:personaId/build", async (req, res) => {
+  const { buildMemoryGraph } = require("../services/memoryGraph");
+  await buildMemoryGraph(req.params.personaId);
+  res.json({ success: true });
+});
+
+router.get("/memory-graph/:personaId", async (req, res) => {
+  const { getFullGraph } = require("../services/memoryGraph");
+  const nodes = await getFullGraph(req.params.personaId);
+  res.json(nodes);
+});
+
+router.get("/memory-graph/:personaId/search", async (req, res) => {
+  const { searchMemory } = require("../services/memoryGraph");
+  const query = req.query.q || "";
+  const limit = parseInt(req.query.limit) || 10;
+  const results = await searchMemory(req.params.personaId, query, limit);
+  res.json(results);
+});
+
+router.get("/memory-graph/node/:nodeId", async (req, res) => {
+  const { getMemoryNode } = require("../services/memoryGraph");
+  const node = await getMemoryNode(req.params.nodeId);
+  res.json(node);
+});
+
 module.exports = router;

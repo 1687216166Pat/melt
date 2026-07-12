@@ -98,6 +98,16 @@ const router = createRouter({
       name: "memo",
       component: () => import("@/views/MemoView.vue"),
     },
+    {
+      path: "/persona-cards",
+      name: "persona-cards",
+      component: () => import("@/views/PersonaCardView.vue"),
+    },
+    {
+      path: "/memory-graph",
+      name: "memory-graph",
+      component: () => import("@/views/WishlistView.vue"),
+    },
   ],
 });
 

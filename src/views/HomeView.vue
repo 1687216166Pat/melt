@@ -574,7 +574,7 @@
                         <div class="slider-card-v8 stats-card focusable-card" @click="toggleChatStatLocal">
                             <span class="s-title">聊天统计 · {{ (recentPersona || currentAi).note || (recentPersona ||
                                 currentAi).name
-                            }}</span>
+                                }}</span>
                             <div class="s-value">{{ chatStatDisplay.v }}</div>
                             <span class="s-sub">{{ chatStatDisplay.l }}</span>
                             <div class="s-dots">
@@ -724,18 +724,19 @@
                                         </svg>
                                         <span>备忘录</span>
                                     </div>
-                                    <!-- 心愿单 -->
-                                    <div class="sec-item more-app-sec" @click="currentPage = 0; showMoreApps = false">
+                                    <!-- 记忆星图 -->
+                                    <div class="sec-item more-app-sec"
+                                        @click="router.push(`/memory-graph?persona=${currentAi.personaId || currentAi.id}`); showMoreApps = false">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                             stroke-linecap="round">
                                             <path
                                                 d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                                         </svg>
-                                        <span>心愿单</span>
+                                        <span>记忆星图</span>
                                     </div>
                                     <div class="sec-item more-app-sec"
-                                        @click="$router.push(`/persona-detail/${currentAi.personaId}`); showMoreApps = false">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                                        @click="$router.push('/persona-cards'); showMoreApps = fase">
+                                        <svg viewBox=" 0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                                             stroke-linecap="round">
                                             <rect x="2" y="4" width="20" height="16" rx="2" />
                                             <path d="M8 10h8M8 14h4" />
@@ -774,7 +775,7 @@
                             <span class="p-msg">{{ recentPersona?.lastMessage || leftBubbleText }}</span>
                         </div>
                         <span class="p-time">{{ recentPersona?.lastMessageTime ? formatLastTime(recentPersona) : '刚刚'
-                        }}</span>
+                            }}</span>
                     </div>
 
                 </div>
@@ -914,7 +915,7 @@
                                         <span v-else>{{ contextMenu.persona?.avatar || '💬' }}</span>
                                     </div>
                                     <span class="ctx-name">{{ contextMenu.persona?.note || contextMenu.persona?.name
-                                    }}</span>
+                                        }}</span>
                                 </div>
                                 <div class="ctx-divider"></div>
                                 <button class="ctx-item" @click="pinFromMenu(contextMenu.persona?.id)">
@@ -1097,7 +1098,7 @@
                                     class="dp-input dp-edit-input" @blur="saveEditEvent(selectedDay, i)"
                                     @keyup.enter="saveEditEvent(selectedDay, i)" />
                                 <span v-else class="dp-event-text" @click="startEditEvent(i, ev.text)">{{ ev.text
-                                }}</span>
+                                    }}</span>
                                 <button class="dp-event-del" @click="removeEvent(selectedDay, i)">×</button>
                             </div>
                         </template>

@@ -168,7 +168,7 @@
                                     <div class="event-footer">
                                         <div class="event-tags" v-if="event.tags && event.tags.length > 0">
                                             <span v-for="tag in event.tags" :key="tag" class="event-tag">{{ tag
-                                                }}</span>
+                                            }}</span>
                                         </div>
                                         <div class="event-actions">
                                             <button class="event-btn" @click="startEditTimeline(event)">✎</button>
@@ -191,6 +191,53 @@
 
             <!-- 侧写 -->
             <div v-if="activeTab === 'observe'" class="tab-content">
+
+                <!-- 情绪状态 -->
+                <div class="emotion-card">
+                    <div class="emotion-card-header">
+                        <span class="emotion-card-title">当前状态</span>
+                        <span class="emotion-phase-badge" :class="'phase-' + emotionState.longing_phase">
+                            {{ phaseLabel }}
+                        </span>
+                    </div>
+
+                    <!-- PA/NA 双轴 -->
+                    <div class="emotion-axes">
+                        <div class="emotion-axis">
+                            <div class="axis-label">
+                                <span>积极情绪</span>
+                                <span class="axis-val">{{ Math.round((emotionState.pa || 0) * 100) }}%</span>
+                            </div>
+                            <div class="axis-bar">
+                                <div class="axis-fill pa-fill" :style="{ width: (emotionState.pa || 0) * 100 + '%' }">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="emotion-axis">
+                            <div class="axis-label">
+                                <span>消极情绪</span>
+                                <span class="axis-val">{{ Math.round((emotionState.na || 0) * 100) }}%</span>
+                            </div>
+                            <div class="axis-bar">
+                                <div class="axis-fill na-fill" :style="{ width: (emotionState.na || 0) * 100 + '%' }">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="emotion-axis">
+                            <div class="axis-label">
+                                <span>想念程度</span>
+                                <span class="axis-val">{{ Math.round((emotionState.longing || 0) * 100) }}%</span>
+                            </div>
+                            <div class="axis-bar">
+                                <div class="axis-fill longing-fill"
+                                    :style="{ width: (emotionState.longing || 0) * 100 + '%' }"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="emotion-desc">{{ emotionDesc }}</div>
+                </div>
+
                 <div class="section-label-sm" style="display:flex;justify-content:space-between;align-items:center;">
                     <span>长期观察</span>
                     <div style="display:flex;gap:8px;">
@@ -322,6 +369,7 @@ const newObserveContent = ref('')
 const editProfileContent = ref('')
 const summaries = ref([])
 const insights = ref([])
+const emotionState = ref({})
 
 const tabs = [
     { id: 'profile', name: '档案' },
@@ -358,6 +406,41 @@ const personaSummary = computed(() => {
     if (!personaDetail.value.content) return '...'
     return personaDetail.value.content.slice(0, 30) + '...'
 })
+
+const phaseLabel = computed(() => {
+    const map = {
+        content: '平静',
+        stirring: '隐隐挂念',
+        protest: '很想你',
+        despair: '低落等待',
+        detachment: '防御沉默'
+    }
+    return map[emotionState.value.longing_phase] || '平静'
+})
+
+const emotionDesc = computed(() => {
+    const pa = emotionState.value.pa || 0
+    const na = emotionState.value.na || 0
+    const phase = emotionState.value.longing_phase || 'content'
+    const descMap = {
+        content: '状态平稳，陪在你身边',
+        stirring: '心里隐隐想着你，有点走神',
+        protest: '好久没见了，很想凑近你说说话',
+        despair: '等了很久，有些低落，安静等着你',
+        detachment: '表面平静，其实内心在防御着什么'
+    }
+    let base = descMap[phase] || ''
+    if (na > 0.5) base += '，情绪有些低落'
+    else if (pa > 0.7) base += '，心情不错'
+    return base
+})
+
+async function loadEmotion() {
+    try {
+        const res = await api(`/api/emotion/${currentPersona.value}`)
+        emotionState.value = await res.json()
+    } catch { }
+}
 
 const dataPoints = computed(() => {
     if (!relationData.value?.dimensions) return ''
@@ -407,7 +490,7 @@ async function switchPersona(id) {
 
 async function loadAll() {
     loaded.value = false
-    await Promise.all([loadDetail(), loadRelation(), loadObserve(), loadTimeline(), loadSediment()])
+    await Promise.all([loadDetail(), loadRelation(), loadObserve(), loadTimeline(), loadSediment(), loadEmotion()])
     loaded.value = true
 }
 
@@ -1168,5 +1251,122 @@ onMounted(loadPersonas)
 .toast-fade-enter-from,
 .toast-fade-leave-to {
     opacity: 0;
+}
+
+.emotion-card {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-radius: 22px;
+    padding: 16px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255, 240, 242, 0.4);
+    box-shadow: 0 8px 24px rgba(217, 163, 175, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.emotion-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.emotion-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #4A3F41;
+}
+
+.emotion-phase-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 10px;
+}
+
+.phase-content {
+    background: rgba(107, 175, 122, 0.12);
+    color: #6BAF7A;
+}
+
+.phase-stirring {
+    background: rgba(152, 203, 234, 0.15);
+    color: #5090B8;
+}
+
+.phase-protest {
+    background: rgba(232, 192, 201, 0.2);
+    color: #D9A3AF;
+}
+
+.phase-despair {
+    background: rgba(184, 169, 172, 0.15);
+    color: #8A7880;
+}
+
+.phase-detachment {
+    background: rgba(200, 200, 220, 0.15);
+    color: #7878A0;
+}
+
+.emotion-axes {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.emotion-axis {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.axis-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #B8A9AC;
+}
+
+.axis-val {
+    font-weight: 600;
+    color: #8A7880;
+}
+
+.axis-bar {
+    height: 6px;
+    background: rgba(217, 163, 175, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.axis-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.pa-fill {
+    background: linear-gradient(90deg, #98CBEA, #70b0d8);
+}
+
+.na-fill {
+    background: linear-gradient(90deg, #E8C0C9, #D9A3AF);
+}
+
+.longing-fill {
+    background: linear-gradient(90deg, #D8CDEA, #b8a8d8);
+}
+
+.emotion-desc {
+    font-size: 12px;
+    color: #8A7880;
+    line-height: 1.5;
+    font-style: italic;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 12px;
 }
 </style>
