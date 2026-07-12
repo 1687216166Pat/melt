@@ -1,4 +1,8 @@
 <template>
+    <div v-if="true"
+        style="position:fixed;top:10px;left:10px;z-index:99999;background:red;color:white;font-size:14px;padding:8px 12px;border-radius:8px;font-weight:bold;">
+        MODE: {{ debugMode }}
+    </div>
     <SplashScreen v-if="showSplash" @done="onSplashDone" />
     <transition name="main-enter">
         <div v-show="!showSplash" class="phone-screen" :class="[period, envClass]" :style="envStyle">
@@ -19,6 +23,7 @@
 </template>
 
 <script setup>
+
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NotificationBanner from '@/components/NotificationBanner.vue'
@@ -29,6 +34,8 @@ import { api } from '@/utils/api'
 import SplashScreen from '@/components/SplashScreen.vue'
 import { startKeepAlive, stopKeepAlive, requestWakeLock } from '@/composables/useBackgroundKeepAlive'
 import { isLocalMode } from '@/utils/api'
+
+const debugMode = ref(import.meta.env.VITE_APP_MODE || 'undefined')
 
 function handleFirstInteraction() {
     startKeepAlive()
