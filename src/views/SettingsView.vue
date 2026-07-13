@@ -44,7 +44,7 @@
 
             <!-- 第一组：连接与网络 -->
             <div class="settings-group">
-                <div class="settings-group-item" @click="betaToggle">
+                <div class="settings-group-item" v-if="features.betaMode" @click="betaToggle">
                     <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #98CBEA, #7ab8e0);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
                             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
@@ -337,6 +337,7 @@ import DreamInput from '@/components/ui/DreamInput.vue'
 import GlassTag from '@/components/ui/GlassTag.vue'
 import BlurModal from '@/components/ui/BlurModal.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { features } from '@/utils/features'
 
 const { registerPushSubscription } = useWebSocket()
 

@@ -186,7 +186,7 @@
                         </svg>
                         <span>位置</span>
                     </button>
-                    <button class="toolbar-btn" :class="{ active: activePanel === 'card' }"
+                    <button v-if="features.htmlCard" class="toolbar-btn" :class="{ active: activePanel === 'card' }"
                         @click="togglePanel('card')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                             stroke-linecap="round">
@@ -255,6 +255,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
+import { features } from '@/utils/features'
 
 const props = defineProps({
     quoteMsg: { type: Object, default: null }

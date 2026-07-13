@@ -1193,6 +1193,7 @@ import DreamInput from '@/components/ui/DreamInput.vue'
 import SoftButton from '@/components/ui/SoftButton.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { isLocalMode } from '@/utils/api'
+import { features } from '@/utils/features'
 
 const router = useRouter()
 const route = useRoute()
@@ -1412,6 +1413,10 @@ const calEventCount = computed(() => {
 
 const filteredPersonas = computed(() => {
     let list = [...allPersonas.value]
+    // 非 personal 版隐藏 agent
+    if (!features.agent) {
+        list = list.filter(p => p.id !== 'agent')
+    }
     if (chatSearchQuery.value.trim()) {
         const q = chatSearchQuery.value.trim().toLowerCase()
         list = list.filter(p =>
