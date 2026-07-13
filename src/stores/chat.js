@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { api, isLocalMode } from "@/utils/api";
 import { getCache, setCache } from "@/utils/cache";
+import { mediaDb } from "@/utils/mediaDb"; // 统一使用 mediaDb
 
 function parseSpecialContent(content) {
   if (!content) return {};
@@ -106,43 +107,38 @@ export const useChatStore = defineStore("chat", () => {
   let currentLoadedPersona = null;
   let isLoading = false;
 
-  function addMessage(msg) {
+  // 关键修改 1：改为 async 函数，处理图片持久化
+  async function addMessage(msg) {
     console.log(
       "[Store] addMessage called:",
       msg.role,
       msg.content?.slice(0, 20),
     );
+    const messageId = msg.id || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    
     const newMsg = {
-      id:
-        msg.id ||
-        `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      id: messageId,
       role: msg.role,
       content: msg.content,
       timestamp: msg.timestamp || new Date().toISOString(),
     };
 
-    if (msg.type) newMsg.type = msg.type;
-    if (msg.giftName !== undefined) newMsg.giftName = msg.giftName;
-    if (msg.giftContent !== undefined) newMsg.giftContent = msg.giftContent;
-    if (msg.giftMessage !== undefined) newMsg.giftMessage = msg.giftMessage;
-    if (msg.amount !== undefined) newMsg.amount = msg.amount;
-    if (msg.note !== undefined) newMsg.note = msg.note;
-    if (msg.locationName !== undefined) newMsg.locationName = msg.locationName;
-    if (msg.lat !== undefined) newMsg.lat = msg.lat;
-    if (msg.lng !== undefined) newMsg.lng = msg.lng;
-    if (msg.emojiUrl !== undefined) newMsg.emojiUrl = msg.emojiUrl;
-    if (msg.emojiName !== undefined) newMsg.emojiName = msg.emojiName;
-    if (msg.images !== undefined) newMsg.images = msg.images;
-    if (msg.cardHtml !== undefined) newMsg.cardHtml = msg.cardHtml;
-    if (msg.deliveryContent !== undefined)
-      newMsg.deliveryContent = msg.deliveryContent;
-    if (msg.deliveryAddress !== undefined)
-      newMsg.deliveryAddress = msg.deliveryAddress;
-    if (msg.deliveryNote !== undefined) newMsg.deliveryNote = msg.deliveryNote;
-    if (msg.deliveryExpectedAt !== undefined)
-      newMsg.deliveryExpectedAt = msg.deliveryExpectedAt;
-    if (msg.quoteContent !== undefined) newMsg.quoteContent = msg.quoteContent;
-    if (msg.quoteRole !== undefined) newMsg.quoteRole = msg.quoteRole;
+    // --- 媒体持久化逻辑 ---
+    if (msg.images && msg.images.length > 0) {
+        newMsg.type = 'images';
+        newMsg.images = msg.images;
+        // 如果是发送图片，将其保存到本地 IndexedDB
+        await mediaDb.save(messageId, msg.images).catch(e => console.error('Save image failed', e));
+    } else if (msg.type === 'images' || msg.content?.includes('[图片]')) {
+        newMsg.type = 'images';
+        // 如果是从后端拉取的消息，尝试从本地库恢复图片显示
+        const cachedImages = await mediaDb.get(String(messageId)).catch(() => null);
+        if (cachedImages) newMsg.images = cachedImages;
+    }
+
+    // 复制其他字段
+    const fields = ['type','giftName','giftContent','giftMessage','amount','note','locationName','lat','lng','emojiUrl','emojiName','cardHtml','deliveryContent','deliveryAddress','deliveryNote','deliveryExpectedAt','quoteContent','quoteRole'];
+    fields.forEach(f => { if(msg[f] !== undefined) newMsg[f] = msg[f]; });
 
     const recent = messages.value.slice(-5);
     const isDuplicate = recent.some(
@@ -192,9 +188,11 @@ export const useChatStore = defineStore("chat", () => {
         data = await res.json();
       }
 
-      const processed = [];
+      messages.value = [];
+      allMessages.value = [];
 
-      data.forEach((m) => {
+      // 关键修改 2：使用 for...of 替代 forEach，配合 await addMessage
+      for (const m of data) {
         if (m.role === "ai") {
           const bubbles = m.content
             .split("|||")
@@ -202,27 +200,24 @@ export const useChatStore = defineStore("chat", () => {
             .filter(Boolean);
 
           if (bubbles.length > 0) {
-            bubbles.forEach((line, partIdx) => {
-              const special =
-                partIdx === 0
+            for (let partIdx = 0; partIdx < bubbles.length; partIdx++) {
+              const line = bubbles[partIdx];
+              const special = partIdx === 0
                   ? m.msg_type && m.msg_type !== "text"
                     ? parseFromMeta(m.msg_type, m.msg_meta)
                     : parseSpecialContent(line)
                   : {};
-              processed.push({
-                id: `${m.id}_${partIdx}`,
+              await addMessage({
+                id: partIdx === 0 ? m.id : `${m.id}_${partIdx}`,
                 role: m.role,
                 content: line,
                 timestamp: m.timestamp,
                 ...special,
               });
-            });
+            }
           } else {
-            const special =
-              m.msg_type && m.msg_type !== "text"
-                ? parseFromMeta(m.msg_type, m.msg_meta)
-                : {};
-            processed.push({
+            const special = m.msg_type && m.msg_type !== "text" ? parseFromMeta(m.msg_type, m.msg_meta) : {};
+            await addMessage({
               id: m.id,
               role: m.role,
               content: m.content.replace(/\|\|\|/g, "").replace(/\n/g, " "),
@@ -231,11 +226,8 @@ export const useChatStore = defineStore("chat", () => {
             });
           }
         } else {
-          const special =
-            m.msg_type && m.msg_type !== "text"
-              ? parseFromMeta(m.msg_type, m.msg_meta)
-              : parseSpecialContent(m.content);
-          processed.push({
+          const special = m.msg_type && m.msg_type !== "text" ? parseFromMeta(m.msg_type, m.msg_meta) : parseSpecialContent(m.content);
+          await addMessage({
             id: m.id,
             role: m.role,
             content: m.content,
@@ -243,16 +235,15 @@ export const useChatStore = defineStore("chat", () => {
             ...special,
           });
         }
-      });
+      }
 
       currentLoadedPersona = personaId;
-      allMessages.value = processed;
 
-      if (processed.length > pageSize) {
-        messages.value = processed.slice(-pageSize);
+      if (allMessages.value.length > pageSize) {
+        messages.value = allMessages.value.slice(-pageSize);
         hasMore.value = true;
       } else {
-        messages.value = processed;
+        messages.value = allMessages.value;
         hasMore.value = false;
       }
     } catch (e) {

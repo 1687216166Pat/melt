@@ -98,7 +98,7 @@
             <!-- 数据管理 -->
             <div class="section-label-sm">数据管理</div>
             <div class="settings-group">
-                <div class="settings-group-item action-item" @click="exportData">
+                <div class="settings-group-item action-item" @click="showExportPanel = !showExportPanel">
                     <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #98CBEA, #70b0d8);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -108,10 +108,34 @@
                     </div>
                     <div class="sgi-label">导出数据</div>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        class="sgi-arrow">
+                        class="sgi-arrow" :style="{ transform: showExportPanel ? 'rotate(90deg)' : '' }">
                         <path d="M9 18l6-6-6-6" />
                     </svg>
                 </div>
+
+                <!-- 导出选项面板 -->
+                <template v-if="showExportPanel">
+                    <div class="export-options">
+                        <div class="export-option" v-for="opt in exportOptions" :key="opt.key">
+                            <label class="export-check">
+                                <input type="checkbox" v-model="opt.checked" />
+                                <span class="export-check-box"></span>
+                            </label>
+                            <div class="export-opt-info">
+                                <span class="export-opt-label">{{ opt.label }}</span>
+                                <span class="export-opt-desc">{{ opt.desc }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-group-item action-item" @click="exportData">
+                        <div class="sgi-label" style="color:#6BAF7A;">确认导出选中项</div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#6BAF7A" stroke-width="2" stroke-linecap="round"
+                            class="sgi-arrow">
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                    </div>
+                </template>
+
                 <div class="settings-group-item action-item" @click="triggerImport">
                     <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #D8CDEA, #b8a8d8);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
@@ -205,6 +229,7 @@ import { api } from '@/utils/api'
 const importInput = ref(null)
 const resultMsg = ref('')
 const resultSuccess = ref(true)
+const showExportPanel = ref(false)
 
 const storageItems = ref([
     { key: 'messages', label: '聊天记录', color: '#E8C0C9', size: 0, percent: 0 },
@@ -317,19 +342,48 @@ function showResult(msg, success = true) {
     setTimeout(() => { resultMsg.value = '' }, 3000)
 }
 
+const showExportPanel = ref(false)
+
+const exportOptions = ref([
+    { key: 'messages', label: '聊天记录', desc: '所有角色的对话数据', checked: true },
+    { key: 'memories', label: '记忆库', desc: '长期印象、碎片、弧线', checked: true },
+    { key: 'worldbooks', label: '世界书', desc: '所有世界书内容', checked: true },
+    { key: 'personas', label: '角色设定', desc: '自定义角色和配置', checked: true },
+    { key: 'timeline', label: '时间线', desc: '时间线事件记录', checked: true },
+    { key: 'settings', label: '本地设置', desc: '主题、壁纸、API配置等', checked: false },
+])
+
 async function exportData() {
     try {
-        const res = await api('/api/export')
+        const selected = exportOptions.value.filter(o => o.checked).map(o => o.key)
+        if (selected.length === 0) { showResult('请至少选择一项', false); return }
+
+        const res = await api('/api/export?modules=' + selected.join(','))
         const serverData = await res.json()
-        const localData = {}
-        Object.keys(localStorage).forEach(k => { localData[k] = localStorage.getItem(k) })
-        const blob = new Blob([JSON.stringify({ ...serverData, localSettings: localData }, null, 2)], { type: 'application/json' })
+
+        const exportPayload = {}
+
+        if (selected.includes('messages') && serverData.messages) exportPayload.messages = serverData.messages
+        if (selected.includes('memories') && serverData.memories) exportPayload.memories = serverData.memories
+        if (selected.includes('worldbooks') && serverData.worldbooks) exportPayload.worldbooks = serverData.worldbooks
+        if (selected.includes('personas') && serverData.personas) exportPayload.personas = serverData.personas
+        if (selected.includes('timeline') && serverData.timeline) exportPayload.timeline = serverData.timeline
+
+        if (selected.includes('settings')) {
+            const localData = {}
+            Object.keys(localStorage).forEach(k => { localData[k] = localStorage.getItem(k) })
+            exportPayload.localSettings = localData
+        }
+
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `melt-backup-${new Date().toISOString().slice(0, 10)}.json`
+        const modules = selected.length === exportOptions.value.length ? 'full' : selected.join('+')
+        a.download = `melt-${modules}-${new Date().toISOString().slice(0, 10)}.json`
         a.click()
         URL.revokeObjectURL(url)
+        showExportPanel.value = false
         showResult('导出成功 ✓')
     } catch (e) { showResult('导出失败: ' + e.message, false) }
 }
@@ -342,16 +396,23 @@ async function importData(event) {
     try {
         const text = await file.text()
         const data = JSON.parse(text)
+
+        // 本地设置
         if (data.localSettings) {
             Object.entries(data.localSettings).forEach(([k, v]) => { if (v) localStorage.setItem(k, v) })
         }
+
+        // 云端数据
         const serverData = { ...data }
         delete serverData.localSettings
-        await api('/api/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(serverData)
-        })
+        if (Object.keys(serverData).length > 0) {
+            await api('/api/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(serverData)
+            })
+        }
+
         showResult('导入成功，刷新页面生效 ✓')
     } catch (e) { showResult('导入失败: ' + e.message, false) }
 }
@@ -803,4 +864,68 @@ onMounted(loadStorageStats)
     color: #C06060;
 }
 
+.export-options {
+    padding: 8px 16px 12px;
+    border-bottom: 1px solid rgba(217, 163, 175, 0.08);
+}
+
+.export-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.export-check {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.export-check input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.export-check-box {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 1.5px solid rgba(217, 163, 175, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.export-check input:checked+.export-check-box {
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    border-color: transparent;
+}
+
+.export-check input:checked+.export-check-box::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.export-opt-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.export-opt-label {
+    font-size: 13px;
+    color: #4A3F41;
+}
+
+.export-opt-desc {
+    font-size: 10px;
+    color: #B8A9AC;
+}
 </style>

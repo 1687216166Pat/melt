@@ -711,6 +711,13 @@ router.put("/persona/:personaId", async (req, res) => {
       updateData.custom_api_key = body.customApiKey;
     if (body.customApiUrl !== undefined)
       updateData.custom_api_url = body.customApiUrl;
+    if (body.cardEnabled !== undefined)
+      updateData.card_enabled = body.cardEnabled;
+    if (body.busyMode !== undefined) updateData.busy_mode = body.busyMode;
+    if (body.autoReplyText !== undefined)
+      updateData.auto_reply_text = body.autoReplyText;
+    if (body.autoMessageCount !== undefined)
+      updateData.auto_message_count = body.autoMessageCount;
 
     const { error } = await db
       .from("custom_personas")

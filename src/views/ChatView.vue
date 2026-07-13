@@ -256,24 +256,32 @@ function handleQuote(quoteData) {
     quotingMsg.value = quoteData
 }
 
-function handleSend(text, opts = {}) {
-    console.log('[Chat] handleSend called, text:', text?.slice(0, 20), 'opts:', JSON.stringify(opts))
+async function handleSend(text, opts = {}) {
     if (!text || !personaId.value) return
-    console.log('[Chat] personaId:', personaId.value)
-    chatStore.addMessage({ role: 'user', content: text, timestamp: new Date().toISOString() })
+    // 加上 await
+    await chatStore.addMessage({ role: 'user', content: text, timestamp: new Date().toISOString() })
     scrollToBottom()
     if (personaId.value === 'wechat_sync') return
     if (opts.autoReply !== false) {
-        console.log('[Chat] calling send()')
         send({ type: 'chat', content: text, personaId: personaId.value })
-        isTyping.value = true  // 加这一行
+        isTyping.value = true
     }
 }
 
-function handleSendImages({ images, text }) {
-    chatStore.addMessage({ role: 'user', type: 'images', images, content: text, timestamp: new Date().toISOString() })
-    const desc = text ? `[用户发送了 ${images.length} 张图片] ${text}` : `[用户发送了 ${images.length} 张图片]`
-    send({ type: 'chat', content: desc, personaId: personaId.value })
+async function handleSendImages({ images, text }) {
+    // 加上 await
+    await chatStore.addMessage({ role: 'user', type: 'images', images, content: text, timestamp: new Date().toISOString() })
+
+    const desc = text ? `[图片] ${text}` : `[图片]`
+
+    // WS payload 里带上 images 字段给后端识图
+    send({
+        type: 'chat',
+        content: desc,
+        personaId: personaId.value,
+        images: images
+    })
+
     isTyping.value = true
     scrollToBottom()
 }
@@ -371,7 +379,6 @@ function handleRegenerateLatest() {
 }
 
 async function handleIncoming(data) {
-
     if (data.type === 'bus_message') return
     if (data.type === 'chat' || data.type === 'push') {
         const key = (data.content || '') + (data.timestamp || '')
@@ -379,13 +386,16 @@ async function handleIncoming(data) {
         if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) return
         lastHandledContent.value = key
         lastHandledTime.value = now
+
         isTyping.value = false
+
         api(`/api/persona-status/${personaId.value}`).then(r => r.json()).then(s => { personaStatus.value = s }).catch(() => { })
 
         let cleanContent = data.content.replace(/\[思考\][\s\S]*?\[思考\]/g, '').replace(/[\s\S]*?<\/think>/g, '').trim()
         const bubbles = cleanContent.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
         let final = bubbles
         const limit = maxBubbles.value || 3
+
         if (bubbles.length > limit) {
             final = []
             const chunkSize = Math.ceil(bubbles.length / limit)
@@ -393,57 +403,73 @@ async function handleIncoming(data) {
                 final.push(bubbles.slice(i, i + chunkSize).join(' '))
             }
         }
-        if (final.length === 0) { isTyping.value = false; return }
 
-        final.forEach((line, idx) => {
-            setTimeout(() => {
-                if (idx === final.length - 1) isTyping.value = false
-                chatStore.addMessage({ role: 'ai', content: line, timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString() })
-                scrollToBottom()
-                if (idx === final.length - 1 && chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
-            }, idx * 600)
-        })
+        if (final.length === 0) {
+            isTyping.value = false;
+            return
+        }
 
-        if (data.specialPayload) {
-            const sp = data.specialPayload
-            const delay = final.length * 600 + 200
-            if (sp.type === 'gift') {
-                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'gift', giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message, content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp }); scrollToBottom() }, delay)
-            } else if (sp.type === 'transfer') {
-                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'transfer', amount: sp.data.amount, note: sp.data.note, content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp }); scrollToBottom() }, delay)
-            } else if (sp.type === 'location') {
-                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'location', lat: null, lng: null, locationName: sp.data.name, content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp }); scrollToBottom() }, delay)
-            } else if (sp.type === 'card') {
-                setTimeout(() => { chatStore.addMessage({ role: 'ai', type: 'card', cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp }); scrollToBottom() }, delay)
-            } else if (sp.type === 'food') {
-                setTimeout(() => {
-                    chatStore.addMessage({ role: 'ai', type: 'food', deliveryContent: sp.data.content, deliveryAddress: sp.data.address, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedMinutes ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString() : null, content: `[外卖: ${sp.data.content}]`, timestamp: data.timestamp })
-                    scrollToBottom()
-                    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
-                }, delay)
-            } else if (sp.type === 'express') {
-                setTimeout(() => {
-                    chatStore.addMessage({ role: 'ai', type: 'express', deliveryContent: sp.data.content, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedDays ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString() : null, content: `[快递: ${sp.data.content}]`, timestamp: data.timestamp })
-                    scrollToBottom()
-                    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
-                }, delay)
+        // 1. 处理文本气泡 (使用 for 循环和 await 保证顺序和存图不冲突)
+        for (let idx = 0; idx < final.length; idx++) {
+            const line = final[idx];
+
+            // 模拟原本 idx * 600 的延迟，除了第一条直接发，后面的都等 600ms
+            if (idx > 0) {
+                await new Promise(resolve => setTimeout(resolve, 600));
+            }
+
+            if (idx === final.length - 1) isTyping.value = false;
+
+            await chatStore.addMessage({
+                role: 'ai',
+                content: line,
+                timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString()
+            });
+            scrollToBottom();
+
+            if (idx === final.length - 1 && chatStore.allMessages) {
+                setCache(`messages_${personaId.value}`, chatStore.allMessages);
             }
         }
 
-        // Agent 工具调用解析
+        // 2. 处理特殊负载 (礼物、转账等)
+        if (data.specialPayload) {
+            const sp = data.specialPayload
+            // 气泡发完后，额外等待 800ms (相当于原本的 final.length * 600 + 200 减去气泡循环已消耗的时间)
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            if (sp.type === 'gift') {
+                await chatStore.addMessage({ role: 'ai', type: 'gift', giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message, content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp })
+            } else if (sp.type === 'transfer') {
+                await chatStore.addMessage({ role: 'ai', type: 'transfer', amount: sp.data.amount, note: sp.data.note, content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp })
+            } else if (sp.type === 'location') {
+                await chatStore.addMessage({ role: 'ai', type: 'location', lat: null, lng: null, locationName: sp.data.name, content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp })
+            } else if (sp.type === 'card') {
+                await chatStore.addMessage({ role: 'ai', type: 'card', cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp })
+            } else if (sp.type === 'food') {
+                await chatStore.addMessage({ role: 'ai', type: 'food', deliveryContent: sp.data.content, deliveryAddress: sp.data.address, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedMinutes ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString() : null, content: `[外卖: ${sp.data.content}]`, timestamp: data.timestamp })
+                if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
+            } else if (sp.type === 'express') {
+                await chatStore.addMessage({ role: 'ai', type: 'express', deliveryContent: sp.data.content, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedDays ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString() : null, content: `[快递: ${sp.data.content}]`, timestamp: data.timestamp })
+                if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
+            }
+            scrollToBottom();
+        }
+
+        // 3. Agent 工具调用解析
         if (personaId.value === 'agent' && data.toolCalls) {
             for (const call of data.toolCalls) {
                 if (call.type === 'github_read') {
                     try {
                         const res = await api(`/api/github/file?path=${encodeURIComponent(call.path)}&branch=${call.branch || 'main'}`);
                         const fileData = await res.json();
-                        chatStore.addMessage({
+                        await chatStore.addMessage({
                             role: 'system',
                             content: `[文件内容]\n路径: ${call.path}\n\n${fileData.content.slice(0, 2000)}${fileData.content.length > 2000 ? '\n...(内容过长已截断)' : ''}`,
                             timestamp: new Date().toISOString()
                         });
                     } catch (e) {
-                        chatStore.addMessage({
+                        await chatStore.addMessage({
                             role: 'system',
                             content: `[错误] 读取文件失败: ${e.message}`,
                             timestamp: new Date().toISOString()
@@ -451,7 +477,7 @@ async function handleIncoming(data) {
                     }
                 } else if (call.type === 'github_write') {
                     // 需要用户确认
-                    chatStore.addMessage({
+                    await chatStore.addMessage({
                         role: 'system',
                         type: 'confirm_commit',
                         confirmData: call,
@@ -459,6 +485,7 @@ async function handleIncoming(data) {
                         timestamp: new Date().toISOString()
                     });
                 }
+                scrollToBottom();
             }
         }
 
@@ -564,12 +591,15 @@ async function handleEdit(msgId, newContent) {
 }
 
 async function handleDelete(msgId) {
-    // 你原来的代码可能只有这一行
-    await api(`/api/message/${msgId}`, { method: 'DELETE' })
-
-    // ✅ 加上这两行清除缓存
-    chatStore.messages = chatStore.messages.filter(m => m.id !== msgId)
-    chatStore.allMessages = chatStore.allMessages.filter(m => m.id !== msgId)
+    if (!confirm('确定删除此消息？')) return
+    try {
+        await api(`/api/message/${msgId}`, { method: 'DELETE' })
+        // 关键：同时清理当前展示数组和全量缓存数组
+        chatStore.messages = chatStore.messages.filter(m => String(m.id) !== String(msgId))
+        chatStore.allMessages = chatStore.allMessages.filter(m => String(m.id) !== String(msgId))
+    } catch (e) {
+        console.error('Delete failed', e)
+    }
 }
 
 async function handleRegenerate(msgId) {

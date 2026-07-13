@@ -636,7 +636,7 @@ async function handleChat(
   }
 
   // 13. 组装 system content
-  const needWorldBook = msgCount === 0 || msgCount % 10 === 0;
+  const needWorldBook = msgCount === 0 || msgCount % 20 === 0;
   let systemContent = "";
   if (worldBookOverride) systemContent += worldBookOverride + "\n";
   if (worldBookBefore) systemContent += worldBookBefore + "\n";
