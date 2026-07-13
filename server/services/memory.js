@@ -109,8 +109,15 @@ AI: ${cleanAiReply}
     const result = await callSubAI(prompt, 100);
     if (!result || result === "无" || result.length < 3) return;
 
+    // 格式校验：必须是 "类型|内容|标签" 格式，且内容部分不超过50字
+    const parts = result.split("|");
+    if (parts.length < 2) return;
+    const content = parts[1]?.trim();
+    if (!content || content.length < 4 || content.length > 60) return;
+    // 只存内容部分，不存类型和标签
     const today = new Date().toISOString().slice(0, 10);
-    await saveDailyMemory(personaId, result, today);
+    await saveDailyMemory(personaId, content, today);
+
     console.log(`[记忆] ${personaId} 短期总结完成: ${result.slice(0, 50)}...`);
     counter.sinceLastSummary = 0;
   } catch (e) {
@@ -490,7 +497,19 @@ AI: ${cleanAiReply}
   try {
     const result = await callSubAI(prompt, 60);
     if (!result || result === "无" || result.length < 2) return;
-    await saveDailyMemory(personaId, result, today);
+    // 过滤掉格式错误的输出（包含"类型|"这种前缀的）
+    const cleaned = result
+      .split("\n")
+      .map((line) => {
+        // 如果是 "类型|内容|标签" 格式，只取内容
+        if (line.includes("|")) return line.split("|")[1]?.trim() || "";
+        return line.trim();
+      })
+      .filter((l) => l.length >= 4 && l.length <= 50)
+      .join("\n");
+    if (!cleaned) return;
+    await saveDailyMemory(personaId, cleaned, today);
+
     console.log(`[记忆] ${personaId} 即时提取: ${result}`);
   } catch (e) {
     console.error("[记忆] 即时提取失败:", e.message);
