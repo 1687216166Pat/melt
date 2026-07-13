@@ -1,4 +1,5 @@
 import { ref, watch } from "vue";
+import { manualOffline } from "./emergencyMode"; // 新增导入
 
 const BASE = import.meta.env.VITE_API_URL || "";
 const MODE = import.meta.env.VITE_APP_MODE || "personal";
@@ -16,20 +17,19 @@ export const isLocalMode = isStaticLocalMode;
 // Personal 版的动态模式判断
 export function shouldUseLocal() {
   if (isStaticLocalMode) return true;
-  return isCloudDown.value;
+  return manualOffline.value || isCloudDown.value;
 }
 
 // 云端健康检查
 let healthCheckTimer = null;
 let consecutiveFailures = 0;
-const MAX_FAILURES = 2;
+const MAX_FAILURES = 4;
 
 async function checkCloudHealth() {
   if (isStaticLocalMode) return;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    // 用已有的接口做健康检查，不依赖 /api/health
+    const timeout = setTimeout(() => controller.abort(), healthCheckTimeout);
     const res = await fetch(`${BASE}/api/prompts/personas`, {
       signal: controller.signal,
       headers: { "x-beta-mode": "false" },
@@ -45,11 +45,27 @@ async function checkCloudHealth() {
     } else if (res.status >= 500) {
       onCloudFailure();
     }
-    // 4xx 不算故障（可能是接口逻辑问题，不是网络问题）
   } catch {
-    // 网络超时或连接失败才算故障
     onCloudFailure();
   }
+}
+
+// 启动时预热：高频检测直到成功，或直到达到最大重试次数
+export async function warmUpCloud() {
+  if (isStaticLocalMode) return;
+  console.log("[API] 开始预热探测云端...");
+  let attempts = 0;
+  const maxAttempts = 6; // 最多 6 次，约 150 秒
+  while (attempts < maxAttempts) {
+    await checkCloudHealth();
+    if (!isCloudDown.value) {
+      console.log("[API] 预热成功，云端已连接");
+      return;
+    }
+    attempts++;
+    await new Promise((r) => setTimeout(r, 5000)); // 间隔 5s
+  }
+  console.warn("[API] 预热结束，云端仍不可用");
 }
 
 function onCloudFailure() {
@@ -63,8 +79,8 @@ function onCloudFailure() {
 // 启动健康检查（Personal 版才启动）
 export function startHealthCheck() {
   if (isStaticLocalMode) return;
-  checkCloudHealth();
-  healthCheckTimer = setInterval(checkCloudHealth, 30000); // 每30秒检查
+  warmUpCloud(); // 启动时预热
+  healthCheckTimer = setInterval(checkCloudHealth, 60000); // 改为 60s 检查一次（降低频率）
 }
 
 export function stopHealthCheck() {
@@ -161,7 +177,7 @@ export async function api(path, options = {}) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 25000);
     const res = await fetch(`${BASE}${path}`, {
       ...options,
       headers,

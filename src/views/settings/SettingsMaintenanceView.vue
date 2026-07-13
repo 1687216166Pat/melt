@@ -71,6 +71,47 @@
                 </div>
             </div>
 
+            <!-- 手动离线模式开关 -->
+            <div class="settings-group-item">
+                <div class="sgi-label-wrap">
+                    <div class="sgi-label">手动离线模式</div>
+                    <div class="sgi-desc">强制使用本地模式，请求全部入队等待云端恢复</div>
+                </div>
+                <label class="toggle-sm">
+                    <input type="checkbox" v-model="manualOffline" @change="onManualOfflineChange" />
+                    <span class="slider-sm"></span>
+                </label>
+            </div>
+
+            <!-- 应急模式开关（仅在手动离线模式下可操作） -->
+            <div class="settings-group-item" v-if="manualOffline">
+                <div class="sgi-label-wrap">
+                    <div class="sgi-label">应急模式：立即用简化AI回复</div>
+                    <div class="sgi-desc">使用本地缓存的人设+记忆生成即时回复，不等待云端</div>
+                </div>
+                <label class="toggle-sm">
+                    <input type="checkbox" v-model="emergencyMode" />
+                    <span class="slider-sm"></span>
+                </label>
+            </div>
+
+            <!-- 在手动离线模式/应急开关那一组下面 -->
+            <div class="section-label-sm">应急数据同步</div>
+            <div class="settings-group">
+                <div class="settings-group-item col-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">上传应急对话</div>
+                        <div class="sgi-desc">
+                            将应急期间产生的对话同步到云端，用于记忆更新。建议在云端恢复后操作。
+                        </div>
+                    </div>
+                    <button class="emergency-upload-btn" :disabled="uploading" @click="uploadEmergencyMessages">
+                        {{ uploading ? '上传中...' : '上传应急对话' }}
+                    </button>
+                    <div v-if="uploadResult" class="upload-result">{{ uploadResult }}</div>
+                </div>
+            </div>
+
             <div class="section-label-sm">危险操作</div>
             <div class="settings-group">
                 <div class="settings-group-item action-item danger-item" @click="nukeAllLocalData">
@@ -105,7 +146,13 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { isCloudDown, pendingSyncCount, getPendingSync } from '@/utils/api'
+import { isCloudDown, pendingSyncCount, getPendingSync, api } from '@/utils/api'
+import { manualOffline, setManualOffline, emergencyMode } from '@/utils/emergencyMode'
+import { useChatStore } from '@/stores/chat'
+import { useRoute } from 'vue-router'
+
+const chatStore = useChatStore()
+const route = useRoute()
 
 const toastMsg = ref('')
 const toastSuccess = ref(true)
@@ -140,6 +187,10 @@ const syncSubText = computed(() => {
     return '所有数据已同步'
 })
 
+function onManualOfflineChange() {
+    setManualOffline(manualOffline.value);
+}
+
 async function manualSync() {
     if (isSyncing.value) return
     isSyncing.value = true
@@ -173,6 +224,68 @@ async function manualSync() {
     }
 }
 
+// ===== 新增：应急对话上传逻辑 =====
+const uploading = ref(false)
+const uploadResult = ref('')
+
+async function uploadEmergencyMessages() {
+    if (isCloudDown.value) {
+        uploadResult.value = '云端仍不可用，请稍后再试。'
+        return
+    }
+
+    const personaId = route.params.personaId
+    if (!personaId) {
+        uploadResult.value = '请先进入某个角色的聊天页面，再回来操作。'
+        return
+    }
+
+    uploading.value = true
+    uploadResult.value = ''
+    try {
+        const allMsgs = chatStore.allMessages || []
+        // 过滤出应急期间的消息
+        const emergencyMsgs = allMsgs.filter(m => m.source === 'emergency')
+        if (emergencyMsgs.length === 0) {
+            uploadResult.value = '没有应急消息需要上传。'
+            uploading.value = false
+            return
+        }
+
+        let uploaded = 0
+        for (const msg of emergencyMsgs) {
+            // 使用 api 函数发送消息，但加上 skip_ai_reply 标记以避免触发新回复
+            // 如果你的后端不支持 skip_ai_reply，可以忽略这个字段，但可能会收到新回复
+            await api(`/api/messages/${personaId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: msg.timestamp,
+                    skip_ai_reply: true,   // 如果你的后端不支持，可移除或忽略
+                    source: 'emergency_sync'
+                })
+            })
+            uploaded++
+        }
+
+        // 标记已上传（避免重复上传）
+        emergencyMsgs.forEach(m => { m.source = 'emergency_synced' })
+        // 更新本地缓存
+        const { setCache } = await import('@/utils/cache')
+        setCache(`messages_${personaId}`, allMsgs)
+
+        uploadResult.value = `成功上传 ${uploaded} 条应急消息！记忆系统将在后台处理。`
+    } catch (e) {
+        console.error('上传应急消息失败:', e)
+        uploadResult.value = '上传失败，请检查网络或稍后再试。'
+    } finally {
+        uploading.value = false
+    }
+}
+
+// ===== 原有工具方法 =====
 async function forceRefreshPage() {
     showToast('正在清除缓存...')
     try {
@@ -551,5 +664,29 @@ async function nukeAllLocalData() {
 
 .sync-upload-btn:active {
     transform: scale(0.98);
+}
+
+.emergency-upload-btn {
+    margin-top: 10px;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #E8C0C9, #D9A3AF);
+    color: white;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.emergency-upload-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.upload-result {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #B8A9AC;
 }
 </style>

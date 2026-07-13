@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { getSnapshot, buildFallbackSystemPrompt } from "./snapshotCache";
 
 // 模拟 Response 对象
 function mockResponse(data, status = 200) {
@@ -78,6 +79,49 @@ async function callAI(messages, personaContent, userMessage) {
     return data.choices?.[0]?.message?.content || "...";
   } catch (e) {
     return "连接失败，请检查 API 配置";
+  }
+}
+
+// 应急生成回复（使用缓存快照 + 本地 AI Key）
+export async function generateEmergencyReply(personaId, userMessage, conversationHistory) {
+  const snapshot = getSnapshot(personaId);
+  if (!snapshot) {
+    return "[本地应急模式] 暂无该角色的本地缓存，请先连接云端获取数据。";
+  }
+  const systemPrompt = buildFallbackSystemPrompt(snapshot);
+  
+  // 调用本地 AI 模型生成回复
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...conversationHistory.slice(-6).map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content
+    })),
+    { role: 'user', content: userMessage }
+  ];
+  
+  const config = storage.getApiConfig();
+  if (!config.apiKey) {
+    return "[本地应急模式] 请先配置 API Key 以使用应急回复。";
+  }
+  
+  try {
+    const response = await fetch(`${config.apiUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`
+      },
+      body: JSON.stringify({
+        model: config.model || 'gpt-4o-mini',
+        temperature: config.temperature || 0.7,
+        messages
+      })
+    });
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || "[应急回复生成失败]";
+  } catch (e) {
+    return "[本地应急模式] API 请求失败，请检查网络或配置。";
   }
 }
 

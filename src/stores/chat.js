@@ -3,6 +3,9 @@ import { ref } from "vue";
 import { api, isLocalMode } from "@/utils/api";
 import { getCache, setCache } from "@/utils/cache";
 import { mediaDb } from "@/utils/mediaDb"; // 统一使用 mediaDb
+import { isCloudDown } from "@/utils/api";
+import { emergencyMode, isEffectivelyOffline } from "@/utils/emergencyMode";
+import { generateEmergencyReply } from "@/utils/localApi";
 
 function parseSpecialContent(content) {
   if (!content) return {};
@@ -114,8 +117,9 @@ export const useChatStore = defineStore("chat", () => {
       msg.role,
       msg.content?.slice(0, 20),
     );
-    const messageId = msg.id || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    
+    const messageId =
+      msg.id || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
     const newMsg = {
       id: messageId,
       role: msg.role,
@@ -125,20 +129,46 @@ export const useChatStore = defineStore("chat", () => {
 
     // --- 媒体持久化逻辑 ---
     if (msg.images && msg.images.length > 0) {
-        newMsg.type = 'images';
-        newMsg.images = msg.images;
-        // 如果是发送图片，将其保存到本地 IndexedDB
-        await mediaDb.save(messageId, msg.images).catch(e => console.error('Save image failed', e));
-    } else if (msg.type === 'images' || msg.content?.includes('[图片]')) {
-        newMsg.type = 'images';
-        // 如果是从后端拉取的消息，尝试从本地库恢复图片显示
-        const cachedImages = await mediaDb.get(String(messageId)).catch(() => null);
-        if (cachedImages) newMsg.images = cachedImages;
+      newMsg.type = "images";
+      newMsg.images = msg.images;
+      // 如果是发送图片，将其保存到本地 IndexedDB
+      await mediaDb
+        .save(messageId, msg.images)
+        .catch((e) => console.error("Save image failed", e));
+    } else if (msg.type === "images" || msg.content?.includes("[图片]")) {
+      newMsg.type = "images";
+      // 如果是从后端拉取的消息，尝试从本地库恢复图片显示
+      const cachedImages = await mediaDb
+        .get(String(messageId))
+        .catch(() => null);
+      if (cachedImages) newMsg.images = cachedImages;
     }
 
     // 复制其他字段
-    const fields = ['type','giftName','giftContent','giftMessage','amount','note','locationName','lat','lng','emojiUrl','emojiName','cardHtml','deliveryContent','deliveryAddress','deliveryNote','deliveryExpectedAt','quoteContent','quoteRole'];
-    fields.forEach(f => { if(msg[f] !== undefined) newMsg[f] = msg[f]; });
+    const fields = [
+      "type",
+      "giftName",
+      "giftContent",
+      "giftMessage",
+      "amount",
+      "note",
+      "locationName",
+      "lat",
+      "lng",
+      "emojiUrl",
+      "emojiName",
+      "cardHtml",
+      "deliveryContent",
+      "deliveryAddress",
+      "deliveryNote",
+      "deliveryExpectedAt",
+      "quoteContent",
+      "quoteRole",
+      "source",
+    ];
+    fields.forEach((f) => {
+      if (msg[f] !== undefined) newMsg[f] = msg[f];
+    });
 
     const recent = messages.value.slice(-5);
     const isDuplicate = recent.some(
@@ -202,7 +232,8 @@ export const useChatStore = defineStore("chat", () => {
           if (bubbles.length > 0) {
             for (let partIdx = 0; partIdx < bubbles.length; partIdx++) {
               const line = bubbles[partIdx];
-              const special = partIdx === 0
+              const special =
+                partIdx === 0
                   ? m.msg_type && m.msg_type !== "text"
                     ? parseFromMeta(m.msg_type, m.msg_meta)
                     : parseSpecialContent(line)
@@ -216,7 +247,10 @@ export const useChatStore = defineStore("chat", () => {
               });
             }
           } else {
-            const special = m.msg_type && m.msg_type !== "text" ? parseFromMeta(m.msg_type, m.msg_meta) : {};
+            const special =
+              m.msg_type && m.msg_type !== "text"
+                ? parseFromMeta(m.msg_type, m.msg_meta)
+                : {};
             await addMessage({
               id: m.id,
               role: m.role,
@@ -226,7 +260,10 @@ export const useChatStore = defineStore("chat", () => {
             });
           }
         } else {
-          const special = m.msg_type && m.msg_type !== "text" ? parseFromMeta(m.msg_type, m.msg_meta) : parseSpecialContent(m.content);
+          const special =
+            m.msg_type && m.msg_type !== "text"
+              ? parseFromMeta(m.msg_type, m.msg_meta)
+              : parseSpecialContent(m.content);
           await addMessage({
             id: m.id,
             role: m.role,
@@ -272,6 +309,63 @@ export const useChatStore = defineStore("chat", () => {
     isLoading = false;
   }
 
+  async function sendUserMessage(personaId, userContent) {
+    // 乐观展示用户消息
+    await addMessage({ role: "user", content: userContent });
+
+    // 判断是否处于应急模式
+    if (emergencyMode.value) {
+      // 立即用本地快照生成回复
+      const history = allMessages.value.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const reply = await generateEmergencyReply(
+        personaId,
+        userContent,
+        history,
+      );
+      await addMessage({
+        role: "ai",
+        content: reply,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // 正常路径：调用 api 发送消息（会经过离线/在线逻辑）
+    try {
+      const res = await api(`/api/messages/${personaId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: userContent }),
+      });
+
+      if (!res.ok) throw new Error("Send failed");
+
+      const data = await res.json();
+      // 假设返回的 data 包含 AI 回复
+      if (data.reply) {
+        await addMessage({
+          role: "ai",
+          content: data.reply,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      // 成功后更新快照
+      import("@/utils/snapshotCache").then((m) => m.cacheSnapshot(personaId));
+    } catch (e) {
+      // 如果云端不可用且不在应急模式，消息已进入 pending 队列，乐观显示“发送中”状态
+      if (isEffectivelyOffline()) {
+        // 不做额外处理，消息界面可显示“发送中”
+        console.log("[Chat] 消息已加入待发送队列");
+      } else {
+        // 其他错误提示
+      }
+    }
+  }
+
+  // 在 return 中暴露 sendUserMessage
   return {
     messages,
     allMessages,
@@ -280,5 +374,6 @@ export const useChatStore = defineStore("chat", () => {
     loadPersonaMessages,
     loadMore,
     clearMessages,
+    sendUserMessage, // 新增
   };
 });

@@ -221,6 +221,14 @@
                         </svg>
                         <span>多选</span>
                     </button>
+                    <button v-if="isEffectivelyOffline" class="toolbar-btn" :class="{ active: emergencyMode }"
+                        @click="toggleEmergencyMode">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        <span>应急</span>
+                    </button>
                 </div>
             </div>
         </Transition>
@@ -256,6 +264,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { features } from '@/utils/features'
+import { emergencyMode, isEffectivelyOffline } from '@/utils/emergencyMode'
 
 const props = defineProps({
     quoteMsg: { type: Object, default: null }
@@ -286,6 +295,10 @@ const deliveryExpected = ref('')
 
 function clearQuote() {
     emit('clear-quote')
+}
+
+function toggleEmergencyMode() {
+    emergencyMode.value = !emergencyMode.value
 }
 
 function sendDelivery() {

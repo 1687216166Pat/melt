@@ -137,6 +137,8 @@ import { useChatStore } from '@/stores/chat'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { api } from '@/utils/api'
 import { setCache } from '@/utils/cache'
+import { emergencyMode, isEffectivelyOffline } from '@/utils/emergencyMode';
+import { generateEmergencyReply } from '@/utils/localApi';   // localApi.js 中新增的函数
 
 const route = useRoute()
 const router = useRouter()
@@ -258,10 +260,41 @@ function handleQuote(quoteData) {
 
 async function handleSend(text, opts = {}) {
     if (!text || !personaId.value) return
-    // 加上 await
-    await chatStore.addMessage({ role: 'user', content: text, timestamp: new Date().toISOString() })
+
+    // 判断应急模式，统一给用户消息加标记
+    const isEmergency = emergencyMode.value
+
+    await chatStore.addMessage({
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString(),
+        source: isEmergency ? 'emergency' : undefined
+    })
     scrollToBottom()
     if (personaId.value === 'wechat_sync') return
+
+    if (isEmergency) {
+        // ...应急生成回复逻辑...
+        isTyping.value = true
+        // 获取最近历史 ...
+        const reply = await generateEmergencyReply(text, personaId.value)
+        const bubbles = reply.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
+        if (bubbles.length === 0) bubbles.push(reply)
+        for (let i = 0; i < bubbles.length; i++) {
+            await new Promise(r => setTimeout(r, 400))
+            await chatStore.addMessage({
+                role: 'ai',
+                content: bubbles[i],
+                timestamp: new Date().toISOString(),
+                source: 'emergency'
+            })
+            scrollToBottom()
+        }
+        isTyping.value = false
+        return
+    }
+
+    // 正常 WS 发送...
     if (opts.autoReply !== false) {
         send({ type: 'chat', content: text, personaId: personaId.value })
         isTyping.value = true

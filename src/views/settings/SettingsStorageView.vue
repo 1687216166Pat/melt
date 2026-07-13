@@ -342,8 +342,6 @@ function showResult(msg, success = true) {
     setTimeout(() => { resultMsg.value = '' }, 3000)
 }
 
-const showExportPanel = ref(false)
-
 const exportOptions = ref([
     { key: 'messages', label: '聊天记录', desc: '所有角色的对话数据', checked: true },
     { key: 'memories', label: '记忆库', desc: '长期印象、碎片、弧线', checked: true },
