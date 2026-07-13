@@ -564,8 +564,12 @@ async function handleEdit(msgId, newContent) {
 }
 
 async function handleDelete(msgId) {
-    chatStore.messages = chatStore.messages.filter(m => m.id !== msgId)
+    // 你原来的代码可能只有这一行
     await api(`/api/message/${msgId}`, { method: 'DELETE' })
+
+    // ✅ 加上这两行清除缓存
+    chatStore.messages = chatStore.messages.filter(m => m.id !== msgId)
+    chatStore.allMessages = chatStore.allMessages.filter(m => m.id !== msgId)
 }
 
 async function handleRegenerate(msgId) {
