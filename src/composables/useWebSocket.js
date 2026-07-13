@@ -1,7 +1,10 @@
 import { ref } from "vue";
-
-const MODE = import.meta.env.VITE_APP_MODE || "personal";
-export const isLocalMode = MODE === "local" || MODE === "lite";
+import {
+  isStaticLocalMode,
+  shouldUseLocal,
+  isCloudDown,
+  addPendingSync,
+} from "@/utils/api";
 
 let socket = null;
 const isConnected = ref(false);
@@ -17,7 +20,7 @@ function getWsUrl() {
 }
 
 function connect() {
-  if (isLocalMode) {
+  if (isStaticLocalMode) {
     isConnected.value = true;
     console.log("[WS] 本地模式，跳过 WebSocket 连接");
     return;
@@ -194,8 +197,22 @@ async function handleLocalMessage(data) {
 }
 
 function send(data) {
-  if (isLocalMode) {
+  // 静态本地模式或云端故障，走本地处理
+  if (isStaticLocalMode || isCloudDown.value) {
     handleLocalMessage(data);
+    // Personal 版云端故障时，同时存入待同步队列
+    if (!isStaticLocalMode && isCloudDown.value) {
+      addPendingSync({
+        path: `/api/messages/${data.personaId || "xiaorou"}`,
+        method: "POST",
+        body: {
+          role: "user",
+          content: data.content,
+          timestamp: new Date().toISOString(),
+        },
+        timestamp: Date.now(),
+      });
+    }
     return;
   }
   if (socket && socket.readyState === WebSocket.OPEN) {
@@ -217,7 +234,7 @@ function clearHandlers() {
 }
 
 function requestNotificationPermission() {
-  if (isLocalMode) return;
+  if (isStaticLocalMode) return;
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
   }
@@ -236,7 +253,7 @@ function sendSystemNotification(content, title) {
 }
 
 async function registerPushSubscription() {
-  if (isLocalMode) return;
+  if (isStaticLocalMode) return;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
   try {
     const registration = await navigator.serviceWorker.ready;

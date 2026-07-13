@@ -274,6 +274,46 @@
                 </div>
             </div>
 
+            <!-- 维护工具 -->
+            <div class="settings-group">
+                <div class="settings-group-item" @click="$router.push('/settings/maintenance')">
+                    <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #A8D8EA, #72c2e0);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                                d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+                        </svg>
+                    </div>
+                    <div class="sgi-label">维护工具</div>
+                    <div class="sgi-right">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" class="sgi-arrow">
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 帮助与信息 -->
+            <div class="settings-group">
+                <div class="settings-group-item" @click="$router.push('/settings/guide')">
+                    <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #B8D4C8, #7eb8a0);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                            <circle cx="12" cy="17" r="0.5" fill="white" />
+                        </svg>
+                    </div>
+                    <div class="sgi-label">使用说明</div>
+                    <div class="sgi-right">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" class="sgi-arrow">
+                            <path d="M9 18l6-6-6-6" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- 只保留 WiFi 弹窗 -->

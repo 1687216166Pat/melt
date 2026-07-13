@@ -1,4 +1,3 @@
-```vue
 <template>
     <div class="chat-page" :class="['theme-' + chatTheme, { 'bubble-merge': bubbleMerge }]">
 
@@ -258,22 +257,16 @@ function handleQuote(quoteData) {
 }
 
 function handleSend(text, opts = {}) {
+    console.log('[Chat] handleSend called, text:', text?.slice(0, 20), 'opts:', JSON.stringify(opts))
     if (!text || !personaId.value) return
-    chatStore.addMessage({
-        role: 'user',
-        content: text,
-        timestamp: new Date().toISOString(),
-        quoteContent: opts.quote?.content || null,
-        quoteRole: opts.quote?.role || null,
-    })
+    console.log('[Chat] personaId:', personaId.value)
+    chatStore.addMessage({ role: 'user', content: text, timestamp: new Date().toISOString() })
+    scrollToBottom()
     if (personaId.value === 'wechat_sync') return
     if (opts.autoReply !== false) {
+        console.log('[Chat] calling send()')
         send({ type: 'chat', content: text, personaId: personaId.value })
-        isTyping.value = true
-        setTimeout(() => { isTyping.value = false }, 30000)
     }
-    scrollToBottom()
-    if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
 }
 
 function handleSendImages({ images, text }) {

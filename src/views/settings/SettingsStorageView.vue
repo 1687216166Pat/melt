@@ -360,10 +360,8 @@ async function syncToCloud() {
     if (!confirm('上传至云端会清除旧缓存并重新同步最新数据，确定继续？')) return
     showResult('正在同步...')
     try {
-        // 清除所有 sessionStorage 缓存
         sessionStorage.clear()
 
-        // 清除 localStorage 里的缓存项（保留设置项）
         const keysToRemove = Object.keys(localStorage).filter(k =>
             k.startsWith('melt_cache_') ||
             k === 'home_data_loaded' ||
@@ -378,7 +376,6 @@ async function syncToCloud() {
         )
         keysToRemove.forEach(k => localStorage.removeItem(k))
 
-        // 重新从后端拉取最新数据写入缓存
         const [personasRes, latestRes] = await Promise.all([
             api('/api/prompts/personas'),
             api('/api/messages/latest-persona')
@@ -422,7 +419,6 @@ async function forceSync() {
     if (!confirm('强制同步会清除所有本地缓存并从云端重新读取，确定？')) return
     showResult('正在从云端读取...')
     try {
-        // 清除所有缓存
         sessionStorage.clear()
         Object.keys(localStorage).forEach(key => {
             if (
@@ -797,4 +793,14 @@ onMounted(loadStorageStats)
 .toast-fade-leave-to {
     opacity: 0;
 }
+
+/* 危险操作 */
+.danger-item:active {
+    background: rgba(208, 96, 96, 0.06);
+}
+
+.danger-label {
+    color: #C06060;
+}
+
 </style>

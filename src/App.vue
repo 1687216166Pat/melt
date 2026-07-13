@@ -29,7 +29,7 @@ import { useDeviceStatus } from '@/composables/useDeviceStatus'
 import { api } from '@/utils/api'
 import SplashScreen from '@/components/SplashScreen.vue'
 import { startKeepAlive, stopKeepAlive, requestWakeLock } from '@/composables/useBackgroundKeepAlive'
-import { isLocalMode } from '@/utils/api'
+import { isLocalMode, isStaticLocalMode, isCloudDown, startHealthCheck, stopHealthCheck, pendingSyncCount } from '@/utils/api'
 
 function handleFirstInteraction() {
     startKeepAlive()
@@ -49,8 +49,8 @@ const isHomePage = computed(() => {
         'about', 'settings-memory-manage',
         'memory', 'logs',
         'diary', 'memory-graph',
-        'presence', 'memo', 'persona-cards'
-
+        'presence', 'memo', 'persona-cards',
+        'settings-guide', 'settings-maintenance'
     ]
     return noPaddingRoutes.includes(route.name) || route.path === '/'
 })
@@ -112,13 +112,13 @@ let envInterval = null
 
 onMounted(() => {
     // 本地模式跳过云端相关初始化
-    if (!isLocalMode) {
+    if (!isStaticLocalMode) {
         connect()
         requestNotificationPermission()
         registerPushSubscription()
         startReporting()
+        startHealthCheck()  // 新增：启动云端健康检查
     } else {
-        // 本地模式也要 connect（走本地处理）
         connect()
     }
 
@@ -175,6 +175,7 @@ onMounted(() => {
 onUnmounted(() => {
     stopClock()
     stopReporting()
+    stopHealthCheck()  // 新增
     if (envInterval) clearInterval(envInterval)
 })
 </script>

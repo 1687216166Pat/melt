@@ -108,6 +108,16 @@ const router = createRouter({
       name: "memory-graph",
       component: () => import("@/views/WishlistView.vue"),
     },
+    {
+      path: "/settings/guide",
+      name: "settings-guide",
+      component: () => import("@/views/settings/SettingsGuideView.vue"),
+    },
+    {
+      path: "/settings/maintenance",
+      name: "settings-maintenance",
+      component: () => import("@/views/settings/SettingsMaintenanceView.vue"),
+    },
   ],
 });
 
