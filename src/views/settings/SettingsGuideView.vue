@@ -105,8 +105,8 @@ const expandedDoc = ref(null)
 const toastMsg = ref('')
 
 // 应用信息
-const appVersion = ref('1.2.0')
-const updateDate = ref('2025-01-15')
+const appVersion = ref('1.0.0')
+const updateDate = ref('2026-07-13')
 const buildVariant = computed(() => {
     const variant = import.meta.env.VITE_APP_VARIANT || 'personal'
     const map = { personal: 'Personal', local: 'Local', lite: 'Lite' }
@@ -115,7 +115,7 @@ const buildVariant = computed(() => {
 
 // 更新日志
 const changelog = ref([
-    '修复 WebSocket 连接问题',
+    '修复安全区问题',
     '新增存储空间维护工具',
     '添加使用说明页面',
     '优化消息发送稳定性',
