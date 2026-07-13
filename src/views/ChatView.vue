@@ -266,6 +266,7 @@ function handleSend(text, opts = {}) {
     if (opts.autoReply !== false) {
         console.log('[Chat] calling send()')
         send({ type: 'chat', content: text, personaId: personaId.value })
+        isTyping.value = true  // 加这一行
     }
 }
 

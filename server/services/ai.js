@@ -307,6 +307,17 @@ async function handleChat(
         note: noteMatch?.[1] || "",
       });
     }
+
+    // ✅ 加上这段：真正插入用户消息
+    await db.from(tableName).insert({
+      persona_id: pid,
+      session_id: pid,
+      role: "user",
+      content: userMessage,
+      timestamp: nowISO,
+      msg_type: userMsgType,
+      msg_meta: userMsgMeta,
+    });
   }
 
   if (!isBeta) updateEmotionOnMessage(pid, userMessage).catch(() => {});
