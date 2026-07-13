@@ -590,7 +590,7 @@ async function testSubApiConnection() {
     background: rgba(255, 255, 255, 0.5);
     backdrop-filter: saturate(180%) blur(16px);
     -webkit-backdrop-filter: saturate(180%) blur(16px);
-    color: #6B5E;
+    color: #6B5B5E;
     border: 1px solid rgba(255, 240, 242, 0.5);
     box-shadow: 0 4px 12px rgba(217, 163, 175, 0.08);
 }
