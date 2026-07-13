@@ -427,6 +427,39 @@ function handleIncoming(data) {
                 }, delay)
             }
         }
+
+        // Agent 工具调用解析
+        if (personaId.value === 'agent' && data.toolCalls) {
+            for (const call of data.toolCalls) {
+                if (call.type === 'github_read') {
+                    try {
+                        const res = await api(`/api/github/file?path=${encodeURIComponent(call.path)}&branch=${call.branch || 'main'}`);
+                        const fileData = await res.json();
+                        chatStore.addMessage({
+                            role: 'system',
+                            content: `[文件内容]\n路径: ${call.path}\n\n${fileData.content.slice(0, 2000)}${fileData.content.length > 2000 ? '\n...(内容过长已截断)' : ''}`,
+                            timestamp: new Date().toISOString()
+                        });
+                    } catch (e) {
+                        chatStore.addMessage({
+                            role: 'system',
+                            content: `[错误] 读取文件失败: ${e.message}`,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                } else if (call.type === 'github_write') {
+                    // 需要用户确认
+                    chatStore.addMessage({
+                        role: 'system',
+                        type: 'confirm_commit',
+                        confirmData: call,
+                        content: `[待确认提交]\n文件: ${call.path}\n分支: ${call.branch}\n\n回复"确认"执行提交`,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+        }
+
         if (data.debug) debugInfo.value = data.debug
     }
 }

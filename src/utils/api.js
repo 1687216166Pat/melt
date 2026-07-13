@@ -28,13 +28,14 @@ async function checkCloudHealth() {
   if (isStaticLocalMode) return;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(`${BASE}/api/health`, {
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    // 用已有的接口做健康检查，不依赖 /api/health
+    const res = await fetch(`${BASE}/api/prompts/personas`, {
       signal: controller.signal,
+      headers: { "x-beta-mode": "false" },
     });
     clearTimeout(timeout);
-    // 404 = 路由还没部署，不算故障；只有网络错误或5xx才算
-    if (res.ok || res.status === 404) {
+    if (res.ok) {
       consecutiveFailures = 0;
       if (isCloudDown.value) {
         console.log("[API] 云端已恢复");
@@ -44,7 +45,9 @@ async function checkCloudHealth() {
     } else if (res.status >= 500) {
       onCloudFailure();
     }
+    // 4xx 不算故障（可能是接口逻辑问题，不是网络问题）
   } catch {
+    // 网络超时或连接失败才算故障
     onCloudFailure();
   }
 }

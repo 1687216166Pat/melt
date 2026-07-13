@@ -154,6 +154,9 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: Date.now(), mode: APP_MODE });
 });
 
+const githubRoutes = require("./routes/github");
+app.use("/api/github", githubRoutes);
+
 app.use("/api", apiRoutes);
 
 const distPath = path.join(__dirname, "../dist");
