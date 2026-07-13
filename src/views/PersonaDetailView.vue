@@ -1074,6 +1074,7 @@ onMounted(() => {
     padding: 14px 16px;
     border-bottom: 1px solid rgba(217, 163, 175, 0.08);
     position: relative;
+    gap: 12px;
 }
 
 .settings-group-item:last-child {
@@ -1086,17 +1087,26 @@ onMounted(() => {
     gap: 8px;
 }
 
+/* 修复：防止标签文字被挤压成竖排 */
 .sgi-label {
-    font-size: 14px;
-    color: #4A3F41;
-    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .sgi-label-wrap {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    min-width: 0;
+    flex-shrink: 0;
+    max-width: 50%;
+}
+
+.sgi-label-wrap .sgi-label {
+    white-space: normal;
+    word-break: keep-all;
+}
+
+.sgi-label-wrap .sgi-desc {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sgi-desc {
@@ -1122,8 +1132,12 @@ onMounted(() => {
     transition: transform 0.2s;
 }
 
+/* 修复：右侧输入框留白 */
 .sgi-input {
     flex: 1;
+    min-width: 0;
+    max-width: 55%;
+    padding-right: 2px;
     border: none;
     background: transparent;
     outline: none;
@@ -1135,6 +1149,11 @@ onMounted(() => {
 
 .sgi-input::placeholder {
     color: #D4C8CA;
+}
+
+/* 确保基本信息里 placeholder 不贴边 */
+.settings-group-item {
+    gap: 12px;
 }
 
 .sgi-input-full {
