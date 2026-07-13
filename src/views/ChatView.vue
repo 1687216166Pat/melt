@@ -370,7 +370,8 @@ function handleRegenerateLatest() {
     }
 }
 
-function handleIncoming(data) {
+async function handleIncoming(data) {
+
     if (data.type === 'bus_message') return
     if (data.type === 'chat' || data.type === 'push') {
         const key = (data.content || '') + (data.timestamp || '')
