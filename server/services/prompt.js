@@ -54,6 +54,7 @@ function getPersonaList() {
     id: key,
     name: value.name,
     description: value.description,
+    avatar: value.avatar || "💬",
   }));
 }
 
