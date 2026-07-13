@@ -243,6 +243,16 @@
                     <input class="sgi-input" type="number" v-model.number="detail.maxMessages" min="1" max="10"
                         style="width:60px;text-align:right;" />
                 </div>
+                <div class="settings-group-item">
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">AI 自主决定</div>
+                        <div class="sgi-desc">优先级高于上方设置</div>
+                    </div>
+                    <label class="toggle-sm">
+                        <input type="checkbox" v-model="detail.autoMessageCount" />
+                        <span class="slider-sm"></span>
+                    </label>
+                </div>
             </div>
 
             <!-- 聊天控制台 -->
@@ -587,6 +597,7 @@ const detail = reactive({
     cardEnabled: false,
     busyMode: 'ai_decide',
     autoReplyText: '',
+    autoMessageCount: false,
 })
 
 const genderLabel = computed(() => {
@@ -681,6 +692,8 @@ async function loadDetail() {
         if (data.card_enabled !== undefined) detail.cardEnabled = data.card_enabled
         if (data.busy_mode) detail.busyMode = data.busy_mode
         if (data.auto_reply_text) detail.autoReplyText = data.auto_reply_text
+        if (data.auto_message_count !== undefined) detail.autoMessageCount = data.auto_message_count
+
     } catch (e) {
         console.error('加载详情失败:', e)
     }
@@ -735,6 +748,8 @@ async function saveDetail() {
                 cardEnabled: detail.cardEnabled,
                 busyMode: detail.busyMode,
                 autoReplyText: detail.autoReplyText,
+                autoMessageCount: detail.autoMessageCount,
+
             })
         })
         saveMsg.value = '已保存 ✓'

@@ -128,7 +128,7 @@
                         @click="openYear(year)">
                         <span class="year-num">{{ year }}</span>
                         <span class="year-sub">年</span>
-                        <span class="year-months">{{ dateTree[year].length }} 个月</span>
+                        <span class="year-months">{{ Object.keys(dateTree[year]).length }} 个月</span>
                     </div>
                 </div>
                 <div v-else class="empty-state-unified">
@@ -143,8 +143,8 @@
             <template v-if="currentView === 'year'">
                 <div class="section-label-sm">选择月份</div>
                 <div class="month-grid">
-                    <div v-for="month in dateTree[selectedYear]" :key="month" class="month-card"
-                        @click="openMonth(month)">
+                    <div v-for="month in Object.keys(dateTree[selectedYear] || {}).sort().reverse()" :key="month"
+                        class="month-card" @click="openMonth(month)">
                         <span class="month-num">{{ parseInt(month) }}</span>
                         <span class="month-sub">月</span>
                     </div>
@@ -259,12 +259,9 @@ const heatmapDays = computed(() => {
 
 const monthDays = computed(() => {
     if (!selectedYear.value || !selectedMonth.value) return []
-    const prefix = `${selectedYear.value}-${selectedMonth.value}`
-    const days = new Set()
-    Object.keys(heatmapData.value).forEach((d) => {
-        if (d.startsWith(prefix)) days.add(d.slice(8, 10))
-    })
-    return [...days].sort()
+    const yearData = dateTree.value[selectedYear.value]
+    if (!yearData) return []
+    return yearData[selectedMonth.value] || []
 })
 
 async function loadAll() {

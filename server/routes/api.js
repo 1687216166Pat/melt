@@ -376,7 +376,7 @@ router.get("/memories/:personaId/date/:date", async (req, res) => {
   res.json(data || []);
 });
 
-// 获取有记忆的年月列表
+// 获取有记忆的年月日列表
 router.get("/memories/:personaId/dates", async (req, res) => {
   const { getDB } = require("../db/index");
   const db = getDB();
@@ -388,14 +388,15 @@ router.get("/memories/:personaId/dates", async (req, res) => {
     .eq("persona_id", personaId)
     .order("source_session", { ascending: false });
 
-  // 整理成 { "2026": ["05", "04", ...] } 格式
   const tree = {};
   if (data) {
     data.forEach((m) => {
-      if (!m.source_session) return;
-      const [year, month] = m.source_session.split("-");
-      if (!tree[year]) tree[year] = new Set();
-      tree[year].add(month);
+      if (!m.source_session || !/^\d{4}-\d{2}-\d{2}$/.test(m.source_session))
+        return;
+      const [year, month, day] = m.source_session.split("-");
+      if (!tree[year]) tree[year] = {};
+      if (!tree[year][month]) tree[year][month] = new Set();
+      tree[year][month].add(day);
     });
   }
 
@@ -405,7 +406,13 @@ router.get("/memories/:personaId/dates", async (req, res) => {
     .sort()
     .reverse()
     .forEach((y) => {
-      result[y] = [...tree[y]].sort().reverse();
+      result[y] = {};
+      Object.keys(tree[y])
+        .sort()
+        .reverse()
+        .forEach((m) => {
+          result[y][m] = [...tree[y][m]].sort();
+        });
     });
 
   res.json(result);
@@ -777,6 +784,7 @@ router.post("/worldbooks", async (req, res) => {
     position: position || "before_char",
     keywords: keywords || "",
     keyword_enabled: keyword_enabled || false,
+    enabled: true, // 加这行
   });
 
   // 清除世界书缓存

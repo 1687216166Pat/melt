@@ -1,7 +1,6 @@
 const { getDB } = require("../db/index");
 const { callSubAI } = require("./subai");
 
-// 时间线事件类型
 const EVENT_TYPES = {
   emotion: "情绪痕迹",
   relation: "关系变化",
@@ -10,7 +9,6 @@ const EVENT_TYPES = {
   memory: "AI主动记住",
 };
 
-// 将精确时间转换为模糊时间描述
 function fuzzyTime(date) {
   const now = new Date();
   const diff = now - new Date(date);
@@ -28,7 +26,6 @@ function fuzzyTime(date) {
   return "很久很久以前";
 }
 
-// 💡 改造：检查并生成时间线（支持 Beta 模式）
 async function checkTimelineEvent(
   personaId,
   userMessage,
@@ -36,63 +33,65 @@ async function checkTimelineEvent(
   isBeta = false,
 ) {
   const db = getDB();
-  // 根据 isBeta 决定写入哪个表
   const tableName = isBeta ? "timeline_beta" : "timeline_events";
 
   const { getRelationshipAtmosphere } = require("./relationship");
   const atmosphere = await getRelationshipAtmosphere(personaId);
 
-  // 1. 冷却检查：同一表内至少间隔 2 小时才生成
+  // 1. 冷却检查：同一表内至少间隔 6 小时才生成
   const { data: lastEvent } = await db
     .from(tableName)
-    .select("created_at")
+    .select("created_at, content")
     .eq("persona_id", personaId)
     .order("created_at", { ascending: false })
-    .limit(1);
+    .limit(3);
 
   if (lastEvent && lastEvent.length > 0) {
     const hoursSince =
       (Date.now() - new Date(lastEvent[0].created_at).getTime()) /
       (1000 * 60 * 60);
-    if (hoursSince < 2) return;
+    if (hoursSince < 6) return;
   }
 
   // 2. 获取称呼配置
   const { getIdentityConfig } = require("./sediment");
   const identity = await getIdentityConfig(personaId);
 
-  const toneGuide =
-    atmosphere.phase === "initial"
-      ? "语气：像刚开始记录的观察者，客观温和"
-      : atmosphere.phase === "familiar"
-        ? "语气：像开始熟悉的朋友在记录"
-        : atmosphere.phase === "close"
-          ? "语气：像一起生活的人在回忆"
-          : "语气：像已经很久很久的陪伴者在轻声说";
+  // 3. 获取最近几条时间线用于去重
+  const recentContents = lastEvent ? lastEvent.map(e => e.content).join('\n') : '';
 
-  // 3. 构建 Prompt
-  const prompt = `你是一个时间线记录系统。判断以下对话是否包含"值得留下痕迹"的瞬间。
+  // 4. 构建 Prompt
+  const prompt = `你是一个时间线记录系统。用纪实手法，以${identity.aiName}的第一人称视角，判断以下对话是否包含值得记录的事件。
 
-${toneGuide}
-身份信息：
-- AI的名字：${identity.aiName}
-- 用户的称呼：${identity.userName}
-- AI的代词：${identity.pronoun}
-- 禁止使用"用户""AI""你""他/她"这些泛称，必须用上面的具体名字。
+写作要求：
+- 用${identity.aiName}的视角，像在写私人日记/备忘录
+- 客观简洁，不要抒情、不要形容词堆砌
+- 禁止使用"温柔地""宝宝""轻轻地"等修饰
+- 直接描述发生了什么事，像新闻简报一样
+- 如果一段时间内发生了多件小事，概括成一件事
+- 不超过25字
 
-只有以下类型才值得记录：
-- 高情绪波动
-- 关系变化
-- 长期习惯形成
-- 共同经历
-- 特别瞬间
+只记录真正有意义的事件：
+- 做出了具体约定或承诺
+- 关系发生了明确变化（不是每句情话都算）
+- 一起经历了完整的事件（不是对话的每个片段）
+- 形成了新习惯或打破了旧模式
 
-如果不值得记录，回复"无"。
-如果值得，严格按以下格式回复一行，不要添加任何额外文字：
-[类型]|[一句像回忆一样的描述，用${identity.userName}和${identity.aiName}称呼，不超过30字]|[标签]
+以下是最近已经记录过的内容，不要重复类似的事件：
+${recentContents}
 
-示例：
-特别瞬间|${identity.userName}第一次说想见${identity.aiName}，两人约好了碰面的地方|温馨约定
+如果不值得记录（大多数对话都不值得），回复"无"。
+如果值得，严格按以下格式回复一行：
+[类型]|[纪实描述]|[标签]
+
+好的示例：
+共同经历|去了她家吃饭，第一次见她做的菜|家常晚餐
+关系变化|她主动提到以后一起住的事，我没反对|同居意向
+共同经历|在天台待了一个多小时，聊了很多关于未来的事|深夜长谈
+
+差的示例（禁止）：
+温馨约定|宝宝温柔地邀请白起来家里～|甜蜜
+特别瞬间|白起温柔地出现在门口给了惊喜|浪漫
 
 用户: ${userMessage}
 AI: ${aiReply}
@@ -112,7 +111,9 @@ AI: ${aiReply}
 
     if (!content || content.length < 4) return;
 
-    // 4. 存入对应的时间线表
+    // 去重：检查最近记录里有没有语义重复的
+    if (recentContents && recentContents.includes(content.slice(0, 10))) return;
+
     await db.from(tableName).insert({
       persona_id: personaId,
       content,
@@ -130,7 +131,6 @@ AI: ${aiReply}
   }
 }
 
-// 💡 改造：获取时间线数据（支持 Beta 模式）
 async function getTimeline(personaId, isBeta = false) {
   const db = getDB();
   const tableName = isBeta ? "timeline_beta" : "timeline_events";
@@ -146,7 +146,6 @@ async function getTimeline(personaId, isBeta = false) {
 
   const groups = {};
   data.forEach((event) => {
-    // 用北京时间做日期分组，避免 UTC 跨天问题
     const date = new Date(event.created_at)
       .toLocaleString("en-CA", { timeZone: "Asia/Shanghai" })
       .slice(0, 10);

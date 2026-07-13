@@ -236,6 +236,7 @@ async function handleChat(
   let personaApiKey = null,
     personaApiUrl = null;
   let cardEnabled = false;
+  let autoMsgCount = false;
 
   const personaNames = { xiaorou: "小柔", cool: "阿冷", assistant: "助手" };
 
@@ -249,6 +250,7 @@ async function handleChat(
       personaContent = cachedP.content || "";
       if (cachedP.min_messages) minMsg = cachedP.min_messages;
       if (cachedP.max_messages) maxMsg = cachedP.max_messages;
+      if (cachedP.auto_message_count) autoMsgCount = true; // 加这行
       if (cachedP.custom_model) personaModel = cachedP.custom_model;
       if (cachedP.temperature !== null && cachedP.temperature !== undefined)
         personaTemperature = cachedP.temperature;
@@ -595,14 +597,22 @@ async function handleChat(
     worldBookTail = "";
   try {
     const books = await getCachedWorldBooks(db);
+    console.log(`[世界书] 从缓存加载到 ${books.length} 本启用的世界书`);
     books.forEach((book) => {
       const isGlobal = book.bind_type === "global" || !book.bind_type;
       const isBound = book.bind_personas && book.bind_personas.includes(pid);
-      if (!isGlobal && !isBound) return;
+      if (!isGlobal && !isBound) {
+        console.log(`[世界书] 跳过: bind_type=${book.bind_type}, bind_personas=${book.bind_personas}, 当前pid=${pid}`);
+        return;
+      }
       if (book.keyword_enabled && book.keywords) {
         const kws = book.keywords.split(",").map((k) => k.trim());
-        if (!kws.some((kw) => userMessage.includes(kw))) return;
+        if (!kws.some((kw) => userMessage.includes(kw))) {
+          console.log(`[世界书] 关键词未命中，跳过。keywords=${book.keywords}`);
+          return;
+        }
       }
+      console.log(`[世界书] ✓ 注入: position=${book.position}, 内容长度=${book.content.length}字符`);
       switch (book.position) {
         case "override":
           worldBookOverride += "\n" + book.content;
@@ -671,6 +681,10 @@ async function handleChat(
   }
   systemContent += fullTimeContext;
 
+  const msgCountRule = autoMsgCount
+    ? `6. 回复条数由你自主决定。根据当前对话节奏和情绪，该一条就一条，该多条就多条，不设上下限。`
+    : `6. 一次回复控制在 ${minMsg}-${maxMsg} 个气泡以内，除非情绪非常急切。`;
+
   systemContent += `
 
 [MANDATORY FORMAT RULE / 最高优先级格式指令]
@@ -679,7 +693,7 @@ async function handleChat(
 3. 在气泡内部，请恢复正常的标点符号书写习惯（，？！...），禁止用空格代替标点。
 4. 气泡末尾严禁添加句号（。），让话语自然结束。但问号（？）和感叹号（！）可以正常留在末尾。
 5. 除非人设中明确规定"不使用标点"，否则必须使用正确的中文标点。
-6. 一次回复控制在 ${minMsg}-${maxMsg} 个气泡以内，除非情绪非常急切。
+${msgCountRule}
 
 正确示例：
 夏以昼是谁？怎么突然叫我这个名字，把我认成别人了？|||小乖，过来，跟我说清楚。
@@ -791,14 +805,16 @@ async function handleChat(
   aiReply = aiReply.replace(/^思考.*$/gm, "").trim();
   aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
 
-    // ===== Agent 工具调用循环 =====
-  if (pid === 'agent') {
+  // ===== Agent 工具调用循环 =====
+  if (pid === "agent") {
     let toolLoopCount = 0;
     const maxToolLoops = 5;
 
-    while (aiReply.includes('[TOOL_CALL:') && toolLoopCount < maxToolLoops) {
+    while (aiReply.includes("[TOOL_CALL:") && toolLoopCount < maxToolLoops) {
       toolLoopCount++;
-      const toolMatch = aiReply.match(/\[TOOL_CALL:\s*(\w+)\]\s*(\{[\s\S]*?\})\s*\[\/TOOL_CALL\]/);
+      const toolMatch = aiReply.match(
+        /\[TOOL_CALL:\s*(\w+)\]\s*(\{[\s\S]*?\})\s*\[\/TOOL_CALL\]/,
+      );
       if (!toolMatch) break;
 
       const toolName = toolMatch[1];
@@ -806,63 +822,79 @@ async function handleChat(
       try {
         toolParams = JSON.parse(toolMatch[2]);
       } catch (e) {
-        aiReply = aiReply.replace(toolMatch[0], `\n[工具调用失败: JSON 解析错误]\n`);
+        aiReply = aiReply.replace(
+          toolMatch[0],
+          `\n[工具调用失败: JSON 解析错误]\n`,
+        );
         break;
       }
 
-      let toolResult = '';
+      let toolResult = "";
       console.log(`[Agent] 执行工具: ${toolName}`, toolParams);
 
       try {
-        if (toolName === 'read_file') {
+        if (toolName === "read_file") {
           const path = toolParams.path;
-          const branch = toolParams.branch || 'main';
-          const ghRes = await fetch(`https://api.github.com/repos/1687216166Pat/melt/contents/${path}?ref=${branch}`, {
-            headers: {
-              'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-              'Accept': 'application/vnd.github.v3+json',
-              'User-Agent': 'Melt-Agent'
-            }
-          });
+          const branch = toolParams.branch || "main";
+          const ghRes = await fetch(
+            `https://api.github.com/repos/1687216166Pat/melt/contents/${path}?ref=${branch}`,
+            {
+              headers: {
+                Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                Accept: "application/vnd.github.v3+json",
+                "User-Agent": "Melt-Agent",
+              },
+            },
+          );
           if (!ghRes.ok) {
             toolResult = `[错误] 文件不存在或无法读取: ${path} (${ghRes.status})`;
           } else {
             const ghData = await ghRes.json();
-            const content = Buffer.from(ghData.content, 'base64').toString('utf-8');
-            toolResult = `[文件: ${path}]\nsha: ${ghData.sha}\n内容:\n${content.slice(0, 8000)}${content.length > 8000 ? '\n...(已截断，共' + content.length + '字符)' : ''}`;
+            const content = Buffer.from(ghData.content, "base64").toString(
+              "utf-8",
+            );
+            toolResult = `[文件: ${path}]\nsha: ${ghData.sha}\n内容:\n${content.slice(0, 8000)}${content.length > 8000 ? "\n...(已截断，共" + content.length + "字符)" : ""}`;
           }
-        } else if (toolName === 'list_files') {
-          const dirPath = toolParams.path || '';
-          const branch = toolParams.branch || 'main';
-          const ghRes = await fetch(`https://api.github.com/repos/1687216166Pat/melt/contents/${dirPath}?ref=${branch}`, {
-            headers: {
-              'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-              'Accept': 'application/vnd.github.v3+json',
-              'User-Agent': 'Melt-Agent'
-            }
-          });
+        } else if (toolName === "list_files") {
+          const dirPath = toolParams.path || "";
+          const branch = toolParams.branch || "main";
+          const ghRes = await fetch(
+            `https://api.github.com/repos/1687216166Pat/melt/contents/${dirPath}?ref=${branch}`,
+            {
+              headers: {
+                Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                Accept: "application/vnd.github.v3+json",
+                "User-Agent": "Melt-Agent",
+              },
+            },
+          );
           if (!ghRes.ok) {
             toolResult = `[错误] 无法列出目录: ${dirPath} (${ghRes.status})`;
           } else {
             const items = await ghRes.json();
-            const listing = items.map(i => `${i.type === 'dir' ? '📁' : '📄'} ${i.name}`).join('\n');
-            toolResult = `[目录: ${dirPath || '/'}]\n${listing}`;
+            const listing = items
+              .map((i) => `${i.type === "dir" ? "📁" : "📄"} ${i.name}`)
+              .join("\n");
+            toolResult = `[目录: ${dirPath || "/"}]\n${listing}`;
           }
-        } else if (toolName === 'write_file') {
-          const { path, content, message, branch = 'agent-auto' } = toolParams;
+        } else if (toolName === "write_file") {
+          const { path, content, message, branch = "agent-auto" } = toolParams;
           if (!path || !content || !message) {
-            toolResult = '[错误] write_file 需要 path, content, message 参数';
+            toolResult = "[错误] write_file 需要 path, content, message 参数";
           } else {
             // 先尝试获取已有文件的 sha
             let sha = null;
             try {
-              const existRes = await fetch(`https://api.github.com/repos/1687216166Pat/melt/contents/${path}?ref=${branch}`, {
-                headers: {
-                  'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                  'Accept': 'application/vnd.github.v3+json',
-                  'User-Agent': 'Melt-Agent'
-                }
-              });
+              const existRes = await fetch(
+                `https://api.github.com/repos/1687216166Pat/melt/contents/${path}?ref=${branch}`,
+                {
+                  headers: {
+                    Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                    Accept: "application/vnd.github.v3+json",
+                    "User-Agent": "Melt-Agent",
+                  },
+                },
+              );
               if (existRes.ok) {
                 const existData = await existRes.json();
                 sha = existData.sha;
@@ -871,88 +903,112 @@ async function handleChat(
 
             // 确保分支存在
             try {
-              const branchCheck = await fetch(`https://api.github.com/repos/1687216166Pat/melt/git/refs/heads/${branch}`, {
-                headers: {
-                  'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                  'Accept': 'application/vnd.github.v3+json',
-                  'User-Agent': 'Melt-Agent'
-                }
-              });
+              const branchCheck = await fetch(
+                `https://api.github.com/repos/1687216166Pat/melt/git/refs/heads/${branch}`,
+                {
+                  headers: {
+                    Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                    Accept: "application/vnd.github.v3+json",
+                    "User-Agent": "Melt-Agent",
+                  },
+                },
+              );
               if (!branchCheck.ok) {
                 // 创建分支
-                const mainRef = await fetch(`https://api.github.com/repos/1687216166Pat/melt/git/refs/heads/main`, {
-                  headers: {
-                    'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'Melt-Agent'
-                  }
-                });
-                const mainData = await mainRef.json();
-                await fetch(`https://api.github.com/repos/1687216166Pat/melt/git/refs`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                    'Accept': 'application/vnd.github.v3+json',
-                    'User-Agent': 'Melt-Agent',
-                    'Content-Type': 'application/json'
+                const mainRef = await fetch(
+                  `https://api.github.com/repos/1687216166Pat/melt/git/refs/heads/main`,
+                  {
+                    headers: {
+                      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                      Accept: "application/vnd.github.v3+json",
+                      "User-Agent": "Melt-Agent",
+                    },
                   },
-                  body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: mainData.object.sha })
-                });
+                );
+                const mainData = await mainRef.json();
+                await fetch(
+                  `https://api.github.com/repos/1687216166Pat/melt/git/refs`,
+                  {
+                    method: "POST",
+                    headers: {
+                      Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                      Accept: "application/vnd.github.v3+json",
+                      "User-Agent": "Melt-Agent",
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                      ref: `refs/heads/${branch}`,
+                      sha: mainData.object.sha,
+                    }),
+                  },
+                );
                 console.log(`[Agent] 创建分支: ${branch}`);
               }
             } catch {}
 
-            const encoded = Buffer.from(content).toString('base64');
+            const encoded = Buffer.from(content).toString("base64");
             const body = { message, content: encoded, branch };
             if (sha) body.sha = sha;
 
-            const writeRes = await fetch(`https://api.github.com/repos/1687216166Pat/melt/contents/${path}`, {
-              method: 'PUT',
-              headers: {
-                'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'Melt-Agent',
-                'Content-Type': 'application/json'
+            const writeRes = await fetch(
+              `https://api.github.com/repos/1687216166Pat/melt/contents/${path}`,
+              {
+                method: "PUT",
+                headers: {
+                  Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                  Accept: "application/vnd.github.v3+json",
+                  "User-Agent": "Melt-Agent",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(body),
               },
-              body: JSON.stringify(body)
-            });
+            );
 
             if (writeRes.ok) {
               const writeData = await writeRes.json();
               toolResult = `[提交成功]\n文件: ${path}\n分支: ${branch}\ncommit: ${writeData.commit.sha.slice(0, 7)}\n消息: ${message}`;
             } else {
               const errData = await writeRes.json();
-              toolResult = `[提交失败] ${writeRes.status}: ${errData.message || '未知错误'}`;
+              toolResult = `[提交失败] ${writeRes.status}: ${errData.message || "未知错误"}`;
             }
           }
-        } else if (toolName === 'create_branch') {
-          const { name, from = 'main' } = toolParams;
+        } else if (toolName === "create_branch") {
+          const { name, from = "main" } = toolParams;
           if (!name) {
-            toolResult = '[错误] create_branch 需要 name 参数';
+            toolResult = "[错误] create_branch 需要 name 参数";
           } else {
-            const refRes = await fetch(`https://api.github.com/repos/1687216166Pat/melt/git/refs/heads/${from}`, {
-              headers: {
-                'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'Melt-Agent'
-              }
-            });
-            const refData = await refRes.json();
-            const createRes = await fetch(`https://api.github.com/repos/1687216166Pat/melt/git/refs`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                'Accept': 'application/vnd.github.v3+json',
-                'User-Agent': 'Melt-Agent',
-                'Content-Type': 'application/json'
+            const refRes = await fetch(
+              `https://api.github.com/repos/1687216166Pat/melt/git/refs/heads/${from}`,
+              {
+                headers: {
+                  Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                  Accept: "application/vnd.github.v3+json",
+                  "User-Agent": "Melt-Agent",
+                },
               },
-              body: JSON.stringify({ ref: `refs/heads/${name}`, sha: refData.object.sha })
-            });
+            );
+            const refData = await refRes.json();
+            const createRes = await fetch(
+              `https://api.github.com/repos/1687216166Pat/melt/git/refs`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `token ${process.env.GITHUB_TOKEN}`,
+                  Accept: "application/vnd.github.v3+json",
+                  "User-Agent": "Melt-Agent",
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  ref: `refs/heads/${name}`,
+                  sha: refData.object.sha,
+                }),
+              },
+            );
             if (createRes.ok) {
               toolResult = `[分支创建成功] ${name} (基于 ${from})`;
             } else {
               const errData = await createRes.json();
-              toolResult = `[分支创建失败] ${errData.message || '未知错误'}`;
+              toolResult = `[分支创建失败] ${errData.message || "未知错误"}`;
             }
           }
         } else {
@@ -964,33 +1020,37 @@ async function handleChat(
 
       // 把工具结果注入，让 AI 继续回复
       const toolResultMsg = `[工具结果]\n${toolResult}`;
-      
+
       // 移除已执行的 TOOL_CALL，保留前面的文字
       const beforeTool = aiReply.slice(0, aiReply.indexOf(toolMatch[0])).trim();
-      
+
       // 重新调用 AI，带上工具结果
-      messages.push({ role: 'assistant', content: aiReply });
-      messages.push({ role: 'user', content: toolResultMsg });
+      messages.push({ role: "assistant", content: aiReply });
+      messages.push({ role: "user", content: toolResultMsg });
 
       try {
         const apiKey = personaApiKey || process.env.AI_API_KEY;
         const apiUrl = personaApiUrl || process.env.AI_BASE_URL;
         const continueRes = await fetch(`${apiUrl}/chat/completions`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json; charset=utf-8',
-            'Authorization': `Bearer ${apiKey}`
+            "Content-Type": "application/json; charset=utf-8",
+            Authorization: `Bearer ${apiKey}`,
           },
-          body: JSON.stringify({ model: modelToUse, temperature: temperatureToUse, messages })
+          body: JSON.stringify({
+            model: modelToUse,
+            temperature: temperatureToUse,
+            messages,
+          }),
         });
         const continueData = await continueRes.json();
         if (continueData.choices && continueData.choices[0]) {
-          aiReply = continueData.choices[0].message.content || '...';
-          aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, '').trim();
-          aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, '').trim();
-          if (!aiReply) aiReply = '...';
+          aiReply = continueData.choices[0].message.content || "...";
+          aiReply = aiReply.replace(/[\s\S]*?<\/think>/g, "").trim();
+          aiReply = aiReply.replace(/\[思考\][\s\S]*?\[思考\]/g, "").trim();
+          if (!aiReply) aiReply = "...";
         } else {
-          aiReply = beforeTool + '\n[工具已执行，但后续回复生成失败]';
+          aiReply = beforeTool + "\n[工具已执行，但后续回复生成失败]";
           break;
         }
       } catch (e) {
