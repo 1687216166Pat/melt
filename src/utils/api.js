@@ -33,7 +33,7 @@ async function checkCloudHealth() {
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    // 404 说明路由还没部署，不算故障
+    // 404 = 路由还没部署，不算故障；只有网络错误或5xx才算
     if (res.ok || res.status === 404) {
       consecutiveFailures = 0;
       if (isCloudDown.value) {
@@ -41,7 +41,7 @@ async function checkCloudHealth() {
         isCloudDown.value = false;
         syncPendingData();
       }
-    } else {
+    } else if (res.status >= 500) {
       onCloudFailure();
     }
   } catch {
