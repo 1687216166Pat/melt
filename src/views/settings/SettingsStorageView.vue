@@ -212,6 +212,43 @@
                 </div>
             </div>
 
+            <!-- 在你的 <template> 中，找到你刚才加的两个 setting-item，用下面的代码块替换 -->
+
+            <!-- 数据迁移 -->
+            <div class="section-label-sm">数据迁移 (Beta)</div>
+            <div class="settings-group">
+                <!-- 单独迁移 -->
+                <div class="settings-group-item action-item">
+                    <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #88abda, #6f94c9);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+                            <path d="M4 12h16M4 12l6 6M4 12l6-6" />
+                        </svg>
+                    </div>
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">迁移当前助手</div>
+                        <div class="sgi-desc">仅将云端数据导入到【{{ personaNameForDisplay }}】</div>
+                    </div>
+                    <button class="action-btn primary" @click="handleSingleMigration">迁移当前</button>
+                </div>
+
+                <!-- 全量迁移 -->
+                <div class="settings-group-item action-item">
+                    <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #c98888, #b86f6f);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                    </div>
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">迁移所有助手</div>
+                        <div class="sgi-desc danger-text">【高风险】一次性导入所有数据</div>
+                    </div>
+                    <button class="action-btn danger" @click="handleFullMigration">全量迁移</button>
+                </div>
+            </div>
+
             <Transition name="toast-fade">
                 <div v-if="resultMsg" class="result-bar" :class="resultSuccess ? 'success' : 'error'">
                     {{ resultMsg }}
@@ -223,14 +260,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { api } from '@/utils/api'
+import { ref, computed, onMounted } from 'vue';
+import { api } from '@/utils/api';
+import { useRoute } from 'vue-router';
+// 导入我们的迁移函数
+import { startSingleMigration, startFullMigration } from '@/utils/migrate.js';
 
-const importInput = ref(null)
-const resultMsg = ref('')
-const resultSuccess = ref(true)
-const showExportPanel = ref(false)
-
+// --- 你原有的 State 和 Refs ---
+const importInput = ref(null);
+const resultMsg = ref('');
+const resultSuccess = ref(true);
+const showExportPanel = ref(false);
 const storageItems = ref([
     { key: 'messages', label: '聊天记录', color: '#E8C0C9', size: 0, percent: 0 },
     { key: 'personas', label: '角色人设', color: '#D8CDEA', size: 0, percent: 0 },
@@ -240,108 +280,7 @@ const storageItems = ref([
     { key: 'calendar', label: '日历', color: '#F1DADD', size: 0, percent: 0 },
     { key: 'media', label: '媒体/头像', color: '#C8C8E8', size: 0, percent: 0 },
     { key: 'other', label: '其他', color: '#D4C8CA', size: 0, percent: 0 },
-])
-
-const totalUsed = computed(() => storageItems.value.reduce((a, b) => a + b.size, 0))
-
-const pieSegments = computed(() => {
-    const total = totalUsed.value || 1
-    const circumference = 2 * Math.PI * 38
-    let offset = 0
-    return storageItems.value.map(item => {
-        const dash = (item.size / total) * circumference
-        const seg = { color: item.color, dash, gap: circumference - dash, offset: circumference - offset }
-        offset += dash
-        return seg
-    })
-})
-
-const recommendations = computed(() => {
-    const recs = []
-    const msgs = storageItems.value.find(i => i.key === 'messages')
-    const mems = storageItems.value.find(i => i.key === 'memories')
-    const media = storageItems.value.find(i => i.key === 'media')
-
-    if (msgs && msgs.size > 500) {
-        recs.push({
-            key: 'clear_messages',
-            emoji: '💬',
-            title: '清理旧聊天记录',
-            desc: `聊天记录占用 ${msgs.size}KB，可清理早期记录`,
-            badge: `${msgs.size}KB`,
-            color: '#E8C0C9',
-            action: () => { }
-        })
-    }
-    if (mems && mems.size > 200) {
-        recs.push({
-            key: 'compress_memory',
-            emoji: '🧠',
-            title: '压缩记忆数据',
-            desc: `记忆占用 ${mems.size}KB，建议触发一次记忆整理`,
-            badge: `${mems.size}KB`,
-            color: '#F5EAD0',
-            action: () => { }
-        })
-    }
-    if (media && media.size > 300) {
-        recs.push({
-            key: 'clear_media',
-            emoji: '🖼️',
-            title: '清理媒体缓存',
-            desc: `媒体文件占用 ${media.size}KB，可清理头像缓存`,
-            badge: `${media.size}KB`,
-            color: '#C8C8E8',
-            action: () => { }
-        })
-    }
-    return recs
-})
-
-function calcSize(str) {
-    return Math.round(new Blob([str]).size / 1024 * 10) / 10
-}
-
-function loadStorageStats() {
-    const keys = Object.keys(localStorage)
-
-    let messages = 0, personas = 0, userProfile = 0,
-        memories = 0, worldBooks = 0, calendar = 0, media = 0, other = 0
-
-    keys.forEach(key => {
-        const val = localStorage.getItem(key) || ''
-        const size = calcSize(val)
-        if (['messages', 'messages_beta'].some(k => key.includes(k))) messages += size
-        else if (['api_config', 'api_configs', 'sub_api', 'custom_personas'].some(k => key.includes(k))) personas += size
-        else if (['user_name', 'user_phone', 'user_bio', 'user_background', 'user_relation', 'user_masks', 'user_identity', 'user_gender', 'user_nickname'].some(k => key.includes(k))) userProfile += size
-        else if (['word_cards', 'memories', 'memory'].some(k => key.includes(k))) memories += size
-        else if (key.includes('world_book')) worldBooks += size
-        else if (['calendar_data', 'period_data', 'together_start_date'].some(k => key.includes(k))) calendar += size
-        else if (['wallpaper', 'avatar', 'font', 'icon'].some(k => key.includes(k))) media += size
-        else other += size
-    })
-
-    storageItems.value[0].size = Math.round(messages)
-    storageItems.value[1].size = Math.round(personas)
-    storageItems.value[2].size = Math.round(userProfile)
-    storageItems.value[3].size = Math.round(memories)
-    storageItems.value[4].size = Math.round(worldBooks)
-    storageItems.value[5].size = Math.round(calendar)
-    storageItems.value[6].size = Math.round(media)
-    storageItems.value[7].size = Math.round(other)
-
-    const total = storageItems.value.reduce((a, b) => a + b.size, 0) || 1
-    storageItems.value.forEach(item => {
-        item.percent = Math.round((item.size / total) * 100)
-    })
-}
-
-function showResult(msg, success = true) {
-    resultMsg.value = msg
-    resultSuccess.value = success
-    setTimeout(() => { resultMsg.value = '' }, 3000)
-}
-
+]);
 const exportOptions = ref([
     { key: 'messages', label: '聊天记录', desc: '所有角色的对话数据', checked: true },
     { key: 'memories', label: '记忆库', desc: '长期印象、碎片、弧线', checked: true },
@@ -349,99 +288,178 @@ const exportOptions = ref([
     { key: 'personas', label: '角色设定', desc: '自定义角色和配置', checked: true },
     { key: 'timeline', label: '时间线', desc: '时间线事件记录', checked: true },
     { key: 'settings', label: '本地设置', desc: '主题、壁纸、API配置等', checked: false },
-])
+]);
+
+// --- 新增的 State，用于数据迁移 ---
+const route = useRoute();
+const personaIdFromRoute = computed(() => route.params.personaId);
+const personaName = ref('未知助手'); // 给一个默认值
+
+// --- 你原有的 Computed Properties ---
+const totalUsed = computed(() => storageItems.value.reduce((a, b) => a + b.size, 0));
+
+const pieSegments = computed(() => {
+    const total = totalUsed.value || 1;
+    const circumference = 2 * Math.PI * 38;
+    let offset = 0;
+    return storageItems.value.map(item => {
+        const dash = (item.size / total) * circumference;
+        const seg = { color: item.color, dash, gap: circumference - dash, offset: circumference - offset };
+        offset += dash;
+        return seg;
+    });
+});
+
+const recommendations = computed(() => {
+    const recs = [];
+    const msgs = storageItems.value.find(i => i.key === 'messages');
+    const mems = storageItems.value.find(i => i.key === 'memories');
+    const media = storageItems.value.find(i => i.key === 'media');
+
+    if (msgs && msgs.size > 500) {
+        recs.push({ key: 'clear_messages', emoji: '💬', title: '清理旧聊天记录', desc: `聊天记录占用 ${msgs.size}KB，可清理早期记录`, badge: `${msgs.size}KB`, color: '#E8C0C9', action: () => { } });
+    }
+    if (mems && mems.size > 200) {
+        recs.push({ key: 'compress_memory', emoji: '🧠', title: '压缩记忆数据', desc: `记忆占用 ${mems.size}KB，建议触发一次记忆整理`, badge: `${mems.size}KB`, color: '#F5EAD0', action: () => { } });
+    }
+    if (media && media.size > 300) {
+        recs.push({ key: 'clear_media', emoji: '🖼️', title: '清理媒体缓存', desc: `媒体文件占用 ${media.size}KB，可清理头像缓存`, badge: `${media.size}KB`, color: '#C8C8E8', action: () => { } });
+    }
+    return recs;
+});
+
+// --- 新增的 Computed Property，用于模板安全显示 ---
+const personaNameForDisplay = computed(() => {
+    return personaName.value !== '未知助手' ? personaName.value : (personaIdFromRoute.value || '当前助手');
+});
+
+
+// --- 你原有的 Methods ---
+function calcSize(str) {
+    if (!str) return 0;
+    return Math.round(new Blob([str]).size / 1024 * 10) / 10;
+}
+
+function loadStorageStats() {
+    const keys = Object.keys(localStorage);
+    let messages = 0, personas = 0, userProfile = 0, memories = 0, worldBooks = 0, calendar = 0, media = 0, other = 0;
+
+    keys.forEach(key => {
+        const val = localStorage.getItem(key) || '';
+        const size = calcSize(val);
+        if (['messages', 'messages_beta'].some(k => key.includes(k))) messages += size;
+        else if (['api_config', 'api_configs', 'sub_api', 'custom_personas'].some(k => key.includes(k))) personas += size;
+        else if (['user_name', 'user_phone', 'user_bio', 'user_background', 'user_relation', 'user_masks', 'user_identity', 'user_gender', 'user_nickname'].some(k => key.includes(k))) userProfile += size;
+        else if (['word_cards', 'memories', 'memory'].some(k => key.includes(k))) memories += size;
+        else if (key.includes('world_book')) worldBooks += size;
+        else if (['calendar_data', 'period_data', 'together_start_date'].some(k => key.includes(k))) calendar += size;
+        else if (['wallpaper', 'avatar', 'font', 'icon'].some(k => key.includes(k))) media += size;
+        else other += size;
+    });
+
+    storageItems.value[0].size = Math.round(messages);
+    storageItems.value[1].size = Math.round(personas);
+    storageItems.value[2].size = Math.round(userProfile);
+    storageItems.value[3].size = Math.round(memories);
+    storageItems.value[4].size = Math.round(worldBooks);
+    storageItems.value[5].size = Math.round(calendar);
+    storageItems.value[6].size = Math.round(media);
+    storageItems.value[7].size = Math.round(other);
+
+    const total = storageItems.value.reduce((a, b) => a + b.size, 0) || 1;
+    storageItems.value.forEach(item => {
+        item.percent = Math.round((item.size / total) * 100);
+    });
+}
+
+function showResult(msg, success = true) {
+    resultMsg.value = msg;
+    resultSuccess.value = success;
+    setTimeout(() => { resultMsg.value = ''; }, 3000);
+}
 
 async function exportData() {
     try {
-        const selected = exportOptions.value.filter(o => o.checked).map(o => o.key)
-        if (selected.length === 0) { showResult('请至少选择一项', false); return }
+        const selected = exportOptions.value.filter(o => o.checked).map(o => o.key);
+        if (selected.length === 0) { showResult('请至少选择一项', false); return; }
 
-        const res = await api('/api/export?modules=' + selected.join(','))
-        const serverData = await res.json()
+        const res = await api('/api/export?modules=' + selected.join(','));
+        const serverData = await res.json();
 
-        const exportPayload = {}
-
-        if (selected.includes('messages') && serverData.messages) exportPayload.messages = serverData.messages
-        if (selected.includes('memories') && serverData.memories) exportPayload.memories = serverData.memories
-        if (selected.includes('worldbooks') && serverData.worldbooks) exportPayload.worldbooks = serverData.worldbooks
-        if (selected.includes('personas') && serverData.personas) exportPayload.personas = serverData.personas
-        if (selected.includes('timeline') && serverData.timeline) exportPayload.timeline = serverData.timeline
+        const exportPayload = {};
+        if (selected.includes('messages') && serverData.messages) exportPayload.messages = serverData.messages;
+        if (selected.includes('memories') && serverData.memories) exportPayload.memories = serverData.memories;
+        if (selected.includes('worldbooks') && serverData.worldbooks) exportPayload.worldbooks = serverData.worldbooks;
+        if (selected.includes('personas') && serverData.personas) exportPayload.personas = serverData.personas;
+        if (selected.includes('timeline') && serverData.timeline) exportPayload.timeline = serverData.timeline;
 
         if (selected.includes('settings')) {
-            const localData = {}
-            Object.keys(localStorage).forEach(k => { localData[k] = localStorage.getItem(k) })
-            exportPayload.localSettings = localData
+            const localData = {};
+            Object.keys(localStorage).forEach(k => { localData[k] = localStorage.getItem(k); });
+            exportPayload.localSettings = localData;
         }
 
-        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        const modules = selected.length === exportOptions.value.length ? 'full' : selected.join('+')
-        a.download = `melt-${modules}-${new Date().toISOString().slice(0, 10)}.json`
-        a.click()
-        URL.revokeObjectURL(url)
-        showExportPanel.value = false
-        showResult('导出成功 ✓')
-    } catch (e) { showResult('导出失败: ' + e.message, false) }
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const modules = selected.length === exportOptions.value.length ? 'full' : selected.join('+');
+        a.download = `melt-${modules}-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showExportPanel.value = false;
+        showResult('导出成功 ✓');
+    } catch (e) { showResult('导出失败: ' + e.message, false); }
 }
 
-function triggerImport() { importInput.value?.click() }
+function triggerImport() {
+    importInput.value?.click();
+}
 
 async function importData(event) {
-    const file = event.target.files[0]
-    if (!file) return
+    const file = event.target.files[0];
+    if (!file) return;
     try {
-        const text = await file.text()
-        const data = JSON.parse(text)
+        const text = await file.text();
+        const data = JSON.parse(text);
 
-        // 本地设置
         if (data.localSettings) {
-            Object.entries(data.localSettings).forEach(([k, v]) => { if (v) localStorage.setItem(k, v) })
+            Object.entries(data.localSettings).forEach(([k, v]) => { if (v) localStorage.setItem(k, v); });
         }
 
-        // 云端数据
-        const serverData = { ...data }
-        delete serverData.localSettings
+        const serverData = { ...data };
+        delete serverData.localSettings;
         if (Object.keys(serverData).length > 0) {
             await api('/api/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(serverData)
-            })
+            });
         }
-
-        showResult('导入成功，刷新页面生效 ✓')
-    } catch (e) { showResult('导入失败: ' + e.message, false) }
+        showResult('导入成功，刷新页面生效 ✓');
+    } catch (e) { showResult('导入失败: ' + e.message, false); }
 }
 
 async function syncToCloud() {
-    if (!confirm('上传至云端会清除旧缓存并重新同步最新数据，确定继续？')) return
-    showResult('正在同步...')
+    if (!confirm('上传至云端会清除旧缓存并重新同步最新数据，确定继续？')) return;
+    showResult('正在同步...');
     try {
-        sessionStorage.clear()
-
+        sessionStorage.clear();
         const keysToRemove = Object.keys(localStorage).filter(k =>
-            k.startsWith('melt_cache_') ||
-            k === 'home_data_loaded' ||
-            k === 'personas_loaded' ||
-            k === 'cached_current_ai' ||
-            k === 'cached_left_bubble' ||
-            k === 'cached_personas' ||
-            k === 'cached_timeline' ||
-            k === 'cached_insights' ||
-            k === 'cached_total_messages' ||
+            k.startsWith('melt_cache_') || k === 'home_data_loaded' || k === 'personas_loaded' ||
+            k === 'cached_current_ai' || k === 'cached_left_bubble' || k === 'cached_personas' ||
+            k === 'cached_timeline' || k === 'cached_insights' || k === 'cached_total_messages' ||
             k === 'cached_streak'
-        )
-        keysToRemove.forEach(k => localStorage.removeItem(k))
+        );
+        keysToRemove.forEach(k => localStorage.removeItem(k));
 
         const [personasRes, latestRes] = await Promise.all([
             api('/api/prompts/personas'),
             api('/api/messages/latest-persona')
-        ])
-        const personasData = await personasRes.json()
-        const latestData = await latestRes.json()
-        const pid = latestData.personaId
+        ]);
+        const personasData = await personasRes.json();
+        const latestData = await latestRes.json();
+        const pid = latestData.personaId;
 
         if (pid) {
             const [msgRes, timelineRes, insightRes, heatmapRes] = await Promise.all([
@@ -449,67 +467,100 @@ async function syncToCloud() {
                 api(`/api/timeline/${pid}`),
                 api(`/api/sediment/${pid}/insights`),
                 api(`/api/memories/${pid}/heatmap`)
-            ])
-            const lastMsg = await msgRes.json()
-            const timeline = await timelineRes.json()
-            const insights = await insightRes.json()
-            const heatmap = await heatmapRes.json()
-
+            ]);
+            const lastMsg = await msgRes.json();
+            const timeline = await timelineRes.json();
+            const insights = await insightRes.json();
+            const heatmap = await heatmapRes.json();
             if (lastMsg) {
-                const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ')
-                localStorage.setItem('cached_left_bubble',
-                    content.length > 30 ? content.slice(0, 30) + '...' : content)
+                const content = lastMsg.content.split('|||')[0].replace(/\n/g, ' ');
+                localStorage.setItem('cached_left_bubble', content.length > 30 ? content.slice(0, 30) + '...' : content);
             }
-            localStorage.setItem('cached_timeline', JSON.stringify(timeline))
-            localStorage.setItem('cached_insights', JSON.stringify(insights))
+            localStorage.setItem('cached_timeline', JSON.stringify(timeline));
+            localStorage.setItem('cached_insights', JSON.stringify(insights));
             if (heatmap) {
-                const total = Object.values(heatmap).reduce((a, b) => a + b, 0)
-                localStorage.setItem('cached_total_messages', String(total))
+                const total = Object.values(heatmap).reduce((a, b) => a + b, 0);
+                localStorage.setItem('cached_total_messages', String(total));
             }
         }
-
-        showResult('已同步最新数据至本地缓存 ✓')
+        showResult('已同步最新数据至本地缓存 ✓');
     } catch (e) {
-        showResult('同步失败: ' + e.message, false)
+        showResult('同步失败: ' + e.message, false);
     }
 }
 
 async function forceSync() {
-    if (!confirm('强制同步会清除所有本地缓存并从云端重新读取，确定？')) return
-    showResult('正在从云端读取...')
+    if (!confirm('强制同步会清除所有本地缓存并从云端重新读取，确定？')) return;
+    showResult('正在从云端读取...');
     try {
-        sessionStorage.clear()
+        sessionStorage.clear();
         Object.keys(localStorage).forEach(key => {
             if (
-                key.startsWith('melt_cache_') ||
-                key.startsWith('cached_') ||
-                key.startsWith('together_loaded_') ||
-                key.startsWith('insights_loaded_') ||
-                key.startsWith('bookmarks_loaded_') ||
-                key === 'home_data_loaded' ||
-                key === 'personas_loaded'
+                key.startsWith('melt_cache_') || key.startsWith('cached_') || key.startsWith('together_loaded_') ||
+                key.startsWith('insights_loaded_') || key.startsWith('bookmarks_loaded_') ||
+                key === 'home_data_loaded' || key === 'personas_loaded'
             ) {
-                localStorage.removeItem(key)
+                localStorage.removeItem(key);
             }
-        })
-        showResult('缓存已清除，正在刷新...')
-        setTimeout(() => { location.reload() }, 1200)
+        });
+        showResult('缓存已清除，正在刷新...');
+        setTimeout(() => { location.reload(); }, 1200);
     } catch (e) {
-        showResult('同步失败: ' + e.message, false)
+        showResult('同步失败: ' + e.message, false);
     }
 }
 
 async function restoreBuiltinPersonas() {
     try {
         for (const id of ['xiaorou', 'cool', 'assistant']) {
-            await api(`/api/personas/builtin/${id}/restore`, { method: 'POST' })
+            await api(`/api/personas/builtin/${id}/restore`, { method: 'POST' });
         }
-        localStorage.removeItem('hidden_personas')
-        showResult('已恢复所有内置人格 ✓')
-    } catch (e) { showResult('恢复失败: ' + e.message, false) }
+        localStorage.removeItem('hidden_personas');
+        showResult('已恢复所有内置人格 ✓');
+    } catch (e) { showResult('恢复失败: ' + e.message, false); }
 }
 
-onMounted(loadStorageStats)
+// --- 新增的 Methods，用于数据迁移 ---
+async function handleSingleMigration() {
+    const pid = personaIdFromRoute.value;
+    if (!pid) {
+        alert('无法获取当前人格 ID，请从具体的人格详情页进入此功能，或选择“全量迁移”。');
+        return;
+    }
+    await startSingleMigration(pid);
+}
+
+async function handleFullMigration() {
+    await startFullMigration();
+}
+
+// --- onMounted 生命周期钩子 ---
+onMounted(() => {
+    // 你原有的 onMounted 逻辑
+    loadStorageStats();
+
+    // 新增的逻辑，用于获取当前 persona 的名称
+    if (personaIdFromRoute.value) {
+        api(`/api/persona/${personaIdFromRoute.value}`)
+            .then(res => res.json())
+            .then(data => {
+                // 假设你的 persona API 返回的对象中有 name 字段
+                if (data && data.name) {
+                    personaName.value = data.name;
+                } else if (personaIdFromRoute.value) {
+                    // 如果没有 name 字段，就用 ID 代替
+                    personaName.value = personaIdFromRoute.value;
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch persona name:", err);
+                // 如果请求失败，也用 ID 代替
+                if (personaIdFromRoute.value) {
+                    personaName.value = personaIdFromRoute.value;
+                }
+            });
+    }
+});
 </script>
 
 <style scoped>
@@ -925,5 +976,40 @@ onMounted(loadStorageStats)
 .export-opt-desc {
     font-size: 10px;
     color: #B8A9AC;
+}
+
+/* 你可以把这些样式加到 Storage.vue 的 style 标签里 */
+.sgi-label-wrap .danger-text {
+    color: #ff4d4f;
+    font-weight: 500;
+}
+
+.action-btn {
+    border: none;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    flex-shrink: 0;
+    transition: background-color 0.2s;
+}
+
+.action-btn.primary {
+    background-color: #1890ff;
+    color: white;
+}
+
+.action-btn.primary:active {
+    background-color: #096dd9;
+}
+
+.action-btn.danger {
+    background-color: #ff4d4f;
+    color: white;
+}
+
+.action-btn.danger:active {
+    background-color: #d9363e;
 }
 </style>
