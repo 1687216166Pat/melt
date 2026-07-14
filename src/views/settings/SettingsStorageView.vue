@@ -153,6 +153,28 @@
                 <input type="file" ref="importInput" accept=".json" style="display:none" @change="importData" />
             </div>
 
+                        <!-- ================= 新增：系统运行模式 ================= -->
+            <div class="section-label-sm">系统运行模式</div>
+            <div class="settings-group">
+                <div class="settings-group-item">
+                    <div class="sgi-icon-wrap" style="background: linear-gradient(135deg, #a18cd1, #fbc2eb);">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <div class="sgi-label-wrap">
+                        <div class="sgi-label">纯本地记忆模式 (Local)</div>
+                        <div class="sgi-desc">开启后，记忆完全在浏览器本地提取和保存，极速且保护隐私。</div>
+                    </div>
+                    <!-- 滑动开关 -->
+                    <label class="toggle-switch">
+                        <input type="checkbox" v-model="isLocalModeEnabled" @change="handleModeToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <!-- ====================================================== -->
+
             <!-- 云端同步 -->
             <div class="section-label-sm">云端</div>
             <div class="settings-group">
@@ -212,8 +234,6 @@
                 </div>
             </div>
 
-            <!-- 在你的 <template> 中，找到你刚才加的两个 setting-item，用下面的代码块替换 -->
-
             <!-- 数据迁移 -->
             <div class="section-label-sm">数据迁移 (Beta)</div>
             <div class="settings-group">
@@ -271,6 +291,26 @@ const importInput = ref(null);
 const resultMsg = ref('');
 const resultSuccess = ref(true);
 const showExportPanel = ref(false);
+
+// --- 新增：模式切换逻辑 ---
+// 初始化开关状态：读取 localStorage，如果没有则读取环境变量
+const isLocalModeEnabled = ref(
+    localStorage.getItem('force_local_mode') !== null 
+        ? localStorage.getItem('force_local_mode') === 'true'
+        : import.meta.env.VITE_APP_MODE === 'local'
+);
+
+function handleModeToggle(e) {
+    const isLocal = e.target.checked;
+    // 将用户的选择保存到 localStorage
+    localStorage.setItem('force_local_mode', isLocal ? 'true' : 'false');
+    
+    // 提示并刷新页面以应用完全不同的网络和数据库策略
+    alert(`已切换为 ${isLocal ? '【纯本地模式】' : '【云端同步模式】'}。\n页面即将刷新以应用更改。`);
+    window.location.reload();
+}
+// ------------------------
+
 const storageItems = ref([
     { key: 'messages', label: '聊天记录', color: '#E8C0C9', size: 0, percent: 0 },
     { key: 'personas', label: '角色人设', color: '#D8CDEA', size: 0, percent: 0 },
@@ -1012,4 +1052,46 @@ onMounted(() => {
 .action-btn.danger:active {
     background-color: #d9363e;
 }
+
+/* --- 新增：滑动开关样式 --- */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .3s;
+  border-radius: 24px;
+}
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+input:checked + .toggle-slider {
+  background-color: #4cd964; /* 开启时的绿色 */
+}
+input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+/* ------------------------ */
+
 </style>

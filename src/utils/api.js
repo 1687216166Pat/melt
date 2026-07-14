@@ -4,15 +4,24 @@ import { manualOffline } from "./emergencyMode"; // 新增导入
 const BASE = import.meta.env.VITE_API_URL || "";
 const MODE = import.meta.env.VITE_APP_MODE || "personal";
 
-// 静态本地模式（local/lite 版本始终走本地）
-export const isStaticLocalMode = MODE === "local" || MODE === "lite";
+// ================= 核心修改：安全融合 =================
+// 优先读取用户的本地设置开关
+const storedMode = localStorage.getItem("force_local_mode");
+
+// 统一的本地模式判断：用户强制开启，或者环境变量指定
+export const isLocalMode =
+  storedMode !== null
+    ? storedMode === "true"
+    : MODE === "local" || MODE === "lite";
+
+// 【重要】保持向下兼容！不删除原来的 isStaticLocalMode，直接让它等同于 isLocalMode
+// 这样下面的所有逻辑 (api拦截、健康检查等) 都不需要修改，自动生效！
+export const isStaticLocalMode = isLocalMode;
+// ======================================================
 
 // 动态本地模式（personal 版云端故障时自动切换）
 export const isCloudDown = ref(false);
 export const pendingSyncCount = ref(0);
-
-// 最终判断：是否走本地
-export const isLocalMode = isStaticLocalMode;
 
 // Personal 版的动态模式判断
 export function shouldUseLocal() {
