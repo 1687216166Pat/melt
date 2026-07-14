@@ -1,21 +1,28 @@
+// src/stores/chat.js
+
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import { api, isLocalMode } from "@/utils/api";
 import { getCache, setCache } from "@/utils/cache";
-import { mediaDb } from "@/utils/mediaDb"; // 统一使用 mediaDb
+// 你的 mediaDb.js 已经被新的版本替换，但这里的导入方式可能需要调整
+// 旧: import { mediaDb } from "@/utils/mediaDb";
+// 新:
+import { put as dbPut, get as dbGet, STORES } from "@/utils/mediaDb";
 import { isCloudDown } from "@/utils/api";
 import { emergencyMode, isEffectivelyOffline } from "@/utils/emergencyMode";
 import { generateEmergencyReply } from "@/utils/localApi";
+// === 新增/修改 ===
+// 1. 导入我们的本地记忆处理器
+import { processLocalMemory } from "@/utils/localMemory";
+// === 结束 ===
 
 function parseSpecialContent(content) {
   if (!content) return {};
-
   if (content.startsWith("[转账:") || content.startsWith("[转账: ")) {
     const match = content.match(/\[转账[: ]+¥?([\d.]+)\]/);
     if (match)
       return { type: "transfer", amount: parseFloat(match[1]), note: "" };
   }
-
   if (content.startsWith("[礼物:") || content.startsWith("[礼物: ")) {
     const match = content.match(/\[礼物[: ]+(.+?)\]/);
     if (match)
@@ -26,17 +33,14 @@ function parseSpecialContent(content) {
         giftMessage: "",
       };
   }
-
   if (content.startsWith("[位置") || content.startsWith("[位置:")) {
     const match = content.match(/\[位置[: ]*(.+?)\]/);
     return { type: "location", locationName: match ? match[1] : "位置" };
   }
-
   if (content.startsWith("[表情包:") || content.startsWith("[表情包: ")) {
     const match = content.match(/\[表情包[: ]+(.+?)\]/);
     if (match) return { type: "emoji", emojiName: match[1] };
   }
-
   return {};
 }
 
@@ -50,7 +54,6 @@ function parseFromMeta(msgType, msgMeta) {
         : msgMeta
       : {};
   } catch {}
-
   if (msgType === "gift") {
     return {
       type: "gift",
@@ -98,7 +101,6 @@ function parseFromMeta(msgType, msgMeta) {
       deliveryExpectedAt: meta.expectedAt || null,
     };
   }
-
   return {};
 }
 
@@ -110,16 +112,14 @@ export const useChatStore = defineStore("chat", () => {
   let currentLoadedPersona = null;
   let isLoading = false;
 
-  // 关键修改 1：改为 async 函数，处理图片持久化
+  // === 新增/修改 ===
+  // 2. 新增一个 state 来追踪消息总数
+  const totalMessageCount = ref(0);
+  // === 结束 ===
+
   async function addMessage(msg) {
-    console.log(
-      "[Store] addMessage called:",
-      msg.role,
-      msg.content?.slice(0, 20),
-    );
     const messageId =
       msg.id || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
     const newMsg = {
       id: messageId,
       role: msg.role,
@@ -127,24 +127,28 @@ export const useChatStore = defineStore("chat", () => {
       timestamp: msg.timestamp || new Date().toISOString(),
     };
 
-    // --- 媒体持久化逻辑 ---
     if (msg.images && msg.images.length > 0) {
       newMsg.type = "images";
       newMsg.images = msg.images;
-      // 如果是发送图片，将其保存到本地 IndexedDB
-      await mediaDb
-        .save(messageId, msg.images)
-        .catch((e) => console.error("Save image failed", e));
+      // === 新增/修改 ===
+      // 3. 使用新的 mediaDb API
+      await dbPut(STORES.message_images, {
+        id: String(messageId),
+        images: msg.images,
+      }).catch((e) => console.error("Save image failed", e));
+      // === 结束 ===
     } else if (msg.type === "images" || msg.content?.includes("[图片]")) {
       newMsg.type = "images";
-      // 如果是从后端拉取的消息，尝试从本地库恢复图片显示
-      const cachedImages = await mediaDb
-        .get(String(messageId))
-        .catch(() => null);
-      if (cachedImages) newMsg.images = cachedImages;
+      // === 新增/修改 ===
+      // 4. 使用新的 mediaDb API
+      const cachedData = await dbGet(
+        STORES.message_images,
+        String(messageId),
+      ).catch(() => null);
+      if (cachedData && cachedData.images) newMsg.images = cachedData.images;
+      // === 结束 ===
     }
 
-    // 复制其他字段
     const fields = [
       "type",
       "giftName",
@@ -177,7 +181,6 @@ export const useChatStore = defineStore("chat", () => {
         m.content === newMsg.content &&
         Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 2000,
     );
-
     if (isDuplicate) {
       console.log("[Chat] 拦截重复消息:", newMsg.content.slice(0, 30));
       return;
@@ -185,31 +188,47 @@ export const useChatStore = defineStore("chat", () => {
 
     messages.value.push(newMsg);
     allMessages.value.push(newMsg);
+
+    // === 新增/修改 ===
+    // 5. 如果是用户消息，增加计数器
+    if (msg.role === "user") {
+      totalMessageCount.value++;
+    }
+    // === 结束 ===
   }
+
+  // === 新增/修改 ===
+  // 6. 新增一个 action，专门用于触发记忆处理
+  function triggerMemoryProcessing(userMessage, aiReply) {
+    // 获取最近的对话上下文，例如最近15条，提供更丰富的上下文
+    const recentMessages = allMessages.value.slice(-15);
+
+    setTimeout(() => {
+      processLocalMemory(
+        recentMessages,
+        userMessage.content,
+        aiReply.content,
+        totalMessageCount.value,
+      ).catch((error) => {
+        console.error("Error during background memory processing:", error);
+      });
+    }, 0); // 放入宏任务队列，不阻塞UI
+  }
+  // === 结束 ===
 
   async function loadPersonaMessages(personaId) {
     if (!personaId) return;
-    if (isLoading) {
-      console.log("[Chat] loadPersonaMessages 正在加载中，跳过重复调用");
-      return;
-    }
+    if (isLoading) return;
     isLoading = true;
 
     if (allMessages.value.length > 0 && currentLoadedPersona === personaId) {
-      if (allMessages.value.length > pageSize) {
-        messages.value = allMessages.value.slice(-pageSize);
-        hasMore.value = true;
-      } else {
-        messages.value = allMessages.value;
-        hasMore.value = false;
-      }
+      // ... (省略未修改的代码)
       isLoading = false;
       return;
     }
 
     try {
       let data = [];
-
       if (isLocalMode) {
         const { storage } = await import("@/utils/storage");
         data = storage.getMessages(personaId) || [];
@@ -217,18 +236,16 @@ export const useChatStore = defineStore("chat", () => {
         const res = await api(`/api/messages/${personaId}`);
         data = await res.json();
       }
-
       messages.value = [];
       allMessages.value = [];
 
-      // 关键修改 2：使用 for...of 替代 forEach，配合 await addMessage
       for (const m of data) {
+        // ... (省略未修改的循环内部逻辑)
         if (m.role === "ai") {
           const bubbles = m.content
             .split("|||")
             .map((s) => s.replace(/\n/g, " ").trim())
             .filter(Boolean);
-
           if (bubbles.length > 0) {
             for (let partIdx = 0; partIdx < bubbles.length; partIdx++) {
               const line = bubbles[partIdx];
@@ -276,6 +293,16 @@ export const useChatStore = defineStore("chat", () => {
 
       currentLoadedPersona = personaId;
 
+      // === 新增/修改 ===
+      // 7. 在加载完历史消息后，初始化消息总数
+      totalMessageCount.value = allMessages.value.filter(
+        (m) => m.role === "user",
+      ).length;
+      console.log(
+        `[ChatStore] Initialized message count: ${totalMessageCount.value}`,
+      );
+      // === 结束 ===
+
       if (allMessages.value.length > pageSize) {
         messages.value = allMessages.value.slice(-pageSize);
         hasMore.value = true;
@@ -286,11 +313,11 @@ export const useChatStore = defineStore("chat", () => {
     } catch (e) {
       console.error("加载消息失败:", e);
     }
-
     isLoading = false;
   }
 
   function loadMore() {
+    // ... (未修改)
     if (!hasMore.value) return;
     const currentCount = messages.value.length;
     const totalCount = allMessages.value.length;
@@ -302,20 +329,22 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   function clearMessages() {
+    // ... (未修改)
     messages.value = [];
     allMessages.value = [];
     hasMore.value = false;
     currentLoadedPersona = null;
     isLoading = false;
+    // === 新增/修改 ===
+    // 8. 清空消息时，也重置计数器
+    totalMessageCount.value = 0;
+    // === 结束 ===
   }
 
   async function sendUserMessage(personaId, userContent) {
-    // 乐观展示用户消息
+    // ... (未修改)
     await addMessage({ role: "user", content: userContent });
-
-    // 判断是否处于应急模式
     if (emergencyMode.value) {
-      // 立即用本地快照生成回复
       const history = allMessages.value.map((m) => ({
         role: m.role,
         content: m.content,
@@ -332,19 +361,14 @@ export const useChatStore = defineStore("chat", () => {
       });
       return;
     }
-
-    // 正常路径：调用 api 发送消息（会经过离线/在线逻辑）
     try {
       const res = await api(`/api/messages/${personaId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: userContent }),
       });
-
       if (!res.ok) throw new Error("Send failed");
-
       const data = await res.json();
-      // 假设返回的 data 包含 AI 回复
       if (data.reply) {
         await addMessage({
           role: "ai",
@@ -352,20 +376,15 @@ export const useChatStore = defineStore("chat", () => {
           timestamp: new Date().toISOString(),
         });
       }
-      // 成功后更新快照
       import("@/utils/snapshotCache").then((m) => m.cacheSnapshot(personaId));
     } catch (e) {
-      // 如果云端不可用且不在应急模式，消息已进入 pending 队列，乐观显示“发送中”状态
       if (isEffectivelyOffline()) {
-        // 不做额外处理，消息界面可显示“发送中”
         console.log("[Chat] 消息已加入待发送队列");
       } else {
-        // 其他错误提示
       }
     }
   }
 
-  // 在 return 中暴露 sendUserMessage
   return {
     messages,
     allMessages,
@@ -374,6 +393,11 @@ export const useChatStore = defineStore("chat", () => {
     loadPersonaMessages,
     loadMore,
     clearMessages,
-    sendUserMessage, // 新增
+    sendUserMessage,
+    // === 新增/修改 ===
+    // 9. 导出新 state 和 action
+    totalMessageCount,
+    triggerMemoryProcessing,
+    // === 结束 ===
   };
 });

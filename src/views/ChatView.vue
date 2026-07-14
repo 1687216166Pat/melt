@@ -412,84 +412,109 @@ function handleRegenerateLatest() {
 }
 
 async function handleIncoming(data) {
-    if (data.type === 'bus_message') return
+    if (data.type === 'bus_message') return;
+
     if (data.type === 'chat' || data.type === 'push') {
-        const key = (data.content || '') + (data.timestamp || '')
-        const now = Date.now()
-        if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) return
-        lastHandledContent.value = key
-        lastHandledTime.value = now
+        const key = (data.content || '') + (data.timestamp || '');
+        const now = Date.now();
+        if (key === lastHandledContent.value && now - lastHandledTime.value < 5000) return;
+        lastHandledContent.value = key;
+        lastHandledTime.value = now;
 
-        isTyping.value = false
+        isTyping.value = false;
 
-        api(`/api/persona-status/${personaId.value}`).then(r => r.json()).then(s => { personaStatus.value = s }).catch(() => { })
+        api(`/api/persona-status/${personaId.value}`).then(r => r.json()).then(s => { personaStatus.value = s }).catch(() => { });
 
-        let cleanContent = data.content.replace(/\[思考\][\s\S]*?\[思考\]/g, '').replace(/[\s\S]*?<\/think>/g, '').trim()
-        const bubbles = cleanContent.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
-        let final = bubbles
-        const limit = maxBubbles.value || 3
+        let cleanContent = data.content.replace(/\[思考\][\s\S]*?\[思考\]/g, '').replace(/[\s\S]*?<\/think>/g, '').trim();
+        const bubbles = cleanContent.split('|||').map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean);
+        let final = bubbles;
+        const limit = maxBubbles.value || 3;
 
         if (bubbles.length > limit) {
-            final = []
-            const chunkSize = Math.ceil(bubbles.length / limit)
+            final = [];
+            const chunkSize = Math.ceil(bubbles.length / limit);
             for (let i = 0; i < bubbles.length; i += chunkSize) {
-                final.push(bubbles.slice(i, i + chunkSize).join(' '))
+                final.push(bubbles.slice(i, i + chunkSize).join(' '));
             }
         }
 
-        if (final.length === 0) {
+        if (final.length === 0 && !data.specialPayload && !data.toolCalls) {
             isTyping.value = false;
-            return
+            return;
         }
 
-        // 1. 处理文本气泡 (使用 for 循环和 await 保证顺序和存图不冲突)
-        for (let idx = 0; idx < final.length; idx++) {
-            const line = final[idx];
+        // ======================= 核心修改区域开始 =======================
 
-            // 模拟原本 idx * 600 的延迟，除了第一条直接发，后面的都等 600ms
-            if (idx > 0) {
-                await new Promise(resolve => setTimeout(resolve, 600));
-            }
+        // 步骤 1: 在 AI 回复前，先找到对应的用户消息。
+        // 我们从 store 中获取，以确保数据是最新的。
+        const lastUserMessage = [...chatStore.messages].reverse().find(m => m.role === 'user');
 
-            if (idx === final.length - 1) isTyping.value = false;
+        // ===============================================================
 
-            await chatStore.addMessage({
-                role: 'ai',
-                content: line,
-                timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString()
-            });
-            scrollToBottom();
+        // 步骤 2: 正常处理文本气泡的显示 (你的原有逻辑)
+        if (final.length > 0) {
+            for (let idx = 0; idx < final.length; idx++) {
+                const line = final[idx];
+                if (idx > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                }
+                if (idx === final.length - 1) isTyping.value = false;
 
-            if (idx === final.length - 1 && chatStore.allMessages) {
-                setCache(`messages_${personaId.value}`, chatStore.allMessages);
+                await chatStore.addMessage({
+                    role: 'ai',
+                    content: line,
+                    timestamp: new Date(new Date(data.timestamp).getTime() + idx * 100).toISOString()
+                });
+                scrollToBottom();
+
+                if (idx === final.length - 1 && chatStore.allMessages) {
+                    setCache(`messages_${personaId.value}`, chatStore.allMessages);
+                }
             }
         }
 
-        // 2. 处理特殊负载 (礼物、转账等)
+        // ======================= 核心修改区域再次出现 =======================
+        
+        // 步骤 3: 在所有气泡都显示完毕后，触发记忆处理。
+        // 我们需要确保 lastUserMessage 存在，并且 AI 确实回复了文本内容。
+        if (lastUserMessage && final.length > 0) {
+            const fullAiReplyContent = final.join(' ');
+            
+            // 重要：调用 store 中的 action (我们稍后会在 chat.js 中创建这个 action)
+            // 即使现在 chat.js 里还没有这个函数，先写上也没关系，这是我们的目标。
+            if (typeof chatStore.triggerMemoryProcessing === 'function') {
+                chatStore.triggerMemoryProcessing(lastUserMessage, { role: 'ai', content: fullAiReplyContent });
+                 console.log('[ChatView] Memory processing triggered.');
+            } else {
+                 console.warn('[ChatView] chatStore.triggerMemoryProcessing is not a function yet. Please implement it in chat.js.');
+            }
+        }
+        
+        // =================================================================
+
+        // 步骤 4: 继续处理你的其他逻辑 (specialPayload, toolCalls)，这些完全不受影响。
         if (data.specialPayload) {
-            const sp = data.specialPayload
-            // 气泡发完后，额外等待 800ms (相当于原本的 final.length * 600 + 200 减去气泡循环已消耗的时间)
+            const sp = data.specialPayload;
             await new Promise(resolve => setTimeout(resolve, 800));
 
             if (sp.type === 'gift') {
-                await chatStore.addMessage({ role: 'ai', type: 'gift', giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message, content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp })
+                await chatStore.addMessage({ role: 'ai', type: 'gift', giftName: sp.data.name, giftContent: sp.data.content, giftMessage: sp.data.message, content: `[礼物: ${sp.data.name}]`, timestamp: data.timestamp });
             } else if (sp.type === 'transfer') {
-                await chatStore.addMessage({ role: 'ai', type: 'transfer', amount: sp.data.amount, note: sp.data.note, content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp })
+                await chatStore.addMessage({ role: 'ai', type: 'transfer', amount: sp.data.amount, note: sp.data.note, content: `[转账: ¥${sp.data.amount}]`, timestamp: data.timestamp });
             } else if (sp.type === 'location') {
-                await chatStore.addMessage({ role: 'ai', type: 'location', lat: null, lng: null, locationName: sp.data.name, content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp })
+                await chatStore.addMessage({ role: 'ai', type: 'location', lat: null, lng: null, locationName: sp.data.name, content: `[位置: ${sp.data.name}]`, timestamp: data.timestamp });
             } else if (sp.type === 'card') {
-                await chatStore.addMessage({ role: 'ai', type: 'card', cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp })
+                await chatStore.addMessage({ role: 'ai', type: 'card', cardHtml: sp.data.html, content: '[HTML卡片]', timestamp: data.timestamp });
             } else if (sp.type === 'food') {
-                await chatStore.addMessage({ role: 'ai', type: 'food', deliveryContent: sp.data.content, deliveryAddress: sp.data.address, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedMinutes ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString() : null, content: `[外卖: ${sp.data.content}]`, timestamp: data.timestamp })
-                if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
+                await chatStore.addMessage({ role: 'ai', type: 'food', deliveryContent: sp.data.content, deliveryAddress: sp.data.address, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedMinutes ? new Date(Date.now() + sp.data.expectedMinutes * 60000).toISOString() : null, content: `[外卖: ${sp.data.content}]`, timestamp: data.timestamp });
+                if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages);
             } else if (sp.type === 'express') {
-                await chatStore.addMessage({ role: 'ai', type: 'express', deliveryContent: sp.data.content, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedDays ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString() : null, content: `[快递: ${sp.data.content}]`, timestamp: data.timestamp })
-                if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages)
+                await chatStore.addMessage({ role: 'ai', type: 'express', deliveryContent: sp.data.content, deliveryNote: sp.data.note, deliveryExpectedAt: sp.data.expectedDays ? new Date(Date.now() + sp.data.expectedDays * 86400000).toISOString() : null, content: `[快递: ${sp.data.content}]`, timestamp: data.timestamp });
+                if (chatStore.allMessages) setCache(`messages_${personaId.value}`, chatStore.allMessages);
             }
             scrollToBottom();
         }
 
-        // 3. Agent 工具调用解析
         if (personaId.value === 'agent' && data.toolCalls) {
             for (const call of data.toolCalls) {
                 if (call.type === 'github_read') {
@@ -509,7 +534,6 @@ async function handleIncoming(data) {
                         });
                     }
                 } else if (call.type === 'github_write') {
-                    // 需要用户确认
                     await chatStore.addMessage({
                         role: 'system',
                         type: 'confirm_commit',
@@ -522,7 +546,7 @@ async function handleIncoming(data) {
             }
         }
 
-        if (data.debug) debugInfo.value = data.debug
+        if (data.debug) debugInfo.value = data.debug;
     }
 }
 

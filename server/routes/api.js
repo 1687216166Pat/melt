@@ -2377,4 +2377,82 @@ router.get("/memory-graph/node/:nodeId", async (req, res) => {
   res.json(node);
 });
 
+// ==================== 新增：用于前端数据迁移的专属 API ====================
+
+router.get("/export-for-migration", async (req, res) => {
+  const { getDB } = require("../db/index");
+  const db = getDB();
+
+  // 从 URL query 中获取 personaId
+  const personaId = req.query.personaId;
+  if (!personaId) {
+    return res
+      .status(400)
+      .json({ error: "A personaId query parameter is required." });
+  }
+
+  // 识别是 beta 环境还是正式环境
+  const isBeta = req.headers["x-beta-mode"] === "true";
+  const messagesTable = isBeta ? "messages_beta" : "messages";
+  const memoriesTable = isBeta ? "memories_recent_beta" : "memories_recent"; // 假设 beta 也有对应表
+  const timelinesTable = isBeta ? "timeline_events_beta" : "timeline_events"; // 假设 beta 也有对应表
+
+  console.log(
+    `[Migration Export] Received request for persona [${personaId}] from table set [${isBeta ? "BETA" : "PROD"}]`,
+  );
+
+  try {
+    // 1. 导出指定 persona 的所有聊天记录
+    const { data: messages, error: messagesError } = await db
+      .from(messagesTable)
+      .select("*")
+      .eq("persona_id", personaId)
+      .order("timestamp", { ascending: true }); // 按时间正序，方便前端处理
+
+    if (messagesError) throw messagesError;
+
+    // 2. 导出指定 persona 的所有记忆 (来自 memories_recent)
+    const { data: memories, error: memoriesError } = await db
+      .from(memoriesTable)
+      .select("*")
+      .eq("persona_id", personaId);
+
+    if (memoriesError) throw memoriesError;
+
+    // 3. 导出指定 persona 的所有时间线事件 (来自 timeline_events)
+    const { data: timelines, error: timelinesError } = await db
+      .from(timelinesTable)
+      .select("*")
+      .eq("persona_id", personaId);
+
+    if (timelinesError) throw timelinesError;
+
+    const exportData = {
+      messages: messages || [],
+      memories: memories || [],
+      // 注意：这里字段名是 timelines，对应你旧的 timeline_events 表
+      timelines: timelines || [],
+    };
+
+    console.log(
+      `[Migration Export] Success for [${personaId}]: ` +
+        `${exportData.messages.length} messages, ` +
+        `${exportData.memories.length} memories, ` +
+        `${exportData.timelines.length} timeline events.`,
+    );
+
+    res.json(exportData);
+  } catch (error) {
+    console.error(
+      `[Migration Export] Error exporting data for persona [${personaId}]:`,
+      error,
+    );
+    res
+      .status(500)
+      .json({ error: "Internal server error during data export." });
+  }
+});
+
+// ========================================================================
+
 module.exports = router;
